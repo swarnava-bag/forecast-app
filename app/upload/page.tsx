@@ -453,7 +453,7 @@ export default function UploadPage() {
             <div className="hidden md:flex items-center gap-4">
               <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition">Dashboard</Link>
               <span className="text-sm text-amber-400 font-medium">Upload</span>
-              <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Channels</Link>
+              <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Forecast View</Link>
               <Link href="/combo-converter" className="text-sm text-gray-400 hover:text-white transition">Combo → Singles</Link>
               {profile?.role === "admin" && <Link href="/admin" className="text-sm text-gray-400 hover:text-white transition">Admin</Link>}
             </div>

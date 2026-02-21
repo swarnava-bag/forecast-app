@@ -40,6 +40,8 @@ export default function ManageUsersPage() {
   const [userChannels, setUserChannels] = useState<string[]>([]);
   const [userClusters, setUserClusters] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
@@ -125,6 +127,32 @@ export default function ManageUsersPage() {
     setTimeout(() => setSuccessMsg(null), 3000);
   }
 
+  async function handleDelete() {
+    if (!selectedUser) return;
+    setDeleting(true);
+    setError(null);
+    setShowDeleteConfirm(false);
+
+    const res = await fetch("/api/admin/delete-user", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: selectedUser.id }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || "Failed to delete user");
+      setDeleting(false);
+      return;
+    }
+
+    setSuccessMsg(`${selectedUser.full_name || selectedUser.email} has been deleted.`);
+    setSelectedUser(null);
+    setDeleting(false);
+    loadData();
+    setTimeout(() => setSuccessMsg(null), 3000);
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center h-64"><p className="text-gray-400">Loading users...</p></div>;
   }
@@ -168,9 +196,18 @@ export default function ManageUsersPage() {
         <div className="lg:col-span-2">
           {selectedUser ? (
             <div className="bg-gray-900 border border-gray-800 rounded-xl">
-              <div className="p-6 border-b border-gray-800">
-                <h3 className="text-lg font-semibold">{selectedUser.full_name || "No name"}</h3>
-                <p className="text-sm text-gray-400">{selectedUser.email}</p>
+              <div className="p-6 border-b border-gray-800 flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold">{selectedUser.full_name || "No name"}</h3>
+                  <p className="text-sm text-gray-400">{selectedUser.email}</p>
+                </div>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={deleting}
+                  className="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-red-400 border border-red-500/50 rounded-lg hover:bg-red-500/10 disabled:opacity-50 transition"
+                >
+                  {deleting ? "Deleting..." : "Delete User"}
+                </button>
               </div>
               <div className="p-6 space-y-6">
                 {/* Role Selection */}
@@ -249,6 +286,37 @@ export default function ManageUsersPage() {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-sm mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-white mb-2">Delete User?</h3>
+            <p className="text-sm text-gray-400 mb-1">
+              You are about to permanently delete:
+            </p>
+            <p className="text-sm font-medium text-white mb-1">{selectedUser.full_name || "No name"}</p>
+            <p className="text-xs text-gray-500 mb-5">{selectedUser.email}</p>
+            <p className="text-xs text-red-400 mb-6">
+              This will remove the user from all channels, clusters, and authentication. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 rounded-lg hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-500 transition"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

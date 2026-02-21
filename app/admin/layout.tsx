@@ -42,7 +42,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="hidden md:flex items-center gap-4">
               <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition">Dashboard</Link>
               <Link href="/upload" className="text-sm text-gray-400 hover:text-white transition">Upload</Link>
-              <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Channels</Link>
+              <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Forecast View</Link>
               <Link href="/admin/skus" className="text-sm text-amber-400 font-medium">
                 Admin
                 {unassignedCount > 0 && (

@@ -98,7 +98,7 @@ export default function DashboardPage() {
                 Upload
               </a>
               <a href="/channels" className="text-sm text-gray-400 hover:text-white transition">
-                Channels
+                Forecast View
               </a>
               <a href="/combo-converter" className="text-sm text-gray-400 hover:text-white transition">
                 Combo → Singles
@@ -223,10 +223,10 @@ export default function DashboardPage() {
             className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-amber-500/50 transition group"
           >
             <h3 className="text-lg font-semibold mb-2 group-hover:text-amber-400 transition">
-              View Channels
+              Forecast View
             </h3>
             <p className="text-sm text-gray-400">
-              See the detailed channel-level forecast breakdown.
+              Analyse forecasts by channel, cluster, SKU, and pivot views.
             </p>
           </a>
         </div>
