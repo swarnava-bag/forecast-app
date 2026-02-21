@@ -64,10 +64,11 @@ export default function LoginPage() {
 
     const supabase = createClient();
 
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       resetEmail,
       {
-        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+        redirectTo: `${siteUrl}/auth?next=/reset-password`,
       }
     );
 
