@@ -24,6 +24,63 @@ type UploadRow = {
   originalRow: number;
 };
 
+// ── Combo-in-upload: types & pure conversion engine ───────────────────────
+type ComboInputRow = { master_sku: string; quantities: Record<string, number> };
+type UploadMapperRow = { master_sku: string; combo: string; products: string[] };
+type ComboSingleRow = { master_sku: string; quantities: Record<string, number>; status: string };
+type MapperSet = { id: string; name: string; row_count: number; product_column_count: number; is_default: boolean };
+type ComboMapperRow = { master_sku: string; is_combo: boolean; products: string[] };
+type ConversionSummary = { inputRows: number; singlesOutput: number; combosResolved: number; warnings: string[] };
+
+function runComboConversion(
+  comboRows: ComboInputRow[],
+  mapperRows: UploadMapperRow[],
+  qtyColumns: string[],
+): { singles: ComboSingleRow[]; warnings: string[]; combosResolved: number } {
+  const warnings: string[] = [];
+  const mapperDict = new Map<string, UploadMapperRow>();
+  for (const m of mapperRows) mapperDict.set(m.master_sku, m);
+
+  const comboSkus = new Set<string>();
+  const notInMapper = new Set<string>();
+  const allSkus = new Set<string>();
+
+  for (const row of comboRows) {
+    allSkus.add(row.master_sku);
+    const mapper = mapperDict.get(row.master_sku);
+    if (!mapper) {
+      notInMapper.add(row.master_sku);
+      warnings.push(`"${row.master_sku}" not in mapper — treated as single`);
+      continue;
+    }
+    const isCombo = ["yes", "y", "1", "true"].includes(mapper.combo.toLowerCase()) || mapper.products.some(p => p.length > 0);
+    if (isCombo) {
+      comboSkus.add(row.master_sku);
+      mapper.products.forEach(p => { if (p) allSkus.add(p); });
+    }
+  }
+
+  const singles: ComboSingleRow[] = [];
+  for (const sku of [...allSkus].sort()) {
+    if (comboSkus.has(sku)) continue;
+    const quantities: Record<string, number> = {};
+    for (const col of qtyColumns) {
+      let total = 0;
+      comboRows.filter(r => r.master_sku === sku).forEach(r => { total += r.quantities[col] || 0; });
+      comboRows.filter(r => comboSkus.has(r.master_sku)).forEach(r => {
+        const m = mapperDict.get(r.master_sku);
+        const count = m?.products.filter(p => p === sku).length || 0;
+        if (count > 0) total += (r.quantities[col] || 0) * count;
+      });
+      quantities[col] = Math.round(total * 100) / 100;
+    }
+    if (Object.values(quantities).some(v => v > 0))
+      singles.push({ master_sku: sku, quantities, status: notInMapper.has(sku) ? "NOT IN MAPPER" : "Converted" });
+  }
+  return { singles, warnings, combosResolved: comboSkus.size };
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function addMonths(dateStr: string, n: number): string {
   const d = new Date(dateStr);
   d.setMonth(d.getMonth() + n);
@@ -44,6 +101,7 @@ export default function UploadPage() {
   const [skus, setSkus] = useState<SKU[]>([]);
   const [channelSkuMapping, setChannelSkuMapping] = useState<Map<string, Set<string>>>(new Map());
   const [allowedChannelIds, setAllowedChannelIds] = useState<string[]>([]);
+  const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]); // multi-mode channel selection
   const [selectedChannel, setSelectedChannel] = useState("");
   const [selectedCycle, setSelectedCycle] = useState("");
   const [uploadMode, setUploadMode] = useState<"single" | "multi">("single");
@@ -54,10 +112,46 @@ export default function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  // Combo integration state
+  const [hasCombo, setHasCombo] = useState(false);
+  const [comboMapperSets, setComboMapperSets] = useState<MapperSet[]>([]);
+  const [comboMapperId, setComboMapperId] = useState("");
+  const [comboMapperRows, setComboMapperRows] = useState<ComboMapperRow[]>([]);
+  const [comboProductCount, setComboProductCount] = useState(0);
+  const [comboLoadingMapper, setComboLoadingMapper] = useState(false);
+  const [conversionSummary, setConversionSummary] = useState<ConversionSummary | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    if (!comboMapperId) return;
+    setComboLoadingMapper(true);
+    let allData: any[] = [];
+    let from = 0;
+    const PAGE = 1000;
+    (async () => {
+      while (true) {
+        const { data, error } = await supabase
+          .from("combo_mapper_rows").select("master_sku, is_combo, products")
+          .eq("mapper_set_id", comboMapperId).range(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        allData = allData.concat(data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      const rows: ComboMapperRow[] = allData.map((r: any) => ({
+        master_sku: String(r.master_sku || "").trim(),
+        is_combo: r.is_combo === true || r.is_combo === "true",
+        products: Array.isArray(r.products) ? r.products.map((p: any) => String(p || "").trim()) : [],
+      }));
+      const maxP = rows.reduce((max, r) => Math.max(max, r.products.length), 0);
+      setComboMapperRows(rows);
+      setComboProductCount(maxP);
+      setComboLoadingMapper(false);
+    })();
+  }, [comboMapperId]);
 
   async function loadData() {
     setLoading(true);
@@ -90,25 +184,40 @@ export default function UploadPage() {
       setChannelSkuMapping(map);
     }
 
+    // Load combo mapper sets (for checkbox feature)
+    const { data: mapperSetData } = await supabase
+      .from("combo_mapper_sets").select("id, name, row_count, product_column_count, is_default")
+      .order("created_at", { ascending: false });
+    if (mapperSetData) {
+      setComboMapperSets(mapperSetData);
+      const def = mapperSetData.find((s: MapperSet) => s.is_default);
+      if (def) setComboMapperId(def.id);
+      else if (mapperSetData.length > 0) setComboMapperId(mapperSetData[0].id);
+    }
+
     // Determine allowed channels based on role
+    let computedAllowedIds: string[] = [];
     if (profileData) {
       if (profileData.role === "admin") {
-        if (channelData) setAllowedChannelIds(channelData.map((c: Channel) => c.id));
+        if (channelData) computedAllowedIds = channelData.map((c: Channel) => c.id);
       } else if (profileData.role === "head_kam") {
         const { data: userClusters } = await supabase.from("user_clusters").select("cluster_id").eq("user_id", user.id);
         if (userClusters && channelData) {
           const clusterIds = userClusters.map((uc: any) => uc.cluster_id);
-          setAllowedChannelIds(channelData.filter((ch: Channel) => clusterIds.includes(ch.cluster_id)).map((ch: Channel) => ch.id));
+          computedAllowedIds = channelData.filter((ch: Channel) => clusterIds.includes(ch.cluster_id)).map((ch: Channel) => ch.id);
         }
       } else if (profileData.role === "channel_kam") {
         const { data: userChannels } = await supabase.from("user_channels").select("channel_id").eq("user_id", user.id);
-        if (userChannels) setAllowedChannelIds(userChannels.map((uc: any) => uc.channel_id));
+        if (userChannels) computedAllowedIds = userChannels.map((uc: any) => uc.channel_id);
       }
     }
+    setAllowedChannelIds(computedAllowedIds);
+    setSelectedChannelIds(computedAllowedIds); // default: all allowed channels selected
     setLoading(false);
   }
 
   const allowedChannels = channels.filter((ch) => allowedChannelIds.includes(ch.id));
+  const selectedChannels = allowedChannels.filter((ch) => selectedChannelIds.includes(ch.id));
   const selectedCycleData = cycles.find((c) => c.id === selectedCycle);
   const isDeadlinePassed = selectedCycleData?.deadline && new Date(selectedCycleData.deadline) < new Date();
 
@@ -148,7 +257,7 @@ export default function UploadPage() {
       const channelName = channels.find((c) => c.id === selectedChannel)?.name || "Channel";
       const chSkus = getSkusForChannel(selectedChannel);
 
-      // Single mode: New Master SKU | M1 | M2 | M3  (no Channel column needed)
+      // Single mode: New Master SKU | M1 | M2 | M3
       const templateData = chSkus.map((sku) => ({
         "New Master SKU": sku.new_master_sku,
         [m1Label]: "",
@@ -162,10 +271,63 @@ export default function UploadPage() {
       ws["!cols"] = [{ wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
       const cycleName = `${m1Label.replace(" ", "_")}_V${selectedCycleData?.version || 1}`;
       XLSX.writeFile(wb, `${channelName}_${cycleName}_Template.xlsx`);
+
+    } else if (hasCombo) {
+      // Multi + Combo: 2-row header pivoted format
+      // Row 1: "" | M1 (spans N channels) | M2 (spans N) | M3 (spans N)
+      // Row 2: "New Master SKU" | Chan1 | Chan2 | ... | Chan1 | Chan2 | ...
+      if (selectedChannels.length === 0) { setError("Select at least one channel."); return; }
+      const N = selectedChannels.length;
+      const months = [m1Label, m2Label, m3Label];
+
+      // Build all unique SKUs from selected channels
+      const allSkuMap = new Map<string, string>();
+      selectedChannels.forEach((ch) => {
+        getSkusForChannel(ch.id).forEach((sku) => allSkuMap.set(sku.new_master_sku, sku.product_name));
+      });
+
+      // Header row 1: blank | M1 blank×(N-1) | M2 blank×(N-1) | M3 blank×(N-1)
+      const headerRow1: any[] = [""];
+      months.forEach((m) => {
+        headerRow1.push(m);
+        for (let i = 1; i < N; i++) headerRow1.push("");
+      });
+
+      // Header row 2: "New Master SKU" | Chan1..ChanN (repeated 3×)
+      const headerRow2: any[] = ["New Master SKU"];
+      months.forEach(() => selectedChannels.forEach((ch) => headerRow2.push(ch.name)));
+
+      // Data rows
+      const dataRows = [...allSkuMap.keys()].sort().map((skuCode) => {
+        const row: any[] = [skuCode];
+        months.forEach(() => selectedChannels.forEach(() => row.push("")));
+        return row;
+      });
+
+      const aoa = [headerRow1, headerRow2, ...dataRows];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+      // Merge cells: row 0 spans N cols for each month group
+      const merges: XLSX.Range[] = [
+        { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, // "New Master SKU" spans 2 rows
+      ];
+      months.forEach((_, mi) => {
+        const startCol = 1 + mi * N;
+        if (N > 1) merges.push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + N - 1 } });
+      });
+      ws["!merges"] = merges;
+      ws["!cols"] = [{ wch: 22 }, ...Array(N * 3).fill({ wch: 13 })];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Forecast");
+      const cycleName = `${m1Label.replace(" ", "_")}_V${selectedCycleData?.version || 1}`;
+      XLSX.writeFile(wb, `Multi_Channel_Combo_${cycleName}_Template.xlsx`);
+
     } else {
-      // Multi mode: New Master SKU | Channel | M1 | M2 | M3
+      // Multi mode (no combo): long format — New Master SKU | Channel | M1 | M2 | M3
+      if (selectedChannels.length === 0) { setError("Select at least one channel."); return; }
       const templateData: any[] = [];
-      allowedChannels.forEach((ch) => {
+      selectedChannels.forEach((ch) => {
         const chSkus = getSkusForChannel(ch.id);
         chSkus.forEach((sku) => {
           templateData.push({
@@ -204,6 +366,193 @@ export default function UploadPage() {
         const json = XLSX.utils.sheet_to_json<any>(sheet);
 
         if (json.length === 0) { setError("The uploaded file is empty."); return; }
+
+        // ── COMBO CONVERSION PATH ──────────────────────────────────────────
+        if (hasCombo) {
+          if (comboMapperRows.length === 0) {
+            setError("Combo mapper not loaded. Select a mapper and wait for it to load.");
+            return;
+          }
+          const headers = Object.keys(json[0]);
+          const skuCol = headers.find(h =>
+            h.toLowerCase().includes("master") || h.toLowerCase().includes("sku")
+          ) || headers[0];
+
+          const mapperForConversion: UploadMapperRow[] = comboMapperRows.map(r => ({
+            master_sku: r.master_sku,
+            combo: r.is_combo ? "Yes" : "No",
+            products: r.products,
+          }));
+
+          // ── MULTI-CHANNEL COMBO: 2-row AOA header format ─────────────────
+          // Row 0: "" | M1 | "" | "" | M2 | "" | "" | M3 | ...
+          // Row 1: "New Master SKU" | Chan1 | Chan2 | Chan3 | Chan1 | ...
+          // Row 2+: data
+          if (uploadMode === "multi") {
+            const aoa = XLSX.utils.sheet_to_json<any[]>(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+            if (aoa.length < 3) { setError("File is empty or missing data rows."); return; }
+
+            const monthRow = aoa[0] as any[];
+            const channelRow = aoa[1] as any[];
+
+            // Build colMeta by fill-forwarding month labels in row 0
+            type ColMeta2 = { colIdx: number; key: string; channelName: string; monthNum: 1 | 2 | 3 };
+            const colMeta: ColMeta2[] = [];
+            let currentMonth = "";
+            for (let c = 1; c < channelRow.length; c++) {
+              const monthCell = String(monthRow[c] || "").trim();
+              if (monthCell) currentMonth = monthCell;
+              const chanName = String(channelRow[c] || "").trim();
+              if (!chanName) continue;
+              let monthNum: 1 | 2 | 3 | null = null;
+              if (currentMonth === m1Label) monthNum = 1;
+              else if (currentMonth === m2Label) monthNum = 2;
+              else if (currentMonth === m3Label) monthNum = 3;
+              if (monthNum) colMeta.push({ colIdx: c, key: `${chanName}__M${monthNum}`, channelName: chanName, monthNum });
+            }
+            if (colMeta.length === 0) { setError(`No valid channel+month columns found. Make sure you downloaded the correct template.`); return; }
+
+            // Parse data rows (from index 2 onwards)
+            const comboInputRows: ComboInputRow[] = [];
+            for (let r = 2; r < aoa.length; r++) {
+              const row = aoa[r] as any[];
+              const sku = String(row[0] || "").trim();
+              if (!sku) continue;
+              const quantities: Record<string, number> = {};
+              for (const { colIdx, key } of colMeta) {
+                const v = Number(row[colIdx]);
+                quantities[key] = isNaN(v) ? 0 : v;
+              }
+              comboInputRows.push({ master_sku: sku, quantities });
+            }
+            if (comboInputRows.length === 0) { setError("No data rows found in file."); return; }
+
+            const conv = runComboConversion(comboInputRows, mapperForConversion, colMeta.map(c => c.key));
+
+            // Group converted quantities by (single_sku, channelName) → {m1, m2, m3}
+            const rows: UploadRow[] = [];
+            for (const single of conv.singles) {
+              const matchedSku = skus.find(s =>
+                s.new_master_sku.toLowerCase() === single.master_sku.toLowerCase()
+              );
+              const chanMap = new Map<string, { m1: number; m2: number; m3: number }>();
+              for (const { key, channelName, monthNum } of colMeta) {
+                const qty = Math.round((single.quantities[key] || 0) * 100) / 100;
+                if (!chanMap.has(channelName)) chanMap.set(channelName, { m1: 0, m2: 0, m3: 0 });
+                const entry = chanMap.get(channelName)!;
+                if (monthNum === 1) entry.m1 = qty;
+                else if (monthNum === 2) entry.m2 = qty;
+                else entry.m3 = qty;
+              }
+              for (const [chanName, { m1, m2, m3 }] of chanMap) {
+                if (m1 === 0 && m2 === 0 && m3 === 0) continue;
+                const errors: string[] = [];
+                if (!matchedSku) errors.push(`SKU "${single.master_sku}" not found in SKU master`);
+                const matchedCh = channels.find(ch => ch.name.toLowerCase() === chanName.toLowerCase());
+                if (!matchedCh) {
+                  errors.push(`Channel "${chanName}" not found`);
+                } else if (!allowedChannelIds.includes(matchedCh.id)) {
+                  errors.push(`No access to "${chanName}"`);
+                } else if (matchedSku) {
+                  const chMapping = channelSkuMapping.get(matchedCh.id);
+                  if (chMapping && chMapping.size > 0 && !chMapping.has(matchedSku.id))
+                    errors.push("SKU not enabled for this channel");
+                }
+                rows.push({
+                  sku_id: matchedSku?.id || "",
+                  new_master_sku: single.master_sku,
+                  product_name: matchedSku?.product_name || "Unknown",
+                  channel_id: matchedCh?.id || "",
+                  channel_name: matchedCh?.name || chanName,
+                  qty_m1: m1, qty_m2: m2, qty_m3: m3,
+                  isValid: errors.length === 0,
+                  errors,
+                  originalRow: rows.length + 1,
+                });
+              }
+            }
+
+            setConversionSummary({
+              inputRows: comboInputRows.length,
+              singlesOutput: conv.singles.length,
+              combosResolved: conv.combosResolved,
+              warnings: conv.warnings,
+            });
+            setUploadData(rows);
+            setShowPreview(true);
+            return;
+          }
+          // ── END MULTI-CHANNEL COMBO PATH ──────────────────────────────────
+
+          // ── SINGLE-CHANNEL COMBO PATH ─────────────────────────────────────
+          const qtyColumns = headers.filter(h => h !== skuCol && h.trim() !== "");
+
+          // Parse input combo rows
+          const comboInputRows: ComboInputRow[] = [];
+          for (const row of json) {
+            const sku = String(row[skuCol] || "").trim();
+            if (!sku) continue;
+            const quantities: Record<string, number> = {};
+            for (const col of qtyColumns) {
+              const v = Number(row[col]);
+              quantities[col] = isNaN(v) ? 0 : v;
+            }
+            comboInputRows.push({ master_sku: sku, quantities });
+          }
+          if (comboInputRows.length === 0) { setError("No data rows found in file."); return; }
+
+          // Run conversion
+          const conv = runComboConversion(comboInputRows, mapperForConversion, qtyColumns);
+
+          // Map singles → UploadRow (validate against SKU master + channel mapping)
+          const rows: UploadRow[] = conv.singles.map((single, idx) => {
+            const errors: string[] = [];
+            const matchedSku = skus.find(s =>
+              s.new_master_sku.toLowerCase() === single.master_sku.toLowerCase()
+            );
+            if (!matchedSku) errors.push(`SKU "${single.master_sku}" not found in SKU master`);
+
+            const channelId = selectedChannel;
+            const channelName = channels.find(c => c.id === channelId)?.name || "";
+
+            if (matchedSku && channelId) {
+              const chMapping = channelSkuMapping.get(channelId);
+              if (chMapping && chMapping.size > 0 && !chMapping.has(matchedSku.id))
+                errors.push("SKU not enabled for this channel");
+            }
+
+            // Map qty columns to m1/m2/m3 by label (fall back to positional)
+            const q1 = Math.round((single.quantities[m1Label] ?? single.quantities[qtyColumns[0]] ?? 0) * 100) / 100;
+            const q2 = Math.round((single.quantities[m2Label] ?? single.quantities[qtyColumns[1]] ?? 0) * 100) / 100;
+            const q3 = Math.round((single.quantities[m3Label] ?? single.quantities[qtyColumns[2]] ?? 0) * 100) / 100;
+
+            if (matchedSku && channelId && q1 === 0 && q2 === 0 && q3 === 0)
+              errors.push("All quantities are zero");
+
+            return {
+              sku_id: matchedSku?.id || "",
+              new_master_sku: single.master_sku,
+              product_name: matchedSku?.product_name || "Unknown",
+              channel_id: channelId,
+              channel_name: channelName,
+              qty_m1: q1, qty_m2: q2, qty_m3: q3,
+              isValid: errors.length === 0,
+              errors,
+              originalRow: idx + 2,
+            };
+          });
+
+          setConversionSummary({
+            inputRows: comboInputRows.length,
+            singlesOutput: conv.singles.length,
+            combosResolved: conv.combosResolved,
+            warnings: conv.warnings,
+          });
+          setUploadData(rows);
+          setShowPreview(true);
+          return;
+        }
+        // ── END COMBO PATH ─────────────────────────────────────────────────
 
         const headers = Object.keys(json[0]);
 
@@ -323,7 +672,7 @@ export default function UploadPage() {
     setDragActive(false);
     const file = e.dataTransfer.files?.[0];
     if (file) parseFile(file);
-  }, [skus, channels, allowedChannelIds, selectedChannel, m1Label]);
+  }, [skus, channels, allowedChannelIds, selectedChannel, m1Label, uploadMode, hasCombo, comboMapperRows]);
 
   // ====== SAVE ======
   async function handleSave() {
@@ -411,7 +760,10 @@ export default function UploadPage() {
   const uniqueChannels = [...new Set(uploadData.filter((r) => r.isValid).map((r) => r.channel_name))];
 
   // Ready to show upload zone?
-  const readyToUpload = selectedCycle && (uploadMode === "multi" || (uploadMode === "single" && selectedChannel));
+  const readyToUpload = selectedCycle && (
+    (uploadMode === "single" && selectedChannel) ||
+    (uploadMode === "multi" && selectedChannelIds.length > 0)
+  );
 
   if (loading) {
     return (
@@ -534,18 +886,60 @@ export default function UploadPage() {
                 </div>
               )}
 
-              {/* Multi-channel info */}
+              {/* Multi-channel channel selector */}
               {uploadMode === "multi" && (
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                  <label className="block text-sm font-medium text-gray-300 mb-3">2. Your Channels ({allowedChannels.length})</label>
-                  <p className="text-xs text-gray-500 mb-3">
-                    Template includes only channels you have access to. Upload will reject any channel outside your access.
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {allowedChannels.map((ch) => (
-                      <span key={ch.id} className="px-2 py-1 bg-gray-800 rounded text-xs text-gray-300">{ch.name}</span>
-                    ))}
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-sm font-medium text-gray-300">
+                      2. Select Channels
+                      <span className="ml-2 text-xs text-gray-500">({selectedChannelIds.length}/{allowedChannels.length} selected)</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setSelectedChannelIds(allowedChannels.map(c => c.id))}
+                        className="text-xs text-amber-400 hover:text-amber-300 transition"
+                      >Select All</button>
+                      <span className="text-gray-700 text-xs">|</span>
+                      <button
+                        onClick={() => setSelectedChannelIds([])}
+                        className="text-xs text-gray-500 hover:text-gray-400 transition"
+                      >Clear</button>
+                    </div>
                   </div>
+                  <div className="space-y-3">
+                    {clusters.map((cl) => {
+                      const clChannels = allowedChannels.filter(ch => ch.cluster_id === cl.id);
+                      if (clChannels.length === 0) return null;
+                      return (
+                        <div key={cl.id}>
+                          <p className="text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wide">{cl.name}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {clChannels.map((ch) => {
+                              const active = selectedChannelIds.includes(ch.id);
+                              return (
+                                <button
+                                  key={ch.id}
+                                  onClick={() => setSelectedChannelIds(prev =>
+                                    active ? prev.filter(id => id !== ch.id) : [...prev, ch.id]
+                                  )}
+                                  className={`px-2.5 py-1 rounded-lg text-xs transition border ${
+                                    active
+                                      ? "bg-amber-500/15 text-amber-300 border-amber-500/40"
+                                      : "bg-gray-800 text-gray-500 border-gray-700 hover:border-gray-600"
+                                  }`}
+                                >
+                                  {ch.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {selectedChannelIds.length === 0 && (
+                    <p className="text-xs text-red-400 mt-3">Select at least one channel to continue.</p>
+                  )}
                 </div>
               )}
 
@@ -589,6 +983,11 @@ export default function UploadPage() {
                     <p className="text-xs text-gray-500">
                       {uploadMode === "single" ? (
                         <>Columns: <span className="text-white">New Master SKU</span>, <span className="text-amber-400">{m1Label}</span>, <span className="text-blue-400">{m2Label}</span>, <span className="text-purple-400">{m3Label}</span></>
+                      ) : hasCombo ? (
+                        <>
+                          2-row header: <span className="text-amber-400">Row 1 = Months</span> (<span className="text-amber-400">{m1Label}</span>, <span className="text-blue-400">{m2Label}</span>, <span className="text-purple-400">{m3Label}</span>), <span className="text-amber-400">Row 2 = Channels</span> — {selectedChannelIds.length} channel(s) × 3 months
+                          <br /><span className="text-gray-600">Each channel gets 3 columns. Fill combo SKU quantities; system converts to singles.</span>
+                        </>
                       ) : (
                         <>Columns: <span className="text-white">New Master SKU</span>, <span className="text-white">Channel</span>, <span className="text-amber-400">{m1Label}</span>, <span className="text-blue-400">{m2Label}</span>, <span className="text-purple-400">{m3Label}</span></>
                       )}
@@ -598,6 +997,116 @@ export default function UploadPage() {
                     Download Template
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Combo SKU checkbox */}
+            {readyToUpload && (
+              <div className={`bg-gray-900 border rounded-xl p-5 transition ${hasCombo ? "border-amber-500/40" : "border-gray-800"}`}>
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <div className="mt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={hasCombo}
+                      onChange={(e) => {
+                        setHasCombo(e.target.checked);
+                        setConversionSummary(null);
+                      }}
+                      className="w-4 h-4 rounded border-gray-600 accent-amber-500 cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-200">My file contains combo SKUs</span>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {uploadMode === "multi"
+                        ? "Pivoted format: one column per channel (channels as columns, not rows). Combo SKUs are converted to singles per channel. M1 quantities only."
+                        : "Automatically converts combo SKUs to their component singles before saving. Use the same download template — fill in combo SKU quantities as normal."}
+                    </p>
+                  </div>
+                </label>
+
+                {hasCombo && (
+                  <div className="mt-4 pt-4 border-t border-gray-800">
+                    {comboMapperSets.length === 0 ? (
+                      <p className="text-xs text-red-400">No mappers available. Ask admin to upload one in Combo → Singles.</p>
+                    ) : profile?.role === "admin" ? (
+                      /* ── Admin: can pick mapper + set as default ── */
+                      <div className="space-y-2">
+                        <label className="block text-xs text-gray-400 font-medium">Combo Mapper (Admin)</label>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={comboMapperId}
+                            onChange={(e) => setComboMapperId(e.target.value)}
+                            className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          >
+                            <option value="">Choose mapper...</option>
+                            {comboMapperSets.map(ms => (
+                              <option key={ms.id} value={ms.id}>
+                                {ms.name} ({ms.row_count} SKUs, P1–P{ms.product_column_count}){ms.is_default ? " ★ Default" : ""}
+                              </option>
+                            ))}
+                          </select>
+                          {/* Set as default button — only show when selected mapper is not already default */}
+                          {comboMapperId && !comboMapperSets.find(ms => ms.id === comboMapperId)?.is_default && (
+                            <button
+                              onClick={async () => {
+                                await supabase.from("combo_mapper_sets").update({ is_default: false }).neq("id", comboMapperId);
+                                await supabase.from("combo_mapper_sets").update({ is_default: true }).eq("id", comboMapperId);
+                                // Refresh mapper sets list to reflect new default
+                                const { data } = await supabase
+                                  .from("combo_mapper_sets").select("id, name, row_count, product_column_count, is_default")
+                                  .order("created_at", { ascending: false });
+                                if (data) setComboMapperSets(data);
+                              }}
+                              className="px-3 py-2 text-xs bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/20 transition whitespace-nowrap"
+                            >
+                              Set as Default
+                            </button>
+                          )}
+                          {comboMapperId && comboMapperSets.find(ms => ms.id === comboMapperId)?.is_default && (
+                            <span className="px-3 py-2 text-xs text-green-400 border border-green-500/20 rounded-lg bg-green-500/10 whitespace-nowrap">★ Default</span>
+                          )}
+                        </div>
+                        <div className="text-xs">
+                          {comboLoadingMapper && <span className="text-gray-500">Loading mapper data...</span>}
+                          {!comboLoadingMapper && comboMapperRows.length > 0 && (
+                            <span className="text-green-400">✓ {comboMapperRows.length} SKUs loaded — ready for conversion</span>
+                          )}
+                          {!comboLoadingMapper && comboMapperId && comboMapperRows.length === 0 && (
+                            <span className="text-red-400">Mapper has no data</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-600">
+                          To upload or update a mapper, go to{" "}
+                          <a href="/combo-converter" className="text-amber-400 hover:underline">Combo → Singles</a>
+                          {" "}→ Manage Mappers.
+                        </p>
+                      </div>
+                    ) : (
+                      /* ── KAM: read-only, shows active default mapper ── */
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1.5 font-medium">Combo Mapper</label>
+                        {(() => {
+                          const active = comboMapperSets.find(ms => ms.id === comboMapperId);
+                          return active ? (
+                            <div className="flex items-center gap-3 px-3 py-2 bg-gray-800/60 border border-gray-700 rounded-lg">
+                              <span className="text-sm text-white font-medium">{active.name}</span>
+                              <span className="text-xs text-gray-500">{active.row_count} SKUs · P1–P{active.product_column_count}</span>
+                              <span className="ml-auto text-xs">
+                                {comboLoadingMapper && <span className="text-gray-500">Loading...</span>}
+                                {!comboLoadingMapper && comboMapperRows.length > 0 && (
+                                  <span className="text-green-400">✓ Ready</span>
+                                )}
+                              </span>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-red-400">No default mapper set. Ask admin to configure one.</p>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -624,6 +1133,44 @@ export default function UploadPage() {
         {/* ====== PREVIEW ====== */}
         {showPreview && (
           <div>
+            {/* Combo conversion banner */}
+            {conversionSummary && (
+              <div className="mb-6 bg-amber-900/20 border border-amber-500/30 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-amber-400 font-semibold text-sm">Combo Conversion Applied</span>
+                  <span className="text-xs text-gray-500">— review the converted singles below before saving</span>
+                </div>
+                <div className="grid grid-cols-4 gap-4 mb-3">
+                  <div className="bg-gray-900/60 rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-white">{conversionSummary.inputRows}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Input rows</p>
+                  </div>
+                  <div className="bg-green-900/30 border border-green-500/20 rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-green-400">{conversionSummary.singlesOutput}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Singles out</p>
+                  </div>
+                  <div className="bg-amber-900/30 border border-amber-500/20 rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-amber-400">{conversionSummary.combosResolved}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Combos resolved</p>
+                  </div>
+                  <div className={`rounded-lg p-3 text-center border ${conversionSummary.warnings.length > 0 ? "bg-red-900/30 border-red-500/20" : "bg-gray-900/60 border-transparent"}`}>
+                    <p className={`text-xl font-bold ${conversionSummary.warnings.length > 0 ? "text-red-400" : "text-gray-600"}`}>{conversionSummary.warnings.length}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Warnings</p>
+                  </div>
+                </div>
+                {conversionSummary.warnings.length > 0 && (
+                  <div className="pt-3 border-t border-amber-500/20">
+                    <p className="text-xs text-amber-300 font-medium mb-1.5">Not-in-mapper SKUs (passed through as singles):</p>
+                    <div className="max-h-[72px] overflow-y-auto space-y-0.5">
+                      {conversionSummary.warnings.map((w, i) => (
+                        <p key={i} className="text-xs text-amber-300/70 font-mono">{w}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Summary */}
             <div className="grid grid-cols-3 md:grid-cols-7 gap-3 mb-6">
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
@@ -715,7 +1262,7 @@ export default function UploadPage() {
 
             {/* Actions */}
             <div className="flex justify-between items-center">
-              <button onClick={() => { setShowPreview(false); setUploadData([]); setError(null); }}
+              <button onClick={() => { setShowPreview(false); setUploadData([]); setError(null); setConversionSummary(null); }}
                 className="px-6 py-2.5 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">
                 {"\u2190"} Back
               </button>
