@@ -43,6 +43,10 @@ export default function ForecastCyclesPage() {
   const [cfPreview, setCfPreview] = useState<CarryForwardPreview | null>(null);
   const [cfLoading, setCfLoading] = useState(false);
 
+  // Edit deadline modal
+  const [editDeadlineTarget, setEditDeadlineTarget] = useState<Cycle | null>(null);
+  const [editDeadlineValue, setEditDeadlineValue] = useState("");
+
   // Delete modal
   const [deleteTarget, setDeleteTarget] = useState<Cycle | null>(null);
   const [deleteMode, setDeleteMode] = useState<"full" | "drafts">("drafts");
@@ -184,6 +188,32 @@ export default function ForecastCyclesPage() {
       setCfPreview(null);
       loadCycles();
     }
+  }
+
+  // ── Edit Deadline ──────────────────────────────────────────────────────────
+  function openEditDeadline(cycle: Cycle) {
+    setEditDeadlineTarget(cycle);
+    // Convert ISO to datetime-local format (YYYY-MM-DDTHH:mm)
+    const val = cycle.deadline ? new Date(cycle.deadline).toISOString().slice(0, 16) : "";
+    setEditDeadlineValue(val);
+  }
+
+  async function saveDeadline() {
+    if (!editDeadlineTarget) return;
+    setActionLoading(true);
+    const newDeadlineIso = editDeadlineValue ? new Date(editDeadlineValue).toISOString() : null;
+    const { error: updateError } = await supabase
+      .from("forecast_cycles")
+      .update({ deadline: newDeadlineIso })
+      .eq("id", editDeadlineTarget.id);
+    if (updateError) {
+      setError(updateError.message);
+    } else {
+      showSuccess("Deadline updated.");
+      setEditDeadlineTarget(null);
+      loadCycles();
+    }
+    setActionLoading(false);
   }
 
   // ── Delete cycle / clear drafts ────────────────────────────────────────────
@@ -386,6 +416,42 @@ export default function ForecastCyclesPage() {
         </div>
       )}
 
+      {/* ── Edit Deadline Modal ───────────────────────────────────────────── */}
+      {editDeadlineTarget && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md">
+            <div className="p-6 border-b border-gray-800">
+              <h3 className="text-lg font-semibold">Edit Deadline</h3>
+              <p className="text-sm text-gray-400 mt-1">
+                {formatMonth(editDeadlineTarget.forecast_month)} V{editDeadlineTarget.version}
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Submission Deadline</label>
+                <input
+                  type="datetime-local"
+                  value={editDeadlineValue}
+                  onChange={(e) => setEditDeadlineValue(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">Leave blank to remove the deadline.</p>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
+              <button onClick={() => setEditDeadlineTarget(null)}
+                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">
+                Cancel
+              </button>
+              <button onClick={saveDeadline} disabled={actionLoading}
+                className="px-6 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
+                {actionLoading ? "Saving..." : "Save Deadline"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Delete / Clear Drafts Modal ───────────────────────────────────── */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -572,6 +638,11 @@ export default function ForecastCyclesPage() {
 
                     {/* Secondary actions */}
                     <div className="flex gap-2 flex-wrap justify-end">
+                      {/* Edit Deadline */}
+                      <button onClick={() => openEditDeadline(cycle)}
+                        className="px-3 py-1.5 text-xs bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition font-medium">
+                        Edit Deadline
+                      </button>
                       {/* Carry Forward — only for non-published cycles */}
                       {cycle.status !== "published" && (
                         <button onClick={() => openCarryForward(cycle)}
