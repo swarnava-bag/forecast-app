@@ -120,6 +120,7 @@ export default function UploadPage() {
   const [comboProductCount, setComboProductCount] = useState(0);
   const [comboLoadingMapper, setComboLoadingMapper] = useState(false);
   const [conversionSummary, setConversionSummary] = useState<ConversionSummary | null>(null);
+  const [comboSaveData, setComboSaveData] = useState<Array<{ master_sku: string; channel_id: string; quantity: number; forecast_month: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
@@ -352,6 +353,7 @@ export default function UploadPage() {
   // ====== FILE PARSING ======
   function parseFile(file: File) {
     setError(null);
+    setComboSaveData([]);
     if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls") && !file.name.endsWith(".csv")) {
       setError("Please upload an Excel file (.xlsx, .xls) or CSV file.");
       return;
@@ -429,6 +431,20 @@ export default function UploadPage() {
 
             const conv = runComboConversion(comboInputRows, mapperForConversion, colMeta.map(c => c.key));
 
+            // Persist all original uploaded rows (pre-conversion) to forecast_data_combos
+            const comboRawRows: Array<{ master_sku: string; channel_id: string; quantity: number; forecast_month: string }> = [];
+            for (const row of comboInputRows) {
+              for (const { key, channelName, monthNum } of colMeta) {
+                const qty = row.quantities[key] || 0;
+                if (qty <= 0) continue;
+                const matchedCh = channels.find(ch => ch.name.toLowerCase() === channelName.toLowerCase());
+                if (!matchedCh) continue;
+                const fm = monthNum === 1 ? month1 : monthNum === 2 ? month2 : month3;
+                comboRawRows.push({ master_sku: row.master_sku, channel_id: matchedCh.id, quantity: qty, forecast_month: fm });
+              }
+            }
+            setComboSaveData(comboRawRows);
+
             // Group converted quantities by (single_sku, channelName) → {m1, m2, m3}
             const rows: UploadRow[] = [];
             for (const single of conv.singles) {
@@ -503,6 +519,18 @@ export default function UploadPage() {
 
           // Run conversion
           const conv = runComboConversion(comboInputRows, mapperForConversion, qtyColumns);
+
+          // Persist all original uploaded rows (pre-conversion) to forecast_data_combos
+          const comboRawRows: Array<{ master_sku: string; channel_id: string; quantity: number; forecast_month: string }> = [];
+          for (const row of comboInputRows) {
+            const q1 = row.quantities[m1Label] ?? row.quantities[qtyColumns[0]] ?? 0;
+            const q2 = row.quantities[m2Label] ?? row.quantities[qtyColumns[1]] ?? 0;
+            const q3 = row.quantities[m3Label] ?? row.quantities[qtyColumns[2]] ?? 0;
+            if (q1 > 0) comboRawRows.push({ master_sku: row.master_sku, channel_id: selectedChannel, quantity: q1, forecast_month: month1 });
+            if (q2 > 0) comboRawRows.push({ master_sku: row.master_sku, channel_id: selectedChannel, quantity: q2, forecast_month: month2 });
+            if (q3 > 0) comboRawRows.push({ master_sku: row.master_sku, channel_id: selectedChannel, quantity: q3, forecast_month: month3 });
+          }
+          setComboSaveData(comboRawRows);
 
           // Map singles → UploadRow (validate against SKU master + channel mapping)
           const rows: UploadRow[] = conv.singles.map((single, idx) => {
@@ -714,6 +742,26 @@ export default function UploadPage() {
 
     const { error: insertError } = await supabase.from("forecast_data").insert(inserts);
     if (insertError) { setError(insertError.message); setSaving(false); return; }
+
+    // Save original (pre-conversion) rows to forecast_data_combos
+    if (comboSaveData.length > 0) {
+      const comboChannelIds = [...new Set(comboSaveData.map(r => r.channel_id))];
+      for (const chId of comboChannelIds) {
+        await supabase.from("forecast_data_combos")
+          .delete()
+          .eq("channel_id", chId)
+          .eq("cycle_id", selectedCycle);
+      }
+      const { error: comboInsertError } = await supabase.from("forecast_data_combos").insert(
+        comboSaveData.map(r => ({ cycle_id: selectedCycle, ...r }))
+      );
+      if (comboInsertError) {
+        setError(`Combo data save failed: ${comboInsertError.message}`);
+        setSaving(false);
+        return;
+      }
+      setComboSaveData([]);
+    }
 
     // Logs
     const channelNames = channelIds.map((id) => channels.find((c) => c.id === id)?.name).join(", ");

@@ -375,6 +375,19 @@ export default function ChannelsPage() {
     } catch (err: any) { setError(`Download failed: ${err.message}`); }
   }
 
+  async function downloadCombos() {
+    if (!selectedCycle) return; setError(null);
+    try {
+      const response = await fetch(`/api/download-forecast-combos?cycle_id=${selectedCycle}`);
+      if (!response.ok) { const err = await response.json(); setError(`Combo download failed: ${err.error}`); return; }
+      const blob = await response.blob(); const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url;
+      const disp = response.headers.get("Content-Disposition"); const match = disp?.match(/filename="(.+)"/);
+      a.download = match ? match[1] : `Forecast_Combos_${m1Label.replace(" ", "_")}_V${selectedCycleData?.version || 1}.xlsx`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    } catch (err: any) { setError(`Combo download failed: ${err.message}`); }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-950 text-white">
@@ -451,6 +464,7 @@ export default function ChannelsPage() {
                 </option>
               ))}
             </select>
+            {selectedCycle && <button onClick={downloadCombos} className="px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition">Download Combos</button>}
             {canDownload && <button onClick={downloadExcel} className="px-4 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition">Download Excel</button>}
           </div>
         </div>
