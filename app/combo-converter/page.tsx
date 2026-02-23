@@ -401,6 +401,19 @@ export default function ComboConverterPage() {
     XLSX.writeFile(buildOutputExcel(result, allMapperRows), "Combo_to_Singles_Output.xlsx");
   }
 
+  function downloadTemplate() {
+    const wb = XLSX.utils.book_new();
+    const comboAoa = [
+      ["New Master SKU", "Month 1", "Month 2", "Month 3"],
+      ["COMBO_SKU_EXAMPLE", 500, 400, 300],
+      ["SINGLE_SKU_EXAMPLE", 200, 150, 100],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(comboAoa);
+    ws["!cols"] = [{ wch: 24 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws, "Combo");
+    XLSX.writeFile(wb, "Combo_Input_Template.xlsx");
+  }
+
   // Re-convert with user-edited unmapped rows merged into mapper
   function handleReConvert() {
     if (!result || cachedComboRows.length === 0) return;
@@ -535,6 +548,11 @@ export default function ComboConverterPage() {
                 <button onClick={downloadResult} className="px-4 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition">Download Excel</button>
                 <button onClick={() => { setResult(null); setError(null); }} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">New Conversion</button>
               </>
+            )}
+            {!result && (
+              <button onClick={downloadTemplate} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">
+                Download Template
+              </button>
             )}
             {isAdmin && !result && (
               <>
