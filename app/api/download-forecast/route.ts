@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
   try {
     await new Promise<void>((resolve, reject) => {
       exec(
-        `python3 "${scriptPath}" "${jsonPath}" "${xlsxPath}"`,
+        `python "${scriptPath}" "${jsonPath}" "${xlsxPath}"`,
         { timeout: 30000 },
         (error, stdout, stderr) => {
           if (error) reject(new Error(`Python script failed: ${stderr || error.message}`));

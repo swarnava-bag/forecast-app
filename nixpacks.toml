@@ -1,2 +1,0 @@
-[phases.setup]
-nixPkgs = ["python3", "python3Packages.openpyxl", "python3Packages.python-dateutil"]
