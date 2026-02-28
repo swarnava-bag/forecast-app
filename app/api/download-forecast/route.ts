@@ -127,7 +127,7 @@ function buildExcel(data: {
       wc(wsC, b.gt, row, null, `SUM(${col(b.s)}${row}:${col(b.e)}${row})`);
       sortedCh.forEach((ch, i) => {
         const qty = flookup[`${nm}::${ch.name}::${months[mi].slice(0, 7)}`];
-        if (qty && qty > 0) wc(wsC, b.s + i, row, qty);
+        wc(wsC, b.s + i, row, qty ?? 0);
       });
     });
   });
@@ -272,10 +272,23 @@ export async function GET(request: NextRequest) {
   const cycleMonth = new Date(cycle.forecast_month);
   const month1 = cycleMonth.toISOString().slice(0, 10);
 
-  const { data: forecastData } = await supabase
-    .from("forecast_data")
-    .select("sku_id, channel_id, quantity, forecast_month")
-    .eq("cycle_id", cycleId);
+  // Fetch forecast data with pagination to bypass Supabase 1000-row default limit
+  const forecastData: any[] = [];
+  {
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("forecast_data")
+        .select("sku_id, channel_id, quantity, forecast_month")
+        .eq("cycle_id", cycleId)
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      forecastData.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
 
   // V2+: merge with previous published version
   let baseForecast: any[] = [];
@@ -289,11 +302,19 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (prevCycle) {
-      const { data: prevData } = await supabase
-        .from("forecast_data")
-        .select("sku_id, channel_id, quantity, forecast_month")
-        .eq("cycle_id", prevCycle.id);
-      if (prevData) baseForecast = prevData;
+      const PAGE = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("forecast_data")
+          .select("sku_id, channel_id, quantity, forecast_month")
+          .eq("cycle_id", prevCycle.id)
+          .range(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        baseForecast.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
     }
   }
 

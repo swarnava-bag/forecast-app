@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname(); // used for active sidebar link highlighting
   const [unassignedCount, setUnassignedCount] = useState(0);
   const supabase = createClient();
 
@@ -29,6 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/channels", label: "Channels & Clusters", badge: 0 },
     { href: "/admin/cycles", label: "Forecast Cycles", badge: 0 },
     { href: "/admin/audit", label: "Audit Log", badge: 0 },
+    { href: "/admin/workflow", label: "Workflow Guide", badge: 0 },
   ];
 
   return (
