@@ -8,11 +8,12 @@ type Profile = { id: string; email: string; full_name: string; role: string };
 type Channel = { id: string; name: string; cluster_id: string };
 type Cluster = { id: string; name: string };
 type Cycle = { id: string; forecast_month: string; version: number; status: string; deadline: string | null };
-type SKU = { id: string; new_master_sku: string; fg_code: string; product_name: string; category: string; product_category: string; is_active: boolean; discontinued_at: string | null };
+type SKU = { id: string; new_master_sku: string; new_fg_code: string; fg_code: string; product_name: string; category: string; product_category: string; is_active: boolean; discontinued_at: string | null };
 
 type UploadRow = {
   sku_id: string;
   new_master_sku: string;
+  fg_code: string;
   product_name: string;
   channel_id: string;
   channel_name: string;
@@ -30,7 +31,7 @@ type ComboInputRow = { master_sku: string; quantities: Record<string, number> };
 type UploadMapperRow = { master_sku: string; combo: string; products: string[] };
 type ComboSingleRow = { master_sku: string; quantities: Record<string, number>; status: string };
 type MapperSet = { id: string; name: string; row_count: number; product_column_count: number; is_default: boolean };
-type ComboMapperRow = { master_sku: string; is_combo: boolean; products: string[] };
+type ComboMapperRow = { master_sku: string; is_combo: boolean; products: string[]; fg_code: string };
 type ConversionSummary = { inputRows: number; singlesOutput: number; combosResolved: number; warnings: string[] };
 
 function runComboConversion(
@@ -106,6 +107,7 @@ export default function UploadPage() {
   const [selectedChannel, setSelectedChannel] = useState("");
   const [selectedCycle, setSelectedCycle] = useState("");
   const [uploadMode, setUploadMode] = useState<"single" | "multi">("single");
+  const [uploadIdentifier, setUploadIdentifier] = useState<"sku" | "fg">("sku");
   const [loading, setLoading] = useState(true);
   const [uploadData, setUploadData] = useState<UploadRow[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -121,6 +123,13 @@ export default function UploadPage() {
   const [conversionSummary, setConversionSummary] = useState<ConversionSummary | null>(null);
   const [comboSaveData, setComboSaveData] = useState<Array<{ master_sku: string; channel_id: string; quantity: number; forecast_month: string }>>([]);
   const [warningReport, setWarningReport] = useState<UploadRow[]>([]);
+  const [submittedFgSuggestions, setSubmittedFgSuggestions] = useState<Set<string>>(new Set());
+  // FG Code change suggestion form
+  const [suggestSku, setSuggestSku] = useState("");
+  const [suggestNewFg, setSuggestNewFg] = useState("");
+  const [suggestNotes, setSuggestNotes] = useState("");
+  const [suggestMsg, setSuggestMsg] = useState<string | null>(null);
+  const [suggestSubmitting, setSuggestSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
@@ -135,7 +144,7 @@ export default function UploadPage() {
     (async () => {
       while (true) {
         const { data, error } = await supabase
-          .from("combo_mapper_rows").select("master_sku, is_combo, products")
+          .from("combo_mapper_rows").select("master_sku, is_combo, products, fg_code")
           .eq("mapper_set_id", comboMapperId).range(from, from + PAGE - 1);
         if (error || !data || data.length === 0) break;
         allData = allData.concat(data);
@@ -146,6 +155,7 @@ export default function UploadPage() {
         master_sku: String(r.master_sku || "").trim(),
         is_combo: r.is_combo === true || r.is_combo === "true",
         products: Array.isArray(r.products) ? r.products.map((p: any) => String(p || "").trim()) : [],
+        fg_code: String(r.fg_code || "").trim(),
       }));
       setComboMapperRows(rows);
       setComboLoadingMapper(false);
@@ -269,38 +279,46 @@ export default function UploadPage() {
     const comboSkuCodes = new Set(
       comboMapperRows.filter(r => r.is_combo).map(r => r.master_sku.toLowerCase())
     );
-    const singleSkuList = skus.map(s => ({ sku: s.new_master_sku, name: s.product_name, type: "Single" }));
+    const singleSkuList = skus.map(s => ({ sku: s.new_master_sku, fgCode: s.new_fg_code || "", name: s.product_name, type: "Single" }));
     const comboSkuList = comboMapperRows
       .filter(r => r.is_combo)
-      .map(r => ({ sku: r.master_sku, name: "", type: "Combo" }));
+      .map(r => ({ sku: r.master_sku, fgCode: r.fg_code || "", name: "", type: "Combo" }));
     // Combos first, then singles not already in combos
     const allSkuList = [
       ...comboSkuList,
       ...singleSkuList.filter(s => !comboSkuCodes.has(s.sku.toLowerCase())),
     ];
 
-    const refRows: any[][] = [["Channel", "Cluster", "", "New Master SKU", "Product Name", "Type"]];
+    // Reference columns adapt to upload mode: primary identifier first for easy copy-paste
+    const refHeader = uploadIdentifier === "fg"
+      ? ["Channel", "Cluster", "", "New FG Code", "New Master SKU", "Product Name", "Type"]
+      : ["Channel", "Cluster", "", "New Master SKU", "New FG Code", "Product Name", "Type"];
+    const refRows: any[][] = [refHeader];
     const maxRef = Math.max(myChannels.length, allSkuList.length);
     for (let i = 0; i < maxRef; i++) {
       const ch = myChannels[i];
       const sku = allSkuList[i];
+      const col1 = uploadIdentifier === "fg" ? (sku?.fgCode ?? "") : (sku?.sku ?? "");
+      const col2 = uploadIdentifier === "fg" ? (sku?.sku ?? "") : (sku?.fgCode ?? "");
       refRows.push([
         ch?.name ?? "",
         ch ? (clusters.find(cl => cl.id === ch.cluster_id)?.name ?? "") : "",
         "",
-        sku?.sku ?? "",
+        col1,
+        col2,
         sku?.name ?? "",
         sku?.type ?? "",
       ]);
     }
     const wsRef = XLSX.utils.aoa_to_sheet(refRows);
-    wsRef["!cols"] = [{ wch: 24 }, { wch: 16 }, { wch: 4 }, { wch: 24 }, { wch: 42 }, { wch: 8 }];
+    wsRef["!cols"] = [{ wch: 24 }, { wch: 16 }, { wch: 4 }, { wch: 24 }, { wch: 16 }, { wch: 42 }, { wch: 8 }];
     XLSX.utils.book_append_sheet(wb, wsRef, "Reference");
 
     // ── Sheet 2: Forecast (upload format) ────────────────────────────────
-    // Headers: Channel | New Master SKU | M1 | M2 | M3 — user fills rows as needed
+    // Headers adapt based on uploadIdentifier toggle
+    const skuColHeader = uploadIdentifier === "fg" ? "New FG Code" : "New Master SKU";
     const forecastRows: any[][] = [
-      ["Channel", "New Master SKU", m1Label, m2Label, m3Label],
+      ["Channel", skuColHeader, m1Label, m2Label, m3Label],
       ...Array(50).fill(null).map(() => ["", "", "", "", ""]),
     ];
     const wsFore = XLSX.utils.aoa_to_sheet(forecastRows);
@@ -340,22 +358,71 @@ export default function UploadPage() {
           products: r.products,
         }));
 
-        // ── Parse long-format rows: Channel | New Master SKU | M1 | M2 | M3 ──
-        type InputRow = { chanName: string; sku: string; q1: number; q2: number; q3: number };
+        // ── Build resolution lookup maps ──
+        // Singles: Master SKU -> SKU object
+        const masterSkuMap = new Map<string, SKU>();
+        for (const s of skus) masterSkuMap.set(s.new_master_sku.toLowerCase(), s);
+        // Singles: New FG Code -> SKU object (the 6-digit+G code e.g. 14244G)
+        const fgCodeMap = new Map<string, SKU>();
+        for (const s of skus) {
+          if (s.new_fg_code) {
+            fgCodeMap.set(s.new_fg_code.toLowerCase(), s);
+            // Also map without trailing "G" so "14244" matches "14244G"
+            if (s.new_fg_code.toLowerCase().endsWith("g")) {
+              fgCodeMap.set(s.new_fg_code.slice(0, -1).toLowerCase(), s);
+            }
+          }
+        }
+        // Combos only: Master SKU -> ComboMapperRow (exclude singles from mapper)
+        const comboMasterMap = new Map<string, ComboMapperRow>();
+        for (const r of comboMapperRows) {
+          if (r.is_combo) comboMasterMap.set(r.master_sku.toLowerCase(), r);
+        }
+        // Combos only: FG Code -> ComboMapperRow
+        const comboFgMap = new Map<string, ComboMapperRow>();
+        for (const r of comboMapperRows) {
+          if (r.is_combo && r.fg_code) comboFgMap.set(r.fg_code.toLowerCase(), r);
+        }
+
+        // Resolution: input identifier -> resolved master_sku
+        function resolveIdentifier(input: string): { resolvedSku: string; resolvedFgCode: string; found: boolean } {
+          const lower = input.toLowerCase().trim();
+          if (uploadIdentifier === "sku") {
+            // SKU mode: check singles master_sku, then combo master_sku
+            const single = masterSkuMap.get(lower);
+            if (single) return { resolvedSku: single.new_master_sku, resolvedFgCode: single.new_fg_code || "", found: true };
+            const combo = comboMasterMap.get(lower);
+            if (combo) return { resolvedSku: combo.master_sku, resolvedFgCode: combo.fg_code || "", found: true };
+          } else {
+            // FG mode: check singles new_fg_code, then combo fg_code
+            const single = fgCodeMap.get(lower);
+            if (single) return { resolvedSku: single.new_master_sku, resolvedFgCode: single.new_fg_code || "", found: true };
+            // Combo: FG Code -> combo Master SKU -> combo conversion -> singles with new_fg_code
+            const combo = comboFgMap.get(lower);
+            if (combo) return { resolvedSku: combo.master_sku, resolvedFgCode: combo.fg_code || "", found: true };
+          }
+          return { resolvedSku: input, resolvedFgCode: "", found: false };
+        }
+
+        // ── Parse long-format rows: Channel | SKU/FG Code | M1 | M2 | M3 ──
+        type InputRow = { chanName: string; sku: string; originalInput: string; resolvedFgCode: string; resolved: boolean; q1: number; q2: number; q3: number };
         const inputRows: InputRow[] = [];
         for (const row of json) {
           const chanName = String(row["Channel"] || "").trim();
-          const sku = String(row["New Master SKU"] || row["new_master_sku"] || "").trim();
-          if (!chanName || !sku) continue;
+          const rawIdentifier = String(
+            row["New FG Code"] || row["New Master SKU"] || row["new_master_sku"] || row["FG Code"] || ""
+          ).trim();
+          if (!chanName || !rawIdentifier) continue;
           const q1 = Math.max(0, Number(row[m1Label]) || 0);
           const q2 = Math.max(0, Number(row[m2Label]) || 0);
           const q3 = Math.max(0, Number(row[m3Label]) || 0);
           if (q1 === 0 && q2 === 0 && q3 === 0) continue;
-          inputRows.push({ chanName, sku, q1, q2, q3 });
+          const resolved = resolveIdentifier(rawIdentifier);
+          inputRows.push({ chanName, sku: resolved.resolvedSku, originalInput: rawIdentifier, resolvedFgCode: resolved.resolvedFgCode, resolved: resolved.found, q1, q2, q3 });
         }
 
         if (inputRows.length === 0) {
-          setError("No data rows found. Fill in Channel, New Master SKU, and at least one quantity.");
+          setError(`No data rows found. Fill in Channel, ${uploadIdentifier === "fg" ? "New FG Code" : "New Master SKU"}, and at least one quantity.`);
           return;
         }
 
@@ -404,7 +471,13 @@ export default function UploadPage() {
             if (q1 === 0 && q2 === 0 && q3 === 0) continue;
             const errors: string[] = [];
             const rowWarnings: string[] = [];
-            if (!matchedSku) errors.push(`SKU "${single.master_sku}" not found in SKU master`);
+            if (!matchedSku) {
+              if (uploadIdentifier === "fg") {
+                errors.push(`FG Code "${single.master_sku}" not found`);
+              } else {
+                errors.push(`SKU "${single.master_sku}" not found in SKU master`);
+              }
+            }
             const matchedCh = channels.find(ch => ch.name.toLowerCase() === chanName.toLowerCase());
             if (!matchedCh) {
               errors.push(`Channel "${chanName}" not found`);
@@ -418,6 +491,7 @@ export default function UploadPage() {
             uploadRows.push({
               sku_id: matchedSku?.id || "",
               new_master_sku: single.master_sku,
+              fg_code: matchedSku?.new_fg_code || "",
               product_name: matchedSku?.product_name || "Unknown",
               channel_id: matchedCh?.id || "",
               channel_name: matchedCh?.name || chanName,
@@ -568,6 +642,48 @@ export default function UploadPage() {
     setTimeout(() => setSuccessMsg(null), 6000);
   }
 
+  async function submitFgSuggestion(fgCode: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error: err } = await supabase.from("mapper_suggestions").insert({
+      master_sku: fgCode,
+      is_combo: false,
+      products: [],
+      submitted_by: user?.id,
+      submitted_by_email: profile?.email,
+      status: "pending",
+    });
+    if (!err) {
+      setSubmittedFgSuggestions(prev => new Set(prev).add(fgCode.toLowerCase()));
+    }
+    return !err;
+  }
+
+  async function submitFgChangeSuggestion() {
+    if (!suggestSku.trim() || !suggestNewFg.trim()) return;
+    setSuggestSubmitting(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    // Find current FG code for this Master SKU
+    const currentSku = skus.find(s => s.new_master_sku.toLowerCase() === suggestSku.trim().toLowerCase());
+    const { error: err } = await supabase.from("mapper_suggestions").insert({
+      master_sku: suggestSku.trim(),
+      is_combo: false,
+      products: [],
+      suggested_fg_code: suggestNewFg.trim(),
+      notes: suggestNotes.trim() || (currentSku ? `FG Code change: ${currentSku.new_fg_code || "(none)"} → ${suggestNewFg.trim()}` : null),
+      submitted_by: user?.id,
+      submitted_by_email: profile?.email,
+      status: "pending",
+    });
+    if (err) {
+      setSuggestMsg("Failed to submit suggestion.");
+    } else {
+      setSuggestMsg(`Suggestion submitted: ${suggestSku.trim()} → ${suggestNewFg.trim()}`);
+      setSuggestSku(""); setSuggestNewFg(""); setSuggestNotes("");
+    }
+    setSuggestSubmitting(false);
+    setTimeout(() => setSuggestMsg(null), 4000);
+  }
+
   function formatDeadline(dateStr: string | null) {
     if (!dateStr) return "No deadline";
     return new Date(dateStr).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -670,6 +786,35 @@ export default function UploadPage() {
 
         {!showPreview && (
           <div className="space-y-6">
+
+            {/* Upload Identifier Toggle */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <label className="block text-sm font-medium text-gray-300 mb-3">Upload By</label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setUploadIdentifier("sku"); setError(null); }}
+                  className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${
+                    uploadIdentifier === "sku"
+                      ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500"
+                      : "bg-gray-800 text-gray-400 border-transparent hover:bg-gray-700"
+                  }`}
+                >
+                  <p className="font-medium">Master SKU</p>
+                  <p className="text-xs mt-0.5 opacity-70">Use New Master SKU codes (e.g. BB_AFG)</p>
+                </button>
+                <button
+                  onClick={() => { setUploadIdentifier("fg"); setError(null); }}
+                  className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${
+                    uploadIdentifier === "fg"
+                      ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500"
+                      : "bg-gray-800 text-gray-400 border-transparent hover:bg-gray-700"
+                  }`}
+                >
+                  <p className="font-medium">FG Code</p>
+                  <p className="text-xs mt-0.5 opacity-70">Use New FG Codes (e.g. 14244G)</p>
+                </button>
+              </div>
+            </div>
 
             {/* Upload Mode Toggle (Admin & Head KAM only) */}
             {canUseMultiMode && (
@@ -928,6 +1073,38 @@ export default function UploadPage() {
               </div>
             )}
 
+            {/* FG Code Change Suggestion */}
+            {profile && profile.role !== "admin" && (
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                <p className="text-sm font-medium text-gray-300 mb-1">Suggest FG Code Change</p>
+                <p className="text-xs text-gray-500 mb-3">FG Code changed for a SKU? Let the admin know so the system stays updated.</p>
+                <div className="flex gap-3 items-end flex-wrap">
+                  <div className="flex-1 min-w-[160px]">
+                    <label className="text-xs text-gray-500 mb-1 block">Master SKU</label>
+                    <input value={suggestSku} onChange={(e) => setSuggestSku(e.target.value)} placeholder="e.g. ENB_Mini_CPBG"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                  </div>
+                  <div className="flex-1 min-w-[130px]">
+                    <label className="text-xs text-gray-500 mb-1 block">New FG Code</label>
+                    <input value={suggestNewFg} onChange={(e) => setSuggestNewFg(e.target.value)} placeholder="e.g. 18651G"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                  </div>
+                  <div className="flex-1 min-w-[160px]">
+                    <label className="text-xs text-gray-500 mb-1 block">Reason (optional)</label>
+                    <input value={suggestNotes} onChange={(e) => setSuggestNotes(e.target.value)} placeholder="e.g. MRP change"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                  </div>
+                  <button onClick={submitFgChangeSuggestion} disabled={suggestSubmitting || !suggestSku.trim() || !suggestNewFg.trim()}
+                    className="px-4 py-2 bg-amber-500 text-black text-sm font-semibold rounded-lg hover:bg-amber-400 transition disabled:opacity-50 whitespace-nowrap">
+                    {suggestSubmitting ? "Submitting..." : "Submit"}
+                  </button>
+                </div>
+                {suggestMsg && (
+                  <p className={`text-xs mt-2 ${suggestMsg.startsWith("Failed") ? "text-red-400" : "text-green-400"}`}>{suggestMsg}</p>
+                )}
+              </div>
+            )}
+
             {error && (
               <div className="p-4 bg-red-900/50 border border-red-500 rounded-xl">
                 <p className="text-red-300 text-sm">{error}</p>
@@ -1046,6 +1223,7 @@ export default function UploadPage() {
                     <tr className="border-b border-gray-800">
                       <th className="text-left py-3 px-3 text-gray-400 font-medium w-10">Row</th>
                       <th className="text-left py-3 px-3 text-gray-400 font-medium">SKU</th>
+                      <th className="text-left py-3 px-3 text-gray-400 font-medium">FG Code</th>
                       <th className="text-left py-3 px-3 text-gray-400 font-medium">Channel</th>
                       <th className="text-right py-3 px-3 text-amber-400 font-medium">{m1Label}</th>
                       <th className="text-right py-3 px-3 text-blue-400 font-medium">{m2Label}</th>
@@ -1058,6 +1236,7 @@ export default function UploadPage() {
                       <tr key={i} className={`border-b border-gray-800/50 ${!row.isValid ? "bg-red-900/10" : row.warnings.length > 0 ? "bg-amber-900/10" : ""}`}>
                         <td className="py-2 px-3 text-gray-500 text-xs">{row.originalRow}</td>
                         <td className="py-2 px-3 font-mono text-xs">{row.new_master_sku}</td>
+                        <td className="py-2 px-3 font-mono text-xs text-gray-400">{row.fg_code || "-"}</td>
                         <td className="py-2 px-3 text-xs text-gray-300">{row.channel_name}</td>
                         <td className="py-2 px-3 text-right font-mono text-xs">{row.isValid ? (row.qty_m1 > 0 ? row.qty_m1.toLocaleString() : "-") : "-"}</td>
                         <td className="py-2 px-3 text-right font-mono text-xs">{row.isValid ? (row.qty_m2 > 0 ? row.qty_m2.toLocaleString() : "-") : "-"}</td>
@@ -1070,7 +1249,26 @@ export default function UploadPage() {
                               <span className="text-green-400 text-xs">{"\u2713"}</span>
                             )
                           ) : (
-                            <div>{row.errors.map((err, j) => (<span key={j} className="block text-red-400 text-xs">{"\u2717"} {err}</span>))}</div>
+                            <div>{row.errors.map((err, j) => (
+                              <span key={j} className="block text-red-400 text-xs">
+                                {"\u2717"} {err}
+                                {uploadIdentifier === "fg" && err.includes("FG Code") && err.includes("not found") && (
+                                  submittedFgSuggestions.has(row.new_master_sku.toLowerCase()) ? (
+                                    <span className="ml-2 text-green-400">Submitted</span>
+                                  ) : (
+                                    <button
+                                      onClick={async () => {
+                                        const ok = await submitFgSuggestion(row.new_master_sku);
+                                        if (!ok) alert("Failed to submit suggestion.");
+                                      }}
+                                      className="ml-2 text-amber-400 underline hover:text-amber-300"
+                                    >
+                                      Submit for Review
+                                    </button>
+                                  )
+                                )}
+                              </span>
+                            ))}</div>
                           )}
                         </td>
                       </tr>

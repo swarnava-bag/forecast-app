@@ -108,9 +108,9 @@ function buildExcel(data: {
   skus.forEach((sku, idx) => {
     const row = CH_D0 + idx;
     const nm  = String(sku.new_master_sku || "");
+    const nfg = String(sku.new_fg_code || "").trim();
     const fg  = String(sku.fg_code || "").trim();
     const ms  = nm.endsWith("G") ? nm.slice(0, -1) : nm;
-    const nfg = fg ? `${fg}G` : "";
     const fgd = /^\d+$/.test(fg) ? Number(fg) : fg;
 
     wc(wsC, 4,  row, nm);
@@ -191,9 +191,9 @@ function buildExcel(data: {
     const conRow = CON_D0 + idx;
     const chRow  = CH_D0 + idx;
     const nm  = String(sku.new_master_sku || "");
+    const nfg = String(sku.new_fg_code || "").trim();
     const fg  = String(sku.fg_code || "").trim();
     const ms  = nm.endsWith("G") ? nm.slice(0, -1) : nm;
-    const nfg = fg ? `${fg}G` : "";
     const fgd = /^\d+$/.test(fg) ? Number(fg) : fg;
 
     wc(wsN, 6,  conRow, nm);
@@ -252,7 +252,7 @@ export async function GET(request: NextRequest) {
 
   const { data: skus } = await supabase
     .from("sku_master")
-    .select("id, new_master_sku, fg_code, product_name, category, product_category")
+    .select("id, new_master_sku, new_fg_code, fg_code, product_name, category, product_category")
     .eq("is_active", true)
     .is("discontinued_at", null)
     .order("product_name");
@@ -344,6 +344,7 @@ export async function GET(request: NextRequest) {
       version:     cycle.version,
       skus: (skus || []).map((s: any) => ({
         new_master_sku:   s.new_master_sku,
+        new_fg_code:      s.new_fg_code || "",
         fg_code:          s.fg_code || "",
         product_name:     s.product_name,
         category:         s.category,
