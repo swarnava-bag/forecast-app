@@ -6,7 +6,7 @@ import Link from "next/link";
 
 type Profile = { id: string; email: string; full_name: string; role: string };
 type MapperSet = { id: string; name: string; description: string | null; product_column_count: number; row_count: number; is_default: boolean; uploaded_by: string; created_at: string };
-type MapperRow = { master_sku: string; combo: string; products: string[] };
+type MapperRow = { master_sku: string; combo: string; products: string[]; fg_code: string };
 type ComboInputRow = { master_sku: string; quantities: Record<string, number> };
 type ConsolidatedRow = { master_sku: string; quantities: Record<string, number>; mapper_status: "Found" | "NOT IN MAPPER"; combo: string; products: string[] };
 type SinglesRow = { master_sku: string; quantities: Record<string, number>; status: "Converted" | "NOT IN MAPPER" };
@@ -27,6 +27,12 @@ function parseMapper(ws: XLSX.WorkSheet): { mapperRows: MapperRow[]; productCoun
     if (h.toLowerCase().includes("product")) { productCount++; productIndices.push(i); }
   }
 
+  // Detect FG Code column (look for header containing "fg")
+  const fgIdx = headers.findIndex((h: any) => {
+    const hl = String(h || "").toLowerCase();
+    return hl.includes("fg") && (hl.includes("code") || hl.includes("fg_code"));
+  });
+
   const mapperRows: MapperRow[] = [];
   for (let r = 1; r < json.length; r++) {
     const row = json[r] as any[];
@@ -37,7 +43,8 @@ function parseMapper(ws: XLSX.WorkSheet): { mapperRows: MapperRow[]; productCoun
       const val = row?.[idx];
       return val && String(val).trim() ? String(val).trim() : "";
     });
-    mapperRows.push({ master_sku: String(sku).trim(), combo, products });
+    const fgCode = fgIdx >= 0 ? String(row?.[fgIdx] || "").trim() : "";
+    mapperRows.push({ master_sku: String(sku).trim(), combo, products, fg_code: fgCode });
   }
   return { mapperRows, productCount };
 }
@@ -114,7 +121,7 @@ function runConversion(comboRows: ComboInputRow[], mapperRows: MapperRow[], qtyC
 
 // ========== EXCEL OUTPUT ==========
 
-function buildOutputExcel(result: ConversionResult, mapperRows: MapperRow[]): XLSX.WorkBook {
+function buildOutputExcel(result: ConversionResult, mapperRows: MapperRow[], skuMap?: Map<string, SingleSku>): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
   const consData = result.consolidated.map((r) => {
     const row: any = { "Master SKU": r.master_sku };
@@ -125,7 +132,8 @@ function buildOutputExcel(result: ConversionResult, mapperRows: MapperRow[]): XL
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consData), "Consolidated");
   const singData = result.singles.map((r) => {
-    const row: any = { "Master SKU": r.master_sku, "Status": r.status };
+    const sku = skuMap?.get(r.master_sku.toLowerCase());
+    const row: any = { "Master SKU": r.master_sku, "FG Code": sku?.new_fg_code || "", "Product Name": sku?.product_name || "", "Status": r.status };
     for (const col of result.qtyColumns) row[col] = Math.round((r.quantities[col] || 0) * 100) / 100;
     return row;
   });
@@ -141,9 +149,12 @@ function buildOutputExcel(result: ConversionResult, mapperRows: MapperRow[]): XL
 
 // ========== COMPONENT ==========
 
+type SingleSku = { new_master_sku: string; new_fg_code: string; product_name: string };
+
 export default function ComboConverterPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [skuMaster, setSkuMaster] = useState<SingleSku[]>([]);
   const [mapperSource, setMapperSource] = useState<"file" | "db">("file");
   // DB mappers
   const [mapperSets, setMapperSets] = useState<MapperSet[]>([]);
@@ -188,6 +199,7 @@ export default function ComboConverterPage() {
     // Non-admin defaults to DB mapper (no file upload option)
     if (profileData?.role !== "admin") setMapperSource("db");
     await loadMapperSets();
+    await loadSkuMaster();
     // Admin: load pending suggestions
     if (profileData?.role === "admin") await loadSuggestions();
     setLoading(false);
@@ -203,6 +215,27 @@ export default function ComboConverterPage() {
     }
   }
 
+  async function loadSkuMaster() {
+    let all: any[] = [];
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from("sku_master")
+        .select("new_master_sku, new_fg_code, product_name")
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      all = all.concat(data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    setSkuMaster(all.map((r: any) => ({
+      new_master_sku: String(r.new_master_sku || "").trim(),
+      new_fg_code: String(r.new_fg_code || "").trim(),
+      product_name: String(r.product_name || "").trim(),
+    })));
+  }
+
   // Load mapper rows for selected set
   async function loadMapperData(setId: string) {
     if (!setId) return;
@@ -215,7 +248,7 @@ export default function ComboConverterPage() {
     while (true) {
       const { data, error } = await supabase
         .from("combo_mapper_rows")
-        .select("master_sku, is_combo, products")
+        .select("master_sku, is_combo, products, fg_code")
         .eq("mapper_set_id", setId)
         .range(from, from + PAGE - 1);
       if (error || !data || data.length === 0) break;
@@ -229,6 +262,7 @@ export default function ComboConverterPage() {
         master_sku: String(r.master_sku || "").trim(),
         combo: (r.is_combo === true || r.is_combo === "true") ? "Yes" : "No",
         products: Array.isArray(r.products) ? r.products.map((p: any) => String(p || "").trim()) : [],
+        fg_code: String(r.fg_code || "").trim(),
       }));
       const maxP = rows.reduce((max, r) => Math.max(max, r.products.length), 0);
       setDbMapperRows(rows);
@@ -277,6 +311,7 @@ export default function ComboConverterPage() {
         master_sku: m.master_sku,
         is_combo: ["yes", "y", "1", "true"].includes(m.combo.toLowerCase()),
         products: m.products.filter((p) => p.length > 0),
+        fg_code: m.fg_code || null,
       }));
 
       for (let i = 0; i < rows.length; i += BATCH) {
@@ -284,13 +319,17 @@ export default function ComboConverterPage() {
         if (insErr) { setMapperMsg(`Row insert failed at batch ${Math.floor(i / BATCH)}: ${insErr.message}`); setUploadingMapper(false); return; }
       }
 
+      // Auto-resolve nested combos
+      const dbRows = rows.map(r => ({ master_sku: r.master_sku, is_combo: r.is_combo, products: r.products }));
+      const resolvedCount = await resolveNestedInDb(setData.id, dbRows, true);
+
       await supabase.from("audit_log").insert({
         user_id: user?.id, user_email: user?.email, action: "mapper_upload",
         table_name: "combo_mapper_sets", record_id: setData.id,
         new_values: { name: newMapperName.trim(), rows: mapperRows.length, products: productCount },
       });
 
-      setMapperMsg(`Mapper "${newMapperName.trim()}" uploaded: ${mapperRows.length} SKUs, P1-P${productCount}`);
+      setMapperMsg(`Mapper "${newMapperName.trim()}" uploaded: ${mapperRows.length} SKUs, P1-P${productCount}${resolvedCount > 0 ? `. Auto-resolved ${resolvedCount} nested combo(s).` : ""}`);
       setNewMapperName(""); setNewMapperDesc("");
       await loadMapperSets();
       setSelectedMapperSetId(setData.id);
@@ -311,27 +350,43 @@ export default function ComboConverterPage() {
       const { mapperRows, productCount } = parseMapper(wb.Sheets[sheetName]);
       if (mapperRows.length === 0) { setMapperMsg("No valid rows."); setUploadingMapper(false); return; }
 
+      // Preserve fg_code and product_name from existing rows before deleting
+      const { data: existingRows } = await supabase.from("combo_mapper_rows").select("master_sku, fg_code, product_name").eq("mapper_set_id", setId);
+      const preservedData = new Map<string, { fg_code: string | null; product_name: string | null }>();
+      for (const r of (existingRows || [])) {
+        if (r.fg_code || r.product_name) preservedData.set(r.master_sku.toLowerCase(), { fg_code: r.fg_code, product_name: r.product_name });
+      }
+
       // Delete old rows
       await supabase.from("combo_mapper_rows").delete().eq("mapper_set_id", setId);
 
-      // Insert new
+      // Insert new — restore fg_code and product_name for SKUs that still exist
       const BATCH = 500;
-      const rows = mapperRows.map((m) => ({
-        mapper_set_id: setId,
-        master_sku: m.master_sku,
-        is_combo: ["yes", "y", "1", "true"].includes(m.combo.toLowerCase()),
-        products: m.products.filter((p) => p.length > 0),
-      }));
+      const rows = mapperRows.map((m) => {
+        const preserved = preservedData.get(m.master_sku.toLowerCase());
+        return {
+          mapper_set_id: setId,
+          master_sku: m.master_sku,
+          is_combo: ["yes", "y", "1", "true"].includes(m.combo.toLowerCase()),
+          products: m.products.filter((p) => p.length > 0),
+          fg_code: m.fg_code || preserved?.fg_code || null,
+          product_name: preserved?.product_name || null,
+        };
+      });
       for (let i = 0; i < rows.length; i += BATCH) {
         const { error: insErr } = await supabase.from("combo_mapper_rows").insert(rows.slice(i, i + BATCH));
         if (insErr) { setMapperMsg(`Insert failed: ${insErr.message}`); setUploadingMapper(false); return; }
       }
 
+      // Auto-resolve nested combos
+      const dbRows = rows.map(r => ({ master_sku: r.master_sku, is_combo: r.is_combo, products: r.products }));
+      const resolvedCount = await resolveNestedInDb(setId, dbRows, true);
+
       await supabase.from("combo_mapper_sets").update({
         product_column_count: productCount, row_count: mapperRows.length, updated_at: new Date().toISOString(),
       }).eq("id", setId);
 
-      setMapperMsg(`"${ms.name}" updated: ${mapperRows.length} SKUs, P1-P${productCount}`);
+      setMapperMsg(`"${ms.name}" updated: ${mapperRows.length} SKUs, P1-P${productCount}${resolvedCount > 0 ? `. Auto-resolved ${resolvedCount} nested combo(s).` : ""}`);
       await loadMapperSets();
       if (selectedMapperSetId === setId) loadMapperData(setId);
     } catch (err: any) { setMapperMsg(`Error: ${err.message}`); }
@@ -398,7 +453,126 @@ export default function ComboConverterPage() {
 
   function downloadResult() {
     if (!result) return;
-    XLSX.writeFile(buildOutputExcel(result, allMapperRows), "Combo_to_Singles_Output.xlsx");
+    XLSX.writeFile(buildOutputExcel(result, allMapperRows, skuLookup), "Combo_to_Singles_Output.xlsx");
+  }
+
+  // Resolve nested combos in a set of mapper rows — returns which ones need updating
+  function findNestedCombos(rows: { master_sku: string; is_combo: boolean; products: string[] }[]): { master_sku: string; resolved: string[] }[] {
+    const comboMap = new Map<string, { products: string[] }>();
+    for (const r of rows) {
+      if (r.is_combo && !comboMap.has(r.master_sku.toLowerCase())) {
+        comboMap.set(r.master_sku.toLowerCase(), { products: r.products });
+      }
+    }
+    function resolve(products: string[], parentSku?: string, visited = new Set<string>()): string[] {
+      const out: string[] = [];
+      for (const p of products) {
+        const key = p.toLowerCase();
+        if (visited.has(key)) { out.push(p); continue; } // circular reference guard
+        const nested = comboMap.get(key);
+        if (nested && key !== parentSku?.toLowerCase()) {
+          visited.add(key);
+          out.push(...resolve(nested.products.filter(x => x), key, visited));
+        } else if (p) {
+          out.push(p);
+        }
+      }
+      return out;
+    }
+    const toUpdate: { master_sku: string; resolved: string[] }[] = [];
+    for (const r of rows) {
+      if (!r.is_combo) continue;
+      const resolved = resolve(r.products.filter(p => p), r.master_sku);
+      if (JSON.stringify(r.products.filter(p => p).sort()) !== JSON.stringify(resolved.sort())) {
+        toUpdate.push({ master_sku: r.master_sku, resolved });
+      }
+    }
+    return toUpdate;
+  }
+
+  // Auto-resolve nested combos in DB for a given mapper set
+  async function resolveNestedInDb(setId: string, rows: { master_sku: string; is_combo: boolean; products: string[] }[], silent = false): Promise<number> {
+    const toUpdate = findNestedCombos(rows);
+    if (toUpdate.length === 0) return 0;
+    let count = 0;
+    for (const u of toUpdate) {
+      const { error: err } = await supabase
+        .from("combo_mapper_rows")
+        .update({ products: u.resolved })
+        .eq("master_sku", u.master_sku)
+        .eq("mapper_set_id", setId);
+      if (!err) count++;
+    }
+    if (!silent && count > 0) {
+      setSubmitMsg(`Auto-resolved nested components for ${count} combo(s).`);
+      setTimeout(() => setSubmitMsg(null), 4000);
+    }
+    return count;
+  }
+
+  // Load rows for a mapper set from DB
+  async function loadMapperSetRows(setId: string): Promise<{ master_sku: string; is_combo: boolean; products: string[]; fg_code: string }[]> {
+    let allData: any[] = [];
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from("combo_mapper_rows")
+        .select("master_sku, is_combo, products, fg_code")
+        .eq("mapper_set_id", setId)
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    return allData.map((r: any) => ({
+      master_sku: String(r.master_sku || "").trim(),
+      is_combo: r.is_combo === true,
+      products: Array.isArray(r.products) ? r.products.map((p: any) => String(p || "").trim()).filter((p: string) => p) : [],
+      fg_code: String(r.fg_code || "").trim(),
+    }));
+  }
+
+  // Resolve nested combos for a specific mapper set
+  async function resolveNestedForSet(setId: string) {
+    setUploadingMapper(true);
+    const rows = await loadMapperSetRows(setId);
+    const toUpdate = findNestedCombos(rows);
+    if (toUpdate.length === 0) {
+      setMapperMsg("No nested combos found in this mapper.");
+      setUploadingMapper(false);
+      return;
+    }
+    if (!confirm(`Found ${toUpdate.length} nested combo(s). Resolve them to singles in the mapper?`)) {
+      setUploadingMapper(false);
+      return;
+    }
+    const count = await resolveNestedInDb(setId, rows, true);
+    setMapperMsg(`Resolved ${count} nested combo(s) to singles.`);
+    setUploadingMapper(false);
+    if (selectedMapperSetId === setId) await loadMapperData(setId);
+  }
+
+  // Download a mapper set as Excel
+  async function downloadMapperSet(setId: string, name: string) {
+    setUploadingMapper(true);
+    const rows = await loadMapperSetRows(setId);
+    let maxCols = 0;
+    for (const r of rows) maxCols = Math.max(maxCols, r.products.length);
+    const wb = XLSX.utils.book_new();
+    const headers = ["Master SKU", "Combo", "FG Code", ...Array.from({ length: maxCols }, (_, i) => `Product ${i + 1}`)];
+    const aoa: any[][] = [headers];
+    for (const r of rows) {
+      const row: any[] = [r.master_sku, r.is_combo ? "Yes" : "No", r.fg_code || ""];
+      for (let i = 0; i < maxCols; i++) row.push(r.products[i] || "");
+      aoa.push(row);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 28 }, { wch: 8 }, { wch: 14 }, ...Array.from({ length: maxCols }, () => ({ wch: 22 }))];
+    XLSX.utils.book_append_sheet(wb, ws, "Mapper");
+    XLSX.writeFile(wb, `${name.replace(/[^a-zA-Z0-9_-]/g, "_")}_Mapper.xlsx`);
+    setUploadingMapper(false);
   }
 
   function downloadTemplate() {
@@ -426,7 +600,7 @@ export default function ComboConverterPage() {
       if (!edit.combo && !edit.products.trim()) continue; // skip untouched
       const prods = edit.products.split(",").map((p) => p.trim()).filter((p) => p.length > 0);
       maxProducts = Math.max(maxProducts, prods.length);
-      patchedMapper.push({ master_sku: sku, combo: edit.combo || "No", products: prods });
+      patchedMapper.push({ master_sku: sku, combo: edit.combo || "No", products: prods, fg_code: "" });
     }
 
     setAllMapperRows(patchedMapper);
@@ -441,6 +615,13 @@ export default function ComboConverterPage() {
     });
     setUnmappedEdits(edits);
   }
+
+  // SKU Master lookup: master_sku -> { new_fg_code, product_name }
+  const skuLookup = useMemo(() => {
+    const map = new Map<string, SingleSku>();
+    for (const s of skuMaster) map.set(s.new_master_sku.toLowerCase(), s);
+    return map;
+  }, [skuMaster]);
 
   const hasUnmappedEdits = useMemo(() => {
     for (const [, edit] of unmappedEdits) {
@@ -487,7 +668,7 @@ export default function ComboConverterPage() {
         await supabase.from("combo_mapper_rows").update({ is_combo: suggestion.is_combo, products: suggestion.products }).eq("id", existing[0].id);
       } else {
         // Insert new
-        await supabase.from("combo_mapper_rows").insert({ mapper_set_id: msId, master_sku: suggestion.master_sku, is_combo: suggestion.is_combo, products: suggestion.products });
+        await supabase.from("combo_mapper_rows").insert({ mapper_set_id: msId, master_sku: suggestion.master_sku, is_combo: suggestion.is_combo, products: suggestion.products, fg_code: suggestion.fg_code || null });
       }
       // Update row count
       const { count } = await supabase.from("combo_mapper_rows").select("id", { count: "exact", head: true }).eq("mapper_set_id", msId);
@@ -550,9 +731,11 @@ export default function ComboConverterPage() {
               </>
             )}
             {!result && (
-              <button onClick={downloadTemplate} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">
-                Download Template
-              </button>
+              <>
+                <button onClick={downloadTemplate} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">
+                  Download Template
+                </button>
+              </>
             )}
             {isAdmin && !result && (
               <>
@@ -600,6 +783,8 @@ export default function ComboConverterPage() {
                         {!ms.is_default && (
                           <button onClick={() => setDefaultMapper(ms.id)} className="text-xs text-gray-400 hover:text-green-400 transition">Set Default</button>
                         )}
+                        <button onClick={() => downloadMapperSet(ms.id, ms.name)} disabled={uploadingMapper} className="text-xs text-blue-400 hover:text-blue-300 transition">Download</button>
+                        <button onClick={() => resolveNestedForSet(ms.id)} disabled={uploadingMapper} className="text-xs text-green-400 hover:text-green-300 transition">Resolve Nested</button>
                         <label className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer transition">
                           Update
                           <input type="file" accept=".xlsx,.xls" className="hidden"
@@ -814,6 +999,8 @@ export default function ComboConverterPage() {
                     <thead className="sticky top-0 bg-gray-900 z-10">
                       <tr className="border-b border-gray-800">
                         <th className="text-left py-3 px-4 text-gray-400 font-medium">Master SKU</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">FG Code</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Product Name</th>
                         <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
                         {result.qtyColumns.map((col) => (<th key={col} className="text-right py-3 px-4 text-gray-400 font-medium">{col}</th>))}
                         <th className="text-right py-3 px-4 text-gray-400 font-medium">Row Total</th>
@@ -822,9 +1009,12 @@ export default function ComboConverterPage() {
                     <tbody>
                       {result.singles.map((row, i) => {
                         const rt = result.qtyColumns.reduce((s, c) => s + (row.quantities[c] || 0), 0);
+                        const sku = skuLookup.get(row.master_sku.toLowerCase());
                         return (
                           <tr key={i} className={`border-b border-gray-800/50 hover:bg-gray-800/20 ${row.status === "NOT IN MAPPER" ? "bg-red-900/10" : ""}`}>
                             <td className="py-2.5 px-4 font-mono text-xs">{row.master_sku}</td>
+                            <td className="py-2.5 px-4 font-mono text-xs">{sku?.new_fg_code || <span className="text-gray-600">—</span>}</td>
+                            <td className="py-2.5 px-4 text-xs text-gray-300 truncate max-w-[200px]" title={sku?.product_name || ""}>{sku?.product_name || <span className="text-gray-600">—</span>}</td>
                             <td className="py-2.5 px-4"><span className={`px-2 py-0.5 rounded text-xs ${row.status === "Converted" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>{row.status}</span></td>
                             {result.qtyColumns.map((col) => (
                               <td key={col} className="py-2.5 px-4 text-right font-mono text-xs">
@@ -838,7 +1028,7 @@ export default function ComboConverterPage() {
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-800/50">
-                        <td className="py-3 px-4 font-semibold" colSpan={2}>Total</td>
+                        <td className="py-3 px-4 font-semibold" colSpan={4}>Total</td>
                         {result.qtyColumns.map((col) => (
                           <td key={col} className="py-3 px-4 text-right font-mono font-bold text-amber-400">
                             {Math.round(result.singles.reduce((s, r) => s + (r.quantities[col] || 0), 0) * 100) / 100}
@@ -870,11 +1060,23 @@ export default function ComboConverterPage() {
                           className="px-4 py-2 text-sm bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-400 transition whitespace-nowrap">
                           Re-Convert
                         </button>
-                        <button onClick={submitSuggestions}
-                          className="px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-400 transition whitespace-nowrap">
-                          Submit to Mapper
-                        </button>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Submit banner — visible whenever there are NOT_IN_MAPPER rows */}
+                {result.consolidated.some((r) => r.mapper_status === "NOT IN MAPPER") && (
+                  <div className="mb-4 p-4 bg-orange-900/20 border border-orange-500/30 rounded-xl">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-orange-300 font-medium">Submit unmapped SKUs for admin approval</p>
+                        <p className="text-xs text-orange-400/60 mt-0.5">Fill in Combo & Components for unmapped SKUs above, then submit to add them permanently to a mapper.</p>
+                      </div>
+                      <button onClick={submitSuggestions}
+                        className="px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-400 transition whitespace-nowrap">
+                        Submit to Mapper
+                      </button>
                     </div>
                     {submitMsg && (
                       <p className={`mt-2 text-xs ${submitMsg.includes("Failed") ? "text-red-400" : "text-green-400"}`}>{submitMsg}</p>
@@ -888,6 +1090,7 @@ export default function ComboConverterPage() {
                       <thead className="sticky top-0 bg-gray-900 z-10">
                         <tr className="border-b border-gray-800">
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Master SKU</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">FG Code</th>
                           {result.qtyColumns.map((col) => (<th key={col} className="text-right py-3 px-4 text-gray-400 font-medium">{col}</th>))}
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Mapper</th>
                           <th className="text-left py-3 px-4 text-gray-400 font-medium w-24">Combo</th>
@@ -898,9 +1101,11 @@ export default function ComboConverterPage() {
                         {result.consolidated.map((row, i) => {
                           const isUnmapped = row.mapper_status === "NOT IN MAPPER";
                           const edit = unmappedEdits.get(row.master_sku);
+                          const mapperRow = allMapperRows.find((m) => m.master_sku === row.master_sku);
                           return (
                             <tr key={i} className={`border-b border-gray-800/50 hover:bg-gray-800/20 ${isUnmapped ? "bg-red-900/10" : ""}`}>
                               <td className="py-2.5 px-4 font-mono text-xs">{row.master_sku}</td>
+                              <td className="py-2.5 px-4 font-mono text-xs text-gray-400">{mapperRow?.fg_code || <span className="text-gray-700">-</span>}</td>
                               {result.qtyColumns.map((col) => (
                                 <td key={col} className="py-2.5 px-4 text-right font-mono text-xs">{(row.quantities[col] || 0) > 0 ? Math.round((row.quantities[col] || 0) * 100) / 100 : <span className="text-gray-700">-</span>}</td>
                               ))}

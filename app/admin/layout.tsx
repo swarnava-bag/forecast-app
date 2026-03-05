@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname(); // used for active sidebar link highlighting
   const [unassignedCount, setUnassignedCount] = useState(0);
   const supabase = createClient();
 
@@ -28,7 +28,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/users", label: "Manage Users", badge: unassignedCount },
     { href: "/admin/channels", label: "Channels & Clusters", badge: 0 },
     { href: "/admin/cycles", label: "Forecast Cycles", badge: 0 },
+    { href: "/admin/fg-codes", label: "Combo to Single Mapper", badge: 0 },
     { href: "/admin/audit", label: "Audit Log", badge: 0 },
+    { href: "/admin/workflow", label: "Workflow Guide", badge: 0 },
   ];
 
   return (
@@ -44,6 +46,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition">Dashboard</Link>
               <Link href="/upload" className="text-sm text-gray-400 hover:text-white transition">Upload</Link>
               <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Forecast View</Link>
+              <Link href="/combo-converter" className="text-sm text-gray-400 hover:text-white transition">Combo → Singles</Link>
               <Link href="/admin/skus" className="text-sm text-amber-400 font-medium">
                 Admin
                 {unassignedCount > 0 && (

@@ -44,9 +44,13 @@ export default function ManageUsersPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const supabase = createClient();
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, []);
 
   async function loadData() {
     setLoading(true);
@@ -129,6 +133,7 @@ export default function ManageUsersPage() {
 
   async function handleDelete() {
     if (!selectedUser) return;
+    if (selectedUser.id === currentUserId) return;
     setDeleting(true);
     setError(null);
     setShowDeleteConfirm(false);
@@ -203,8 +208,9 @@ export default function ManageUsersPage() {
                 </div>
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  disabled={deleting}
-                  className="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-red-400 border border-red-500/50 rounded-lg hover:bg-red-500/10 disabled:opacity-50 transition"
+                  disabled={deleting || selectedUser.id === currentUserId}
+                  title={selectedUser.id === currentUserId ? "You cannot delete your own account" : undefined}
+                  className="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-red-400 border border-red-500/50 rounded-lg hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
                   {deleting ? "Deleting..." : "Delete User"}
                 </button>

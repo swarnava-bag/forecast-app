@@ -108,9 +108,9 @@ function buildExcel(data: {
   skus.forEach((sku, idx) => {
     const row = CH_D0 + idx;
     const nm  = String(sku.new_master_sku || "");
+    const nfg = String(sku.new_fg_code || "").trim();
     const fg  = String(sku.fg_code || "").trim();
     const ms  = nm.endsWith("G") ? nm.slice(0, -1) : nm;
-    const nfg = fg ? `${fg}G` : "";
     const fgd = /^\d+$/.test(fg) ? Number(fg) : fg;
 
     wc(wsC, 4,  row, nm);
@@ -127,7 +127,7 @@ function buildExcel(data: {
       wc(wsC, b.gt, row, null, `SUM(${col(b.s)}${row}:${col(b.e)}${row})`);
       sortedCh.forEach((ch, i) => {
         const qty = flookup[`${nm}::${ch.name}::${months[mi].slice(0, 7)}`];
-        if (qty && qty > 0) wc(wsC, b.s + i, row, qty);
+        wc(wsC, b.s + i, row, qty ?? 0);
       });
     });
   });
@@ -191,9 +191,9 @@ function buildExcel(data: {
     const conRow = CON_D0 + idx;
     const chRow  = CH_D0 + idx;
     const nm  = String(sku.new_master_sku || "");
+    const nfg = String(sku.new_fg_code || "").trim();
     const fg  = String(sku.fg_code || "").trim();
     const ms  = nm.endsWith("G") ? nm.slice(0, -1) : nm;
-    const nfg = fg ? `${fg}G` : "";
     const fgd = /^\d+$/.test(fg) ? Number(fg) : fg;
 
     wc(wsN, 6,  conRow, nm);
@@ -252,7 +252,7 @@ export async function GET(request: NextRequest) {
 
   const { data: skus } = await supabase
     .from("sku_master")
-    .select("id, new_master_sku, fg_code, product_name, category, product_category")
+    .select("id, new_master_sku, new_fg_code, fg_code, product_name, category, product_category")
     .eq("is_active", true)
     .is("discontinued_at", null)
     .order("product_name");
@@ -272,10 +272,23 @@ export async function GET(request: NextRequest) {
   const cycleMonth = new Date(cycle.forecast_month);
   const month1 = cycleMonth.toISOString().slice(0, 10);
 
-  const { data: forecastData } = await supabase
-    .from("forecast_data")
-    .select("sku_id, channel_id, quantity, forecast_month")
-    .eq("cycle_id", cycleId);
+  // Fetch forecast data with pagination to bypass Supabase 1000-row default limit
+  const forecastData: any[] = [];
+  {
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("forecast_data")
+        .select("sku_id, channel_id, quantity, forecast_month")
+        .eq("cycle_id", cycleId)
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      forecastData.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
 
   // V2+: merge with previous published version
   let baseForecast: any[] = [];
@@ -289,11 +302,19 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (prevCycle) {
-      const { data: prevData } = await supabase
-        .from("forecast_data")
-        .select("sku_id, channel_id, quantity, forecast_month")
-        .eq("cycle_id", prevCycle.id);
-      if (prevData) baseForecast = prevData;
+      const PAGE = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("forecast_data")
+          .select("sku_id, channel_id, quantity, forecast_month")
+          .eq("cycle_id", prevCycle.id)
+          .range(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        baseForecast.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
     }
   }
 
@@ -323,6 +344,7 @@ export async function GET(request: NextRequest) {
       version:     cycle.version,
       skus: (skus || []).map((s: any) => ({
         new_master_sku:   s.new_master_sku,
+        new_fg_code:      s.new_fg_code || "",
         fg_code:          s.fg_code || "",
         product_name:     s.product_name,
         category:         s.category,
