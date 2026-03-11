@@ -576,10 +576,12 @@ export default function UploadPage() {
         .eq("uploaded_by", user?.id);
     }
 
-    // Chunk inserts to avoid Supabase PostgREST row limit (~1000 rows/request)
+    // Chunk upserts to avoid Supabase PostgREST row limit (~1000 rows/request)
     const CHUNK = 500;
     for (let i = 0; i < inserts.length; i += CHUNK) {
-      const { error: insertError } = await supabase.from("forecast_data").insert(inserts.slice(i, i + CHUNK));
+      const { error: insertError } = await supabase
+        .from("forecast_data")
+        .upsert(inserts.slice(i, i + CHUNK), { onConflict: "sku_id,channel_id,forecast_month,version" });
       if (insertError) { setError(insertError.message); setSaving(false); return; }
     }
 
