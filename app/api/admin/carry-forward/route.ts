@@ -59,22 +59,41 @@ export async function POST(request: Request) {
   if (!sourceCycle)
     return NextResponse.json({ error: "No published cycle found to carry forward from" }, { status: 404 });
 
-  // 4. Get source published forecast data
-  const { data: sourceData, error: srcDataErr } = await adminClient
-    .from("forecast_data")
-    .select("sku_id, channel_id, quantity, forecast_month")
-    .eq("cycle_id", sourceCycle.id)
-    .eq("status", "published");
+  // 4. Get source published forecast data (paginated)
+  const PAGE = 1000;
+  let sourceData: any[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await adminClient
+      .from("forecast_data")
+      .select("sku_id, channel_id, quantity, forecast_month")
+      .eq("cycle_id", sourceCycle.id)
+      .eq("status", "published")
+      .range(from, from + PAGE - 1);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data || data.length === 0) break;
+    sourceData = sourceData.concat(data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
 
-  if (srcDataErr) return NextResponse.json({ error: srcDataErr.message }, { status: 500 });
-  if (!sourceData || sourceData.length === 0)
+  if (sourceData.length === 0)
     return NextResponse.json({ error: "Source cycle has no published data" }, { status: 404 });
 
-  // 5. Get existing data in target cycle (all statuses)
-  const { data: existingData } = await adminClient
-    .from("forecast_data")
-    .select("sku_id, channel_id, forecast_month")
-    .eq("cycle_id", target_cycle_id);
+  // 5. Get existing data in target cycle (all statuses, paginated)
+  let existingData: any[] = [];
+  from = 0;
+  while (true) {
+    const { data } = await adminClient
+      .from("forecast_data")
+      .select("sku_id, channel_id, forecast_month")
+      .eq("cycle_id", target_cycle_id)
+      .range(from, from + PAGE - 1);
+    if (!data || data.length === 0) break;
+    existingData = existingData.concat(data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
 
   const existingKeys = new Set(
     (existingData || []).map((r: any) => `${r.sku_id}::${r.channel_id}::${r.forecast_month}`)
