@@ -566,14 +566,13 @@ export default function UploadPage() {
       if (row.qty_m3 > 0) inserts.push({ ...base, forecast_month: month3, quantity: row.qty_m3 });
     }
 
-    // Delete existing drafts for affected channels
+    // Delete existing drafts for affected channels (any uploader — allows multiple KAMs on same cluster)
     const channelIds = [...new Set(validRows.map((r) => r.channel_id))];
     for (const chId of channelIds) {
       await supabase.from("forecast_data").delete()
         .eq("channel_id", chId)
         .eq("cycle_id", selectedCycle)
-        .eq("status", "draft")
-        .eq("uploaded_by", user?.id);
+        .eq("status", "draft");
     }
 
     // Chunk upserts to avoid Supabase PostgREST row limit (~1000 rows/request)
