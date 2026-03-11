@@ -745,6 +745,7 @@ export default function UploadPage() {
               <span className="text-sm text-amber-400 font-medium">Upload</span>
               <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Forecast View</Link>
               <Link href="/combo-converter" className="text-sm text-gray-400 hover:text-white transition">Combo → Singles</Link>
+              <Link href="/master-data" className="text-sm text-gray-400 hover:text-white transition">Master Data</Link>
               {profile?.role === "admin" && <Link href="/admin" className="text-sm text-gray-400 hover:text-white transition">Admin</Link>}
             </div>
           </div>
