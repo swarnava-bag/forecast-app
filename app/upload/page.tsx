@@ -593,8 +593,9 @@ export default function UploadPage() {
           .eq("channel_id", chId)
           .eq("cycle_id", selectedCycle);
       }
-      const { error: comboInsertError } = await supabase.from("forecast_data_combos").insert(
-        comboSaveData.map(r => ({ cycle_id: selectedCycle, ...r }))
+      const { error: comboInsertError } = await supabase.from("forecast_data_combos").upsert(
+        comboSaveData.map(r => ({ cycle_id: selectedCycle, ...r })),
+        { onConflict: "cycle_id,master_sku,channel_id,forecast_month" }
       );
       if (comboInsertError) {
         setError(`Combo data save failed: ${comboInsertError.message}`);
