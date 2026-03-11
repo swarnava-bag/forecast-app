@@ -711,6 +711,7 @@ export default function ComboConverterPage() {
               <Link href="/upload" className="text-sm text-gray-400 hover:text-white transition">Upload</Link>
               <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Forecast View</Link>
               <span className="text-sm text-amber-400 font-medium">Combo → Singles</span>
+              <Link href="/master-data" className="text-sm text-gray-400 hover:text-white transition">Master Data</Link>
               {isAdmin && <Link href="/admin" className="text-sm text-gray-400 hover:text-white transition">Admin</Link>}
             </div>
           </div>

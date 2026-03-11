@@ -47,6 +47,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link href="/upload" className="text-sm text-gray-400 hover:text-white transition">Upload</Link>
               <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Forecast View</Link>
               <Link href="/combo-converter" className="text-sm text-gray-400 hover:text-white transition">Combo → Singles</Link>
+              <Link href="/master-data" className="text-sm text-gray-400 hover:text-white transition">Master Data</Link>
               <Link href="/admin/skus" className="text-sm text-amber-400 font-medium">
                 Admin
                 {unassignedCount > 0 && (
