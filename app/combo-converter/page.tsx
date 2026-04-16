@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef, useMemo } from "react";
+import { Fragment, useEffect, useState, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import * as XLSX from "xlsx";
 import Link from "next/link";
@@ -117,6 +117,349 @@ function runConversion(comboRows: ComboInputRow[], mapperRows: MapperRow[], qtyC
     if (Object.values(quantities).some((v) => v > 0)) singles.push({ master_sku: sku, quantities, status: "Converted" });
   }
   return { consolidated, singles, qtyColumns, productCount, warnings };
+}
+
+// ========== NTO CONVERSION (MRP-RATIO SPLIT) ==========
+// Splits a combo's NTO into component NTOs using the MRP ratio of components.
+// contribution_i = MRP(c_i) * qty_i_in_combo  |  NTO_i = NTO_combo * contribution_i / sum(contributions)
+// Singles pass through unchanged. Combos with ANY component missing MRP are BLOCKED and flagged CRITICAL.
+
+type NtoCriticalEntry = { type: "MISSING_MRP" | "NOT_IN_MAPPER" | "COMPONENT_NOT_IN_SKU_MASTER"; combo_sku: string; detail: string };
+type NtoResult = {
+  consolidated: ConsolidatedRow[]; // combo/input SKU with its input NTO values
+  singles: SinglesRow[]; // singles after split — `quantities` here holds NTO values (same shape)
+  ntoColumns: string[];
+  productCount: number;
+  warnings: string[];
+  criticals: NtoCriticalEntry[];
+};
+
+function runNtoConversion(
+  comboRows: ComboInputRow[],
+  mapperRows: MapperRow[],
+  ntoColumns: string[],
+  productCount: number,
+  skuMap: Map<string, SingleSku>
+): NtoResult {
+  const warnings: string[] = [];
+  const criticals: NtoCriticalEntry[] = [];
+  const mapperDict = new Map<string, MapperRow>();
+  for (const m of mapperRows) mapperDict.set(m.master_sku, m);
+
+  // Helper: count component qty inside a combo (products array can have duplicates for qty > 1)
+  function componentCounts(products: string[]): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const p of products) {
+      if (!p) continue;
+      counts.set(p, (counts.get(p) || 0) + 1);
+    }
+    return counts;
+  }
+
+  // Consolidated — same shape as qty converter
+  const consolidated: ConsolidatedRow[] = comboRows.map((row) => {
+    const mapper = mapperDict.get(row.master_sku);
+    if (!mapper) {
+      warnings.push(`SKU "${row.master_sku}" not found in mapper`);
+      criticals.push({ type: "NOT_IN_MAPPER", combo_sku: row.master_sku, detail: "Not in mapper — NTO passed through as-is." });
+      return { master_sku: row.master_sku, quantities: { ...row.quantities }, mapper_status: "NOT IN MAPPER" as const, combo: "", products: Array(productCount).fill("") };
+    }
+    return { master_sku: row.master_sku, quantities: { ...row.quantities }, mapper_status: "Found" as const, combo: mapper.combo, products: [...mapper.products] };
+  });
+
+  // Accumulator: component_sku -> { col -> NTO }
+  const singleNto = new Map<string, Record<string, number>>();
+  const singleStatus = new Map<string, "Converted" | "NOT IN MAPPER">();
+
+  function addNto(sku: string, col: string, val: number, status: "Converted" | "NOT IN MAPPER") {
+    if (!singleNto.has(sku)) singleNto.set(sku, {});
+    const rec = singleNto.get(sku)!;
+    rec[col] = (rec[col] || 0) + val;
+    // Mark as NOT IN MAPPER only if we've never seen it as Converted
+    if (!singleStatus.has(sku) || singleStatus.get(sku) === "NOT IN MAPPER") singleStatus.set(sku, status);
+  }
+
+  for (const row of consolidated) {
+    const isFlag = ["yes", "y", "1", "true"].includes(row.combo.toLowerCase());
+    const hasP = row.products.some((p) => p.length > 0);
+    const isCombo = row.mapper_status === "Found" && (isFlag || hasP);
+
+    if (row.mapper_status === "NOT IN MAPPER") {
+      // Pass-through: treat input SKU as its own single
+      for (const col of ntoColumns) addNto(row.master_sku, col, row.quantities[col] || 0, "NOT IN MAPPER");
+      continue;
+    }
+
+    if (!isCombo) {
+      // Single — pass NTO through unchanged
+      for (const col of ntoColumns) addNto(row.master_sku, col, row.quantities[col] || 0, "Converted");
+      continue;
+    }
+
+    // Combo — split NTO by MRP ratio
+    const counts = componentCounts(row.products);
+    // Check every component has a valid MRP > 0
+    let missing: string[] = [];
+    let contributions: Array<{ sku: string; weight: number; qty: number }> = [];
+    let totalWeight = 0;
+    for (const [sku, qty] of counts.entries()) {
+      const single = skuMap.get(sku.toLowerCase());
+      if (!single) {
+        missing.push(`${sku} (not in SKU Master)`);
+        continue;
+      }
+      if (single.mrp === null || single.mrp === undefined || single.mrp <= 0) {
+        missing.push(`${sku} (MRP missing)`);
+        continue;
+      }
+      const weight = single.mrp * qty;
+      contributions.push({ sku, weight, qty });
+      totalWeight += weight;
+    }
+
+    if (missing.length > 0) {
+      criticals.push({
+        type: "MISSING_MRP",
+        combo_sku: row.master_sku,
+        detail: `Cannot split NTO — missing MRP/component data: ${missing.join("; ")}`,
+      });
+      // Do NOT split — drop the combo's NTO (preserve consolidated row for audit).
+      continue;
+    }
+    if (totalWeight <= 0) {
+      criticals.push({ type: "MISSING_MRP", combo_sku: row.master_sku, detail: "Total MRP weight is zero." });
+      continue;
+    }
+
+    for (const col of ntoColumns) {
+      const comboNto = row.quantities[col] || 0;
+      if (comboNto === 0) continue;
+      for (const c of contributions) {
+        const share = (comboNto * c.weight) / totalWeight;
+        addNto(c.sku, col, share, "Converted");
+      }
+    }
+  }
+
+  const singles: SinglesRow[] = [...singleNto.entries()].map(([sku, nto]) => {
+    // Round each value to 2dp
+    const rounded: Record<string, number> = {};
+    for (const col of ntoColumns) rounded[col] = Math.round((nto[col] || 0) * 100) / 100;
+    return { master_sku: sku, quantities: rounded, status: singleStatus.get(sku) || "Converted" };
+  }).filter((r) => Object.values(r.quantities).some((v) => v !== 0))
+    .sort((a, b) => a.master_sku.localeCompare(b.master_sku));
+
+  return { consolidated, singles, ntoColumns, productCount, warnings, criticals };
+}
+
+// ========== MULTI-PLATFORM (NTO + QTY) CONVERSION ==========
+// Input: SKU, Channel, then paired columns like "Mar 2026 Qty" + "Mar 2026 NTO".
+// Month keys are derived by stripping trailing " Qty" / " NTO" (case-insensitive).
+// For combos: qty expands by component count; NTO splits by MRP ratio. Each row preserves its Channel.
+
+type MultiInputRow = { master_sku: string; channel: string; qty: Record<string, number>; nto: Record<string, number> };
+type MultiSingleRow = { master_sku: string; channel: string; qty: Record<string, number>; nto: Record<string, number>; status: "Converted" | "NOT IN MAPPER" };
+type MultiResult = {
+  input: MultiInputRow[];
+  singles: MultiSingleRow[];
+  months: string[];
+  warnings: string[];
+  criticals: NtoCriticalEntry[];
+};
+
+// Parse a single sheet (Qty OR NTO) into rows of {sku, channel, values[month]}.
+// Month columns are every column that isn't SKU / Channel.
+type SingleSheetRow = { master_sku: string; channel: string; values: Record<string, number> };
+function parseSingleValueSheet(ws: XLSX.WorkSheet): { rows: SingleSheetRow[]; months: string[] } {
+  const json = XLSX.utils.sheet_to_json<any>(ws);
+  if (json.length === 0) return { rows: [], months: [] };
+  const headers = Object.keys(json[0]);
+  const skuCol = headers.find((h) => /master.*sku/i.test(h) || /^sku$/i.test(h)) || headers[0];
+  const channelCol = headers.find((h) => /channel/i.test(h)) || headers[1];
+  const months = headers.filter((h) => h !== skuCol && h !== channelCol).map((h) => String(h).trim());
+  const monthSrcMap = new Map<string, string>(); // trimmed -> original
+  for (const h of headers) {
+    if (h === skuCol || h === channelCol) continue;
+    monthSrcMap.set(String(h).trim(), h);
+  }
+
+  const rows: SingleSheetRow[] = [];
+  for (const r of json) {
+    const sku = String(r[skuCol] || "").trim();
+    if (!sku) continue;
+    const channel = String(r[channelCol] || "").trim();
+    const values: Record<string, number> = {};
+    for (const m of months) {
+      const srcKey = monthSrcMap.get(m);
+      values[m] = srcKey !== undefined ? (Number(String(r[srcKey] ?? "").replace(/[, ]/g, "")) || 0) : 0;
+    }
+    rows.push({ master_sku: sku, channel, values });
+  }
+  return { rows, months };
+}
+
+// Parse Qty + NTO sheets separately and merge, validating structure.
+// Throws with a descriptive error if sheets don't match.
+function parseMultiInput(qtyWs: XLSX.WorkSheet, ntoWs: XLSX.WorkSheet): { rows: MultiInputRow[]; months: string[] } {
+  const qty = parseSingleValueSheet(qtyWs);
+  const nto = parseSingleValueSheet(ntoWs);
+
+  // Validation 1: both sheets must have data
+  if (qty.rows.length === 0) throw new Error("Quantity sheet is empty.");
+  if (nto.rows.length === 0) throw new Error("NTO sheet is empty.");
+
+  // Validation 2: same month columns (same count + same names in same order)
+  if (qty.months.length !== nto.months.length) {
+    throw new Error(`Month columns differ: Quantity sheet has ${qty.months.length} months, NTO sheet has ${nto.months.length}.`);
+  }
+  for (let i = 0; i < qty.months.length; i++) {
+    if (qty.months[i] !== nto.months[i]) {
+      throw new Error(`Month column mismatch at position ${i + 1}: Quantity="${qty.months[i]}" vs NTO="${nto.months[i]}".`);
+    }
+  }
+
+  // Validation 3: same number of rows
+  if (qty.rows.length !== nto.rows.length) {
+    throw new Error(`Row count mismatch: Quantity has ${qty.rows.length} rows, NTO has ${nto.rows.length} rows.`);
+  }
+
+  // Validation 4: same (SKU, Channel) pairs — order-independent
+  const qtyKeys = new Set(qty.rows.map((r) => `${r.master_sku}||${r.channel}`));
+  const ntoKeys = new Set(nto.rows.map((r) => `${r.master_sku}||${r.channel}`));
+  const missingInNto: string[] = [];
+  const missingInQty: string[] = [];
+  for (const k of qtyKeys) if (!ntoKeys.has(k)) missingInNto.push(k);
+  for (const k of ntoKeys) if (!qtyKeys.has(k)) missingInQty.push(k);
+  if (missingInNto.length > 0 || missingInQty.length > 0) {
+    const parts: string[] = [];
+    if (missingInNto.length > 0) parts.push(`Missing in NTO sheet: ${missingInNto.slice(0, 5).join("; ")}${missingInNto.length > 5 ? ` (+${missingInNto.length - 5} more)` : ""}`);
+    if (missingInQty.length > 0) parts.push(`Missing in Quantity sheet: ${missingInQty.slice(0, 5).join("; ")}${missingInQty.length > 5 ? ` (+${missingInQty.length - 5} more)` : ""}`);
+    throw new Error(`Master SKU / Channel rows don't match between sheets.\n${parts.join("\n")}`);
+  }
+
+  // Validation 5: no duplicate (SKU, Channel) within either sheet
+  if (qtyKeys.size !== qty.rows.length) {
+    throw new Error(`Quantity sheet has duplicate Master SKU + Channel rows. Each combination must appear exactly once.`);
+  }
+  if (ntoKeys.size !== nto.rows.length) {
+    throw new Error(`NTO sheet has duplicate Master SKU + Channel rows. Each combination must appear exactly once.`);
+  }
+
+  // Merge — use Qty's row order, look up NTO by key
+  const ntoLookup = new Map<string, SingleSheetRow>();
+  for (const r of nto.rows) ntoLookup.set(`${r.master_sku}||${r.channel}`, r);
+
+  const merged: MultiInputRow[] = qty.rows.map((q) => {
+    const n = ntoLookup.get(`${q.master_sku}||${q.channel}`)!;
+    return { master_sku: q.master_sku, channel: q.channel, qty: q.values, nto: n.values };
+  });
+  return { rows: merged, months: qty.months };
+}
+
+function runMultiConversion(
+  input: MultiInputRow[],
+  mapperRows: MapperRow[],
+  months: string[],
+  skuMap: Map<string, SingleSku>
+): MultiResult {
+  const warnings: string[] = [];
+  const criticals: NtoCriticalEntry[] = [];
+  const mapperDict = new Map<string, MapperRow>();
+  for (const m of mapperRows) mapperDict.set(m.master_sku, m);
+
+  function componentCounts(products: string[]): Map<string, number> {
+    const c = new Map<string, number>();
+    for (const p of products) { if (p) c.set(p, (c.get(p) || 0) + 1); }
+    return c;
+  }
+
+  // key = `${sku}||${channel}`
+  const agg = new Map<string, MultiSingleRow>();
+
+  function addTo(sku: string, channel: string, month: string, qtyVal: number, ntoVal: number, status: "Converted" | "NOT IN MAPPER") {
+    const key = `${sku}||${channel}`;
+    let row = agg.get(key);
+    if (!row) {
+      row = { master_sku: sku, channel, qty: {}, nto: {}, status };
+      for (const m of months) { row.qty[m] = 0; row.nto[m] = 0; }
+      agg.set(key, row);
+    }
+    row.qty[month] = (row.qty[month] || 0) + qtyVal;
+    row.nto[month] = (row.nto[month] || 0) + ntoVal;
+    if (row.status === "Converted" && status === "NOT IN MAPPER") row.status = "NOT IN MAPPER";
+  }
+
+  for (const row of input) {
+    const mapper = mapperDict.get(row.master_sku);
+    if (!mapper) {
+      warnings.push(`SKU "${row.master_sku}" not found in mapper (channel: ${row.channel})`);
+      criticals.push({ type: "NOT_IN_MAPPER", combo_sku: row.master_sku, detail: `Channel: ${row.channel} — passed through as-is.` });
+      for (const m of months) addTo(row.master_sku, row.channel, m, row.qty[m] || 0, row.nto[m] || 0, "NOT IN MAPPER");
+      continue;
+    }
+    const isFlag = ["yes", "y", "1", "true"].includes(mapper.combo.toLowerCase());
+    const hasP = mapper.products.some((p) => p.length > 0);
+    const isCombo = isFlag || hasP;
+
+    if (!isCombo) {
+      // Single — pass through
+      for (const m of months) addTo(row.master_sku, row.channel, m, row.qty[m] || 0, row.nto[m] || 0, "Converted");
+      continue;
+    }
+
+    // Combo — qty expands, NTO splits by MRP ratio
+    const counts = componentCounts(mapper.products);
+    const contributions: Array<{ sku: string; weight: number; qty: number }> = [];
+    const missing: string[] = [];
+    let totalWeight = 0;
+    for (const [sku, qty] of counts.entries()) {
+      const single = skuMap.get(sku.toLowerCase());
+      if (!single) { missing.push(`${sku} (not in SKU Master)`); continue; }
+      if (single.mrp === null || single.mrp === undefined || single.mrp <= 0) { missing.push(`${sku} (MRP missing)`); continue; }
+      const weight = single.mrp * qty;
+      contributions.push({ sku, weight, qty });
+      totalWeight += weight;
+    }
+    if (missing.length > 0 || totalWeight <= 0) {
+      criticals.push({
+        type: "MISSING_MRP",
+        combo_sku: row.master_sku,
+        detail: `Channel: ${row.channel} — cannot split NTO (${missing.join("; ") || "zero total weight"}). Qty still expanded.`,
+      });
+      // Expand qty only — skip NTO (drop to zero)
+      for (const [compSku, q] of counts.entries()) {
+        for (const m of months) {
+          const qtyVal = (row.qty[m] || 0) * q;
+          addTo(compSku, row.channel, m, qtyVal, 0, "Converted");
+        }
+      }
+      continue;
+    }
+
+    for (const [compSku, q] of counts.entries()) {
+      for (const m of months) {
+        const qtyVal = (row.qty[m] || 0) * q;
+        const contribution = (skuMap.get(compSku.toLowerCase())!.mrp! * q);
+        const ntoShare = (row.nto[m] || 0) * contribution / totalWeight;
+        addTo(compSku, row.channel, m, qtyVal, ntoShare, "Converted");
+      }
+    }
+  }
+
+  const singles: MultiSingleRow[] = [...agg.values()]
+    .map((r) => {
+      const qty: Record<string, number> = {};
+      const nto: Record<string, number> = {};
+      for (const m of months) {
+        qty[m] = Math.round((r.qty[m] || 0) * 100) / 100;
+        nto[m] = Math.round((r.nto[m] || 0) * 100) / 100;
+      }
+      return { ...r, qty, nto };
+    })
+    .filter((r) => months.some((m) => r.qty[m] !== 0 || r.nto[m] !== 0))
+    .sort((a, b) => a.master_sku.localeCompare(b.master_sku) || a.channel.localeCompare(b.channel));
+
+  return { input, singles, months, warnings, criticals };
 }
 
 // ========== EXCEL OUTPUT ==========
@@ -279,9 +622,124 @@ function buildOutputExcel(result: ConversionResult, mapperRows: MapperRow[], sku
   return wb;
 }
 
+// ========== NTO EXCEL OUTPUT ==========
+
+function buildNtoOutputExcel(result: NtoResult, mapperRows: MapperRow[], skuMap: Map<string, SingleSku>): XLSX.WorkBook {
+  const wb = XLSX.utils.book_new();
+
+  // 1. Singles_NTO — final output: each single SKU with NTO per month
+  const singlesData = result.singles.map((r) => {
+    const row: any = { "Master SKU": r.master_sku };
+    const single = skuMap.get(r.master_sku.toLowerCase());
+    row["FG Code"] = single?.new_fg_code || "";
+    row["Product Name"] = single?.product_name || "";
+    row["MRP"] = single?.mrp ?? "";
+    for (const col of result.ntoColumns) row[col] = r.quantities[col] || 0;
+    row["Status"] = r.status;
+    return row;
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(singlesData), "Singles_NTO");
+
+  // 2. Consolidated_Input — the raw combo input with NTO pre-split
+  const consData = result.consolidated.map((r) => {
+    const row: any = { "Master SKU": r.master_sku, "Mapper Status": r.mapper_status, "Combo": r.combo };
+    for (const col of result.ntoColumns) row[col] = r.quantities[col] || 0;
+    r.products.forEach((p, i) => { if (p) row[`P${i + 1}`] = p; });
+    return row;
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consData), "Consolidated_Input");
+
+  // 3. Diagnostics — CRITICAL first (blocked combos), then warnings
+  const diag: Array<{ Type: string; "Combo SKU": string; Details: string }> = [];
+  for (const c of result.criticals) {
+    const typeLabel = c.type === "MISSING_MRP" ? "CRITICAL" : c.type === "NOT_IN_MAPPER" ? "NOT IN MAPPER" : "WARNING";
+    diag.push({ Type: typeLabel, "Combo SKU": c.combo_sku, Details: c.detail });
+  }
+  for (const w of result.warnings) diag.push({ Type: "WARNING", "Combo SKU": "", Details: w });
+  const seen = new Set<string>();
+  const deduped = diag.filter((d) => {
+    const k = `${d.Type}|${d["Combo SKU"]}|${d.Details}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const rank: Record<string, number> = { CRITICAL: 0, "NOT IN MAPPER": 1, WARNING: 2 };
+  deduped.sort((a, b) => (rank[a.Type] ?? 99) - (rank[b.Type] ?? 99));
+  const diagSheet = deduped.length > 0 ? deduped : [{ Type: "OK", "Combo SKU": "", Details: "No issues — all combos split successfully." }];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(diagSheet), "Diagnostics");
+
+  // 4. Mapper_Used
+  const mapData = mapperRows.map((m) => {
+    const row: any = { "Master_SKU": m.master_sku, "Combo": m.combo };
+    m.products.forEach((p, i) => { if (p) row[`P${i + 1}`] = p; });
+    return row;
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(mapData), "Mapper_Used");
+
+  return wb;
+}
+
+// ========== MULTI-PLATFORM EXCEL OUTPUT ==========
+
+function buildMultiOutputExcel(result: MultiResult, mapperRows: MapperRow[], skuMap: Map<string, SingleSku>): XLSX.WorkBook {
+  const wb = XLSX.utils.book_new();
+
+  // 1. Singles_Multi — per SKU per Channel.
+  // Layout: identifiers | all Qty columns | all NTO columns | Status
+  const singlesData = result.singles.map((r) => {
+    const row: any = { "Master SKU": r.master_sku, "Channel": r.channel };
+    const single = skuMap.get(r.master_sku.toLowerCase());
+    row["FG Code"] = single?.new_fg_code || "";
+    row["MRP"] = single?.mrp ?? "";
+    for (const m of result.months) row[`${m} Qty`] = r.qty[m] || 0;
+    for (const m of result.months) row[`${m} NTO`] = r.nto[m] || 0;
+    row["Status"] = r.status;
+    return row;
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(singlesData), "Singles_Multi");
+
+  // 2. Input_Snapshot — the raw input rows (same grouping)
+  const inputData = result.input.map((r) => {
+    const row: any = { "Master SKU": r.master_sku, "Channel": r.channel };
+    for (const m of result.months) row[`${m} Qty`] = r.qty[m] || 0;
+    for (const m of result.months) row[`${m} NTO`] = r.nto[m] || 0;
+    return row;
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(inputData), "Input_Snapshot");
+
+  // 3. Diagnostics
+  const diag: Array<{ Type: string; "Combo SKU": string; Details: string }> = [];
+  for (const c of result.criticals) {
+    const typeLabel = c.type === "MISSING_MRP" ? "CRITICAL" : c.type === "NOT_IN_MAPPER" ? "NOT IN MAPPER" : "WARNING";
+    diag.push({ Type: typeLabel, "Combo SKU": c.combo_sku, Details: c.detail });
+  }
+  for (const w of result.warnings) diag.push({ Type: "WARNING", "Combo SKU": "", Details: w });
+  const seen = new Set<string>();
+  const deduped = diag.filter((d) => {
+    const k = `${d.Type}|${d["Combo SKU"]}|${d.Details}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const rank: Record<string, number> = { CRITICAL: 0, "NOT IN MAPPER": 1, WARNING: 2 };
+  deduped.sort((a, b) => (rank[a.Type] ?? 99) - (rank[b.Type] ?? 99));
+  const diagSheet = deduped.length > 0 ? deduped : [{ Type: "OK", "Combo SKU": "", Details: "No issues." }];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(diagSheet), "Diagnostics");
+
+  // 4. Mapper_Used
+  const mapData = mapperRows.map((m) => {
+    const row: any = { "Master_SKU": m.master_sku, "Combo": m.combo };
+    m.products.forEach((p, i) => { if (p) row[`P${i + 1}`] = p; });
+    return row;
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(mapData), "Mapper_Used");
+
+  return wb;
+}
+
 // ========== COMPONENT ==========
 
-type SingleSku = { new_master_sku: string; new_fg_code: string; product_name: string };
+type SingleSku = { new_master_sku: string; new_fg_code: string; product_name: string; mrp: number | null };
 
 export default function ComboConverterPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -300,8 +758,12 @@ export default function ComboConverterPage() {
   const [newMapperDesc, setNewMapperDesc] = useState("");
   const [uploadingMapper, setUploadingMapper] = useState(false);
   const [mapperMsg, setMapperMsg] = useState<string | null>(null);
+  // Mode / View: qty-only (existing) | nto-only (MRP-ratio split) | nto + qty multi-platform
+  const [mode, setMode] = useState<"qty" | "nto" | "multi">("qty");
   // Conversion
   const [result, setResult] = useState<ConversionResult | null>(null);
+  const [ntoResult, setNtoResult] = useState<NtoResult | null>(null);
+  const [multiResult, setMultiResult] = useState<MultiResult | null>(null);
   const [allMapperRows, setAllMapperRows] = useState<MapperRow[]>([]);
   const [processing, setProcessing] = useState(false);
   // Inline edit for unmapped rows: key = master_sku, value = { combo, products }
@@ -363,7 +825,7 @@ export default function ComboConverterPage() {
     while (true) {
       const { data, error } = await supabase
         .from("sku_master")
-        .select("new_master_sku, new_fg_code, product_name")
+        .select("new_master_sku, new_fg_code, product_name, mrp")
         .range(from, from + PAGE - 1);
       if (error || !data || data.length === 0) break;
       all = all.concat(data);
@@ -374,6 +836,7 @@ export default function ComboConverterPage() {
       new_master_sku: String(r.new_master_sku || "").trim(),
       new_fg_code: String(r.new_fg_code || "").trim(),
       product_name: String(r.product_name || "").trim(),
+      mrp: r.mrp === null || r.mrp === undefined ? null : Number(r.mrp),
     })));
   }
 
@@ -819,6 +1282,174 @@ export default function ComboConverterPage() {
     XLSX.writeFile(buildOutputExcel(result, allMapperRows, skuLookup), "Combo_to_Singles_Output.xlsx");
   }
 
+  // ====== NTO-ONLY CONVERSION ======
+
+  function handleNtoFile(file: File) {
+    setError(null); setProcessing(true); setNtoResult(null);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target?.result;
+        const wb = XLSX.read(data, { type: "binary" });
+        const sheetName = wb.SheetNames.includes("NTO") ? "NTO" : wb.SheetNames.includes("Combo") ? "Combo" : wb.SheetNames[0];
+        // Reuse parseCombo since shape is identical: SKU + month columns (values are NTO instead of qty)
+        const { comboRows, qtyColumns } = parseCombo(wb.Sheets[sheetName]);
+        if (comboRows.length === 0) { setError("No data found in the first sheet."); setProcessing(false); return; }
+
+        // NTO mode ALWAYS uses DB mapper — MRP lookup depends on DB SKU Master anyway.
+        if (dbMapperRows.length === 0) {
+          setError("No DB mapper loaded. Ask an admin to upload a mapper set.");
+          setProcessing(false); return;
+        }
+        const mapperRows = dbMapperRows;
+        const productCount = dbProductCount;
+
+        setAllMapperRows(mapperRows);
+        const res = runNtoConversion(comboRows, mapperRows, qtyColumns, productCount, skuLookup);
+        setNtoResult(res);
+      } catch (err: any) { setError(`Processing failed: ${err.message}`); }
+      setProcessing(false);
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  function downloadNtoResult() {
+    if (!ntoResult) return;
+    XLSX.writeFile(buildNtoOutputExcel(ntoResult, allMapperRows, skuLookup), "Combo_to_Singles_NTO_Output.xlsx");
+  }
+
+  // ====== MULTI-PLATFORM (NTO + QTY) CONVERSION ======
+
+  function handleMultiFile(file: File) {
+    setError(null); setProcessing(true); setMultiResult(null);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target?.result;
+        const wb = XLSX.read(data, { type: "binary" });
+
+        // Locate the two required sheets by name (case-insensitive, common variants)
+        const findSheet = (patterns: RegExp[]): string | null => {
+          for (const name of wb.SheetNames) {
+            for (const p of patterns) if (p.test(name)) return name;
+          }
+          return null;
+        };
+        const qtySheetName = findSheet([/^quantity$/i, /^qty$/i, /quantity/i, /\bqty\b/i]);
+        const ntoSheetName = findSheet([/^nto$/i, /nto/i]);
+        if (!qtySheetName) {
+          setError('Quantity sheet not found. Create a sheet named "Quantity" (or "Qty").');
+          setProcessing(false); return;
+        }
+        if (!ntoSheetName) {
+          setError('NTO sheet not found. Create a sheet named "NTO".');
+          setProcessing(false); return;
+        }
+        if (qtySheetName === ntoSheetName) {
+          setError("Could not distinguish Quantity and NTO sheets — they resolved to the same sheet. Rename them.");
+          setProcessing(false); return;
+        }
+
+        const { rows, months } = parseMultiInput(wb.Sheets[qtySheetName], wb.Sheets[ntoSheetName]);
+        if (rows.length === 0) { setError("No data found after merging sheets."); setProcessing(false); return; }
+        if (months.length === 0) { setError("No month columns detected. Each sheet must have Master SKU, Channel, then one column per month."); setProcessing(false); return; }
+
+        // Multi-Platform mode ALWAYS uses DB mapper — no file-mapper option.
+        if (dbMapperRows.length === 0) {
+          setError("No DB mapper loaded. Ask an admin to upload a mapper set.");
+          setProcessing(false); return;
+        }
+        const mapperRows = dbMapperRows;
+
+        setAllMapperRows(mapperRows);
+        const res = runMultiConversion(rows, mapperRows, months, skuLookup);
+        setMultiResult(res);
+      } catch (err: any) { setError(`${err.message}`); }
+      setProcessing(false);
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  function downloadMultiResult() {
+    if (!multiResult) return;
+    XLSX.writeFile(buildMultiOutputExcel(multiResult, allMapperRows, skuLookup), "MultiPlatform_NTO_Qty_Output.xlsx");
+  }
+
+  // Intuitive multi-sheet template: Instructions → Quantity → NTO.
+  // Qty and NTO share the same (Master SKU, Channel) row order.
+  // Sample numbers are deliberately different so users can see what goes where.
+  function downloadMultiTemplate() {
+    const wb = XLSX.utils.book_new();
+
+    // ===== Sheet 1: Instructions =====
+    const instr: (string | number)[][] = [
+      ["Multi-Platform Converter — Workbook Template"],
+      [""],
+      ["This workbook MUST contain two data sheets: 'Quantity' and 'NTO'."],
+      ["Both sheets must have the SAME Master SKU + Channel rows, in any order,"],
+      ["and the SAME month columns. A pre-conversion check enforces this."],
+      [""],
+      ["Column structure (both sheets):"],
+      ["  • Column A: Master SKU"],
+      ["  • Column B: Channel"],
+      ["  • Column C onward: one column per month (e.g. 'Mar 2026', 'Apr 2026', ...)"],
+      [""],
+      ["What each sheet means:"],
+      ["  • Quantity sheet  → units forecast per SKU × Channel × Month"],
+      ["  • NTO sheet       → rupee NTO forecast per SKU × Channel × Month"],
+      [""],
+      ["Conversion behaviour:"],
+      ["  • Singles  → passed through as-is (Qty + NTO)"],
+      ["  • Combos   → Qty expands by component count; NTO splits across"],
+      ["               components by MRP ratio: NTO_i = NTO × (MRP_i × qty_i) / Σ(MRP_j × qty_j)"],
+      ["  • Missing MRP on any component → row flagged CRITICAL; Qty still expands,"],
+      ["    NTO is zeroed (set MRPs in SKU Master and re-run)."],
+      [""],
+      ["Tips:"],
+      ["  • Keep row order identical across both sheets — easier to eyeball."],
+      ["  • Do not add extra columns besides SKU, Channel, and month columns."],
+      ["  • No duplicate (Master SKU, Channel) rows within a sheet."],
+      ["  • Replace the sample rows in Quantity and NTO with your real data."],
+    ];
+    const instrWs = XLSX.utils.aoa_to_sheet(instr);
+    instrWs["!cols"] = [{ wch: 90 }];
+    XLSX.utils.book_append_sheet(wb, instrWs, "Instructions");
+
+    // Shared (SKU, Channel) identity for both data sheets
+    const pairs = [
+      { sku: "EXAMPLE_SKU1", channel: "Amazon" },
+      { sku: "EXAMPLE_SKU1", channel: "Flipkart" },
+      { sku: "EXAMPLE_SKU2", channel: "Amazon" },
+      { sku: "EXAMPLE_COMBO1", channel: "Amazon" },
+    ];
+
+    // ===== Sheet 2: Quantity (units) =====
+    const qtyData = pairs.map((p, i) => ({
+      "Master SKU": p.sku, "Channel": p.channel,
+      "Mar 2026": 100 + i * 50,
+      "Apr 2026": 120 + i * 60,
+    }));
+    const qtyWs = XLSX.utils.json_to_sheet(qtyData);
+    qtyWs["!cols"] = [{ wch: 22 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, qtyWs, "Quantity");
+
+    // ===== Sheet 3: NTO (rupee value, larger numbers) =====
+    const ntoData = pairs.map((p, i) => ({
+      "Master SKU": p.sku, "Channel": p.channel,
+      "Mar 2026": (100 + i * 50) * 50, // units × ~MRP/NTO to make the distinction obvious
+      "Apr 2026": (120 + i * 60) * 50,
+    }));
+    const ntoWs = XLSX.utils.json_to_sheet(ntoData);
+    ntoWs["!cols"] = [{ wch: 22 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ntoWs, "NTO");
+
+    // Open on the Instructions sheet by default
+    wb.Workbook = { Views: [{ RTL: false }] } as any;
+    (wb.Workbook as any).Views[0].activeTab = 0;
+
+    XLSX.writeFile(wb, "MultiPlatform_Template.xlsx");
+  }
+
   // Resolve nested combos in a set of mapper rows — returns which ones need updating
   function findNestedCombos(rows: { master_sku: string; is_combo: boolean; products: string[] }[]): { master_sku: string; resolved: string[] }[] {
     const comboMap = new Map<string, { products: string[] }>();
@@ -1097,7 +1728,7 @@ export default function ComboConverterPage() {
                 <button onClick={() => { setResult(null); setError(null); }} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">New Conversion</button>
               </>
             )}
-            {!result && (
+            {!result && mode !== "multi" && (
               <>
                 <button onClick={downloadTemplate} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">
                   Download Template
@@ -1207,8 +1838,255 @@ export default function ComboConverterPage() {
           </div>
         )}
 
-        {/* ====== UPLOAD SECTION ====== */}
-        {!result && (
+        {/* ====== MODE TABS ====== */}
+        <div className="mb-6 bg-gray-900 border border-gray-800 rounded-xl p-2 inline-flex gap-1">
+          {([
+            { k: "qty", label: "Qty Only", desc: "Original converter — quantities" },
+            { k: "nto", label: "NTO Only", desc: "Split NTO by MRP ratio" },
+            { k: "multi", label: "NTO + Qty (Multi-Platform)", desc: "Per-channel Qty + NTO" },
+          ] as const).map((t) => {
+            const active = mode === t.k;
+            return (
+              <button
+                key={t.k}
+                onClick={() => {
+                  setMode(t.k);
+                  setError(null);
+                  // Clear the other modes' results when switching
+                  if (t.k !== "qty") setResult(null);
+                  if (t.k !== "nto") setNtoResult(null);
+                  if (t.k !== "multi") setMultiResult(null);
+                  // NTO and Multi modes always use DB mapper — auto-load if needed
+                  if ((t.k === "nto" || t.k === "multi") && dbMapperRows.length === 0) {
+                    const setId = selectedMapperSetId || (mapperSets.find((s) => s.is_default) || mapperSets[0])?.id || "";
+                    if (setId) {
+                      if (setId !== selectedMapperSetId) setSelectedMapperSetId(setId);
+                      loadMapperData(setId);
+                    }
+                  }
+                }}
+                className={`px-4 py-2 rounded-lg text-sm transition ${active ? "bg-purple-500/15 text-purple-300 ring-1 ring-purple-500/40" : "text-gray-400 hover:bg-gray-800"}`}
+                title={t.desc}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ====== NTO-ONLY VIEW ====== */}
+        {mode === "nto" && (
+          <div className="space-y-6">
+            {!ntoResult ? (
+              <>
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                  <label className="block text-sm font-medium text-gray-300 mb-3">Upload NTO Sheet</label>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Sheet name: <span className="font-mono text-gray-300">NTO</span> or first sheet. Columns: <span className="font-mono text-gray-300">Master SKU</span> + one column per month containing NTO values.
+                    Combos are split across components using MRP ratio (<span className="font-mono">NTO × MRP × qty / Σ(MRP × qty)</span>).
+                    Missing MRP on any component <span className="text-red-300 font-semibold">blocks that combo</span> and is flagged CRITICAL.
+                  </p>
+                  <div className="border-2 border-dashed border-gray-700 rounded-xl p-10 text-center hover:border-gray-600 transition cursor-pointer"
+                    onClick={() => document.getElementById("nto-file-input")?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleNtoFile(f); }}>
+                    <input id="nto-file-input" type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleNtoFile(f); (e.target as HTMLInputElement).value = ""; }} />
+                    {processing ? <p className="text-purple-400 font-medium">Processing...</p> : (
+                      <>
+                        <div className="text-3xl mb-2">₹</div>
+                        <p className="text-gray-300 font-medium mb-1">Drop NTO Excel here</p>
+                        <p className="text-gray-500 text-sm">First sheet (or &quot;NTO&quot;): SKU + month NTO columns</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {error && <div className="p-3 bg-red-900/50 border border-red-500 rounded-lg"><p className="text-red-300 text-sm">{error}</p></div>}
+              </>
+            ) : (
+              <div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-400">Input Rows</p><p className="text-2xl font-bold">{ntoResult.consolidated.length}</p></div>
+                  <div className="bg-gray-900 border border-green-800/30 rounded-xl p-4"><p className="text-xs text-green-400">Singles Output</p><p className="text-2xl font-bold text-green-400">{ntoResult.singles.length}</p></div>
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-400">NTO Columns</p><p className="text-2xl font-bold">{ntoResult.ntoColumns.length}</p><p className="text-xs text-gray-500 mt-0.5">{ntoResult.ntoColumns.join(", ")}</p></div>
+                  <div className="bg-gray-900 border border-red-800/30 rounded-xl p-4"><p className="text-xs text-red-400">CRITICAL</p><p className={`text-2xl font-bold ${ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length > 0 ? "text-red-400" : "text-gray-600"}`}>{ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length}</p></div>
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-400">Warnings</p><p className={`text-2xl font-bold ${ntoResult.warnings.length > 0 ? "text-amber-400" : "text-gray-600"}`}>{ntoResult.warnings.length}</p></div>
+                </div>
+
+                {ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length > 0 && (
+                  <div className="mb-6 p-4 bg-red-950/50 border border-red-500/50 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <span className="text-red-300 text-xl leading-none">⚠</span>
+                      <div className="flex-1">
+                        <div className="text-red-200 font-bold uppercase tracking-wider text-sm">CRITICAL — {ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length} combo(s) blocked: missing component MRP</div>
+                        <div className="text-red-300/80 text-xs mt-1">These combos' NTO could NOT be split because one or more components are missing MRP in SKU Master. Set the MRPs and re-run, or accept that these combos are excluded from the Singles output. Full list in the Diagnostics sheet.</div>
+                        <ul className="mt-2 text-xs text-red-300/90 space-y-0.5 max-h-40 overflow-auto">
+                          {ntoResult.criticals.filter(c => c.type === "MISSING_MRP").slice(0, 20).map((c, i) => (
+                            <li key={i}><span className="font-mono">{c.combo_sku}</span> — {c.detail}</li>
+                          ))}
+                          {ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length > 20 && <li>… +{ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length - 20} more</li>}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3 mb-4">
+                  <button onClick={downloadNtoResult} className="px-5 py-2 bg-purple-500 text-black font-semibold rounded-lg hover:bg-purple-400 transition text-sm">Download Output (Excel)</button>
+                  <button onClick={() => setNtoResult(null)} className="px-5 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition text-sm">Upload Another</button>
+                </div>
+
+                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="overflow-auto max-h-[600px]">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-gray-900">
+                        <tr className="border-b border-gray-800">
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Master SKU</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">FG Code</th>
+                          <th className="text-right py-3 px-4 text-gray-400 font-medium">MRP</th>
+                          {ntoResult.ntoColumns.map((c) => <th key={c} className="text-right py-3 px-4 text-gray-400 font-medium">{c}</th>)}
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ntoResult.singles.map((r) => {
+                          const single = skuLookup.get(r.master_sku.toLowerCase());
+                          return (
+                            <tr key={r.master_sku} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                              <td className="py-2 px-4 font-mono text-xs">{r.master_sku}</td>
+                              <td className="py-2 px-4 font-mono text-xs text-gray-400">{single?.new_fg_code || "—"}</td>
+                              <td className="py-2 px-4 text-right font-mono text-xs">{single?.mrp ?? "—"}</td>
+                              {ntoResult.ntoColumns.map((c) => <td key={c} className="py-2 px-4 text-right font-mono text-xs">{(r.quantities[c] || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>)}
+                              <td className="py-2 px-4 text-xs">
+                                {r.status === "NOT IN MAPPER" ? <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] uppercase">Not in Mapper</span> : <span className="px-2 py-0.5 rounded bg-green-500/20 text-green-300 text-[10px] uppercase">Converted</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ====== MULTI-PLATFORM VIEW ====== */}
+        {mode === "multi" && (
+          <div className="space-y-6">
+            {!multiResult ? (
+              <>
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                  <div className="flex items-start justify-between mb-3 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300">Upload Multi-Platform Workbook</label>
+                      <p className="text-xs text-gray-500 mt-1">
+                        One Excel file with <span className="text-gray-300 font-medium">two sheets</span>: <span className="font-mono text-gray-300">Quantity</span> and <span className="font-mono text-gray-300">NTO</span>.
+                        Each sheet: <span className="font-mono text-gray-300">Master SKU</span>, <span className="font-mono text-gray-300">Channel</span>, then one column per month.
+                        Both sheets must have the <span className="text-amber-300">same months, same row count, and same (SKU × Channel) pairs</span> — a pre-conversion check enforces this.
+                        Combos: Qty expands; NTO splits by MRP ratio.
+                      </p>
+                    </div>
+                    <button
+                      onClick={downloadMultiTemplate}
+                      className="shrink-0 px-3 py-2 text-xs bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition whitespace-nowrap"
+                    >
+                      Download Template
+                    </button>
+                  </div>
+                  <div className="border-2 border-dashed border-gray-700 rounded-xl p-10 text-center hover:border-gray-600 transition cursor-pointer"
+                    onClick={() => document.getElementById("multi-file-input")?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleMultiFile(f); }}>
+                    <input id="multi-file-input" type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMultiFile(f); (e.target as HTMLInputElement).value = ""; }} />
+                    {processing ? <p className="text-purple-400 font-medium">Processing...</p> : (
+                      <>
+                        <div className="text-3xl mb-2">⊞</div>
+                        <p className="text-gray-300 font-medium mb-1">Drop Multi-Platform Excel here</p>
+                        <p className="text-gray-500 text-sm">Workbook with "Quantity" and "NTO" sheets</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {error && <div className="p-3 bg-red-900/50 border border-red-500 rounded-lg"><p className="text-red-300 text-sm">{error}</p></div>}
+              </>
+            ) : (
+              <div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-400">Input Rows</p><p className="text-2xl font-bold">{multiResult.input.length}</p></div>
+                  <div className="bg-gray-900 border border-green-800/30 rounded-xl p-4"><p className="text-xs text-green-400">Singles × Channels</p><p className="text-2xl font-bold text-green-400">{multiResult.singles.length}</p></div>
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-400">Months</p><p className="text-2xl font-bold">{multiResult.months.length}</p><p className="text-xs text-gray-500 mt-0.5">{multiResult.months.join(", ")}</p></div>
+                  <div className="bg-gray-900 border border-red-800/30 rounded-xl p-4"><p className="text-xs text-red-400">CRITICAL</p><p className={`text-2xl font-bold ${multiResult.criticals.filter(c => c.type === "MISSING_MRP").length > 0 ? "text-red-400" : "text-gray-600"}`}>{multiResult.criticals.filter(c => c.type === "MISSING_MRP").length}</p></div>
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-400">Warnings</p><p className={`text-2xl font-bold ${multiResult.warnings.length > 0 ? "text-amber-400" : "text-gray-600"}`}>{multiResult.warnings.length}</p></div>
+                </div>
+
+                {multiResult.criticals.filter(c => c.type === "MISSING_MRP").length > 0 && (
+                  <div className="mb-6 p-4 bg-red-950/50 border border-red-500/50 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <span className="text-red-300 text-xl leading-none">⚠</span>
+                      <div className="flex-1">
+                        <div className="text-red-200 font-bold uppercase tracking-wider text-sm">CRITICAL — {multiResult.criticals.filter(c => c.type === "MISSING_MRP").length} combo-channel row(s): NTO not split (missing MRP)</div>
+                        <div className="text-red-300/80 text-xs mt-1">Qty still expanded for these, but NTO is zeroed. Set MRPs in SKU Master and re-run.</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3 mb-4">
+                  <button onClick={downloadMultiResult} className="px-5 py-2 bg-purple-500 text-black font-semibold rounded-lg hover:bg-purple-400 transition text-sm">Download Output (Excel)</button>
+                  <button onClick={() => setMultiResult(null)} className="px-5 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition text-sm">Upload Another</button>
+                </div>
+
+                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="overflow-auto max-h-[600px]">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-gray-900">
+                        <tr className="border-b border-gray-800">
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Master SKU</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Channel</th>
+                          {multiResult.months.map((m) => <th key={m} colSpan={2} className="text-center py-3 px-4 text-gray-400 font-medium border-l border-gray-800">{m}</th>)}
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
+                        </tr>
+                        <tr className="border-b border-gray-800 text-[10px] text-gray-500">
+                          <th></th><th></th>
+                          {multiResult.months.map((m) => (
+                            <Fragment key={m}>
+                              <th className="text-right py-1 px-4 border-l border-gray-800">Qty</th>
+                              <th className="text-right py-1 px-4">NTO</th>
+                            </Fragment>
+                          ))}
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {multiResult.singles.map((r, i) => (
+                          <tr key={`${r.master_sku}-${r.channel}-${i}`} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                            <td className="py-2 px-4 font-mono text-xs">{r.master_sku}</td>
+                            <td className="py-2 px-4 text-xs">{r.channel}</td>
+                            {multiResult.months.map((m) => (
+                              <Fragment key={m}>
+                                <td className="py-2 px-4 text-right font-mono text-xs border-l border-gray-800/50">{(r.qty[m] || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                <td className="py-2 px-4 text-right font-mono text-xs">{(r.nto[m] || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                              </Fragment>
+                            ))}
+                            <td className="py-2 px-4 text-xs">
+                              {r.status === "NOT IN MAPPER" ? <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] uppercase">Not in Mapper</span> : <span className="px-2 py-0.5 rounded bg-green-500/20 text-green-300 text-[10px] uppercase">Converted</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ====== UPLOAD SECTION (QTY ONLY — existing, untouched) ====== */}
+        {mode === "qty" && !result && (
           <div className="space-y-6">
             {/* Mapper Source */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
@@ -1309,8 +2187,8 @@ export default function ComboConverterPage() {
           </div>
         )}
 
-        {/* ====== RESULTS ====== */}
-        {result && (
+        {/* ====== RESULTS (QTY ONLY — existing) ====== */}
+        {mode === "qty" && result && (
           <div>
             {/* Summary */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
