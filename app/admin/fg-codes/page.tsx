@@ -188,10 +188,11 @@ export default function FGCodeManagerPage() {
     return "missing";
   }
 
-  // Priority: combos with invalid components come first
+  // Priority: CRITICAL rows (Combo=Yes + no components) first, then invalid components, then incomplete.
   function getComboSortPriority(c: UniqueCombo): number {
+    if (c.is_combo && (!c.products || c.products.length === 0)) return -1; // CRITICAL — top
     const invalid = getInvalidComponents(c.products);
-    if (invalid.length > 0) return 0; // Highest priority
+    if (invalid.length > 0) return 0;
     const status = getComboStatus(c);
     if (status === "missing") return 1;
     if (status === "partial") return 2;
@@ -226,19 +227,44 @@ export default function FGCodeManagerPage() {
     setSaving(true);
     setError(null);
     const newProducts = edit.components.split(",").map(p => p.trim()).filter(p => p);
+
+    // Auto-correct SAFE direction only: products exist → force is_combo = true (silent fix, logged to audit).
+    // DANGEROUS direction (Combo=Yes + no products) is BLOCKED — admin must resolve explicitly.
+    const existingRow = comboRows.find(r => r.master_sku === masterSku);
+    const currentIsCombo = existingRow?.is_combo ?? false;
+    let correctedIsCombo = currentIsCombo;
+    let correction: string | null = null;
+    if (newProducts.length > 0 && !currentIsCombo) {
+      correctedIsCombo = true;
+      correction = `Combo: No → Yes (has ${newProducts.length} component(s))`;
+    } else if (newProducts.length === 0 && currentIsCombo) {
+      setError(`CRITICAL: "${masterSku}" is marked Combo=Yes but has no components. Add components, or explicitly uncheck Combo before saving.`);
+      setSaving(false);
+      return;
+    }
+
     const { error: err } = await supabase
       .from("combo_mapper_rows")
-      .update({ fg_code: edit.fg_code || null, product_name: edit.product_name || null, products: newProducts })
+      .update({ fg_code: edit.fg_code || null, product_name: edit.product_name || null, products: newProducts, is_combo: correctedIsCombo })
       .eq("master_sku", masterSku);
     if (err) {
       setError(`Failed to save: ${err.message}`);
     } else {
-      setSuccessMsg(`Updated ${masterSku}`);
+      // Audit log (includes any auto-correction)
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from("audit_log").insert({
+        user_id: user?.id,
+        user_email: user?.email,
+        action: "mapper_row_update",
+        table_name: "combo_mapper_rows",
+        new_values: { master_sku: masterSku, is_combo: correctedIsCombo, products: newProducts, fg_code: edit.fg_code || null, auto_correction: correction },
+      });
+      setSuccessMsg(correction ? `Updated ${masterSku} · auto-corrected ${correction}` : `Updated ${masterSku}`);
       setEditingRow(prev => { const next = { ...prev }; delete next[masterSku]; return next; });
       setComboRows(prev => prev.map(r =>
-        r.master_sku === masterSku ? { ...r, fg_code: edit.fg_code || null, product_name: edit.product_name || null, products: newProducts } : r
+        r.master_sku === masterSku ? { ...r, fg_code: edit.fg_code || null, product_name: edit.product_name || null, products: newProducts, is_combo: correctedIsCombo } : r
       ));
-      setTimeout(() => setSuccessMsg(null), 3000);
+      setTimeout(() => setSuccessMsg(null), 4000);
     }
     setSaving(false);
   }
@@ -525,6 +551,8 @@ export default function FGCodeManagerPage() {
 
   const completeCount = uniqueCombos.filter(c => getComboStatus(c) === "complete").length;
   const incompleteCount = uniqueCombos.length - completeCount;
+  // CRITICAL: combos flagged is_combo=true but with no component SKUs (data integrity failure).
+  const criticalCombos = uniqueCombos.filter(c => c.is_combo && (!c.products || c.products.length === 0));
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><p className="text-gray-400">Loading...</p></div>;
@@ -721,6 +749,24 @@ export default function FGCodeManagerPage() {
       {/* ═══════ COMBOS TAB ═══════ */}
       {tab === "combos" && (
         <div>
+          {criticalCombos.length > 0 && (
+            <div className="mb-4 p-4 bg-red-950/60 border border-red-500/50 rounded-xl">
+              <div className="flex items-start gap-3">
+                <span className="text-red-300 text-xl leading-none">⚠</span>
+                <div className="flex-1">
+                  <div className="text-red-200 font-bold uppercase tracking-wider text-sm">
+                    {criticalCombos.length} Critical combo{criticalCombos.length > 1 ? "s" : ""} — Admin action required
+                  </div>
+                  <div className="text-red-300/80 text-xs mt-1">
+                    These combos are flagged <span className="font-mono">is_combo=Yes</span> but have no component SKUs. They will silently drop from conversions. Add component SKUs, or uncheck Combo if the SKU is actually a single.
+                  </div>
+                  <div className="text-red-300/90 text-xs mt-2 font-mono">
+                    {criticalCombos.slice(0, 10).map(c => c.master_sku).join(", ")}{criticalCombos.length > 10 ? `, +${criticalCombos.length - 10} more` : ""}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <button onClick={downloadBulkTemplate}
               className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg hover:bg-gray-700 transition">
@@ -758,16 +804,22 @@ export default function FGCodeManagerPage() {
                   {filteredCombos.map((combo) => {
                     const status = getComboStatus(combo);
                     const isEditing = !!editingRow[combo.master_sku];
+                    const isCritical = combo.is_combo && (!combo.products || combo.products.length === 0);
                     return (
                       <tr key={combo.master_sku} className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${
-                        status === "missing" ? "bg-red-900/5" : status === "partial" ? "bg-amber-900/5" : ""
+                        isCritical ? "bg-red-900/25 hover:bg-red-900/35" : status === "missing" ? "bg-red-900/5" : status === "partial" ? "bg-amber-900/5" : ""
                       }`}>
                         <td className="py-2 px-2 text-center">
                           <span className={`inline-block w-2.5 h-2.5 rounded-full ${
                             status === "complete" ? "bg-green-500" : status === "partial" ? "bg-amber-500" : "bg-red-500/60"
                           }`} title={status === "complete" ? "Complete" : status === "partial" ? "Partially filled" : "Missing FG Code & Name"} />
                         </td>
-                        <td className="py-2 px-3 font-mono text-xs">{combo.master_sku}</td>
+                        <td className="py-2 px-3 font-mono text-xs">
+                          {combo.master_sku}
+                          {isCritical && (
+                            <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/30 text-red-200 font-bold text-[10px] uppercase ring-1 ring-red-500/60" title="CRITICAL: Combo=Yes but no components — cannot expand">⚠ Crit</span>
+                          )}
+                        </td>
                         <td className="py-2 px-3">
                           {isEditing ? (
                             <input type="text" value={editingRow[combo.master_sku].fg_code}

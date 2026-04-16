@@ -123,6 +123,19 @@ function runConversion(comboRows: ComboInputRow[], mapperRows: MapperRow[], qtyC
 
 function buildOutputExcel(result: ConversionResult, mapperRows: MapperRow[], skuMap?: Map<string, SingleSku>): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
+
+  // Build combo FG code lookup from mapper (combo_mapper_rows.fg_code)
+  const comboFgMap = new Map<string, string>();
+  for (const m of mapperRows) {
+    if (m.combo === "Yes" && m.fg_code) {
+      comboFgMap.set(m.master_sku.toLowerCase(), m.fg_code);
+    }
+  }
+
+  // Diagnostics collector
+  const diagnostics: Array<{ type: string; master_sku: string; context: string; details: string }> = [];
+
+  // 1. Consolidated (existing — unchanged)
   const consData = result.consolidated.map((r) => {
     const row: any = { "Master SKU": r.master_sku };
     for (const col of result.qtyColumns) row[col] = r.quantities[col] || 0;
@@ -131,19 +144,138 @@ function buildOutputExcel(result: ConversionResult, mapperRows: MapperRow[], sku
     return row;
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consData), "Consolidated");
+
+  // 2. Singles (existing — adds diagnostics for missing FG codes)
   const singData = result.singles.map((r) => {
     const sku = skuMap?.get(r.master_sku.toLowerCase());
-    const row: any = { "Master SKU": r.master_sku, "FG Code": sku?.new_fg_code || "", "Product Name": sku?.product_name || "", "Status": r.status };
+    const fgCode = sku?.new_fg_code || "";
+    if (r.status === "Converted" && !fgCode) {
+      diagnostics.push({
+        type: "MISSING FG CODE",
+        master_sku: r.master_sku,
+        context: "Singles sheet",
+        details: "No new_fg_code in sku_master",
+      });
+    }
+    const row: any = { "Master SKU": r.master_sku, "FG Code": fgCode, "Product Name": sku?.product_name || "", "Status": r.status };
     for (const col of result.qtyColumns) row[col] = Math.round((r.quantities[col] || 0) * 100) / 100;
     return row;
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(singData), "Singles");
+
+  // 3. NEW: Consolidated_FG_Codes — mirrors Consolidated but with FG codes
+  // For combos: own FG from combo_mapper_rows, components (P1..Pn) as FG codes from sku_master
+  // For singles: own FG from sku_master, no P1..Pn
+  const consFgData = result.consolidated.map((r) => {
+    const isCombo = r.combo === "Yes";
+    let ownFgCode = "";
+    if (isCombo) {
+      ownFgCode = comboFgMap.get(r.master_sku.toLowerCase()) || "";
+      if (!ownFgCode && r.mapper_status === "Found") {
+        diagnostics.push({
+          type: "MISSING FG CODE",
+          master_sku: r.master_sku,
+          context: "Combo (Consolidated_FG_Codes)",
+          details: "No fg_code in combo_mapper_rows",
+        });
+      }
+    } else if (r.mapper_status === "Found") {
+      const sku = skuMap?.get(r.master_sku.toLowerCase());
+      ownFgCode = sku?.new_fg_code || "";
+      if (!ownFgCode) {
+        diagnostics.push({
+          type: "MISSING FG CODE",
+          master_sku: r.master_sku,
+          context: "Single (Consolidated_FG_Codes)",
+          details: "No new_fg_code in sku_master",
+        });
+      }
+    }
+    const row: any = { "Master SKU": r.master_sku };
+    for (const col of result.qtyColumns) row[col] = r.quantities[col] || 0;
+    row["Combo"] = r.combo;
+    row["FG Code"] = ownFgCode;
+    if (isCombo) {
+      r.products.forEach((p, i) => {
+        if (p) {
+          const sku = skuMap?.get(p.toLowerCase());
+          const fg = sku?.new_fg_code || "";
+          row[`P${i + 1}`] = fg;
+          if (!fg) {
+            diagnostics.push({
+              type: "MISSING FG CODE",
+              master_sku: p,
+              context: `Component of ${r.master_sku}`,
+              details: "No new_fg_code in sku_master",
+            });
+          }
+        }
+      });
+    }
+    return row;
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consFgData), "Consolidated_FG_Codes");
+
+  // 4. NEW: Diagnostics — all issues in one place
+  result.consolidated.filter((r) => r.mapper_status === "NOT IN MAPPER").forEach((r) => {
+    diagnostics.push({
+      type: "NOT IN MAPPER",
+      master_sku: r.master_sku,
+      context: "Consolidated",
+      details: "SKU not found in mapper",
+    });
+  });
+  // Data inconsistencies in the mapper itself
+  for (const m of mapperRows) {
+    const hasProducts = m.products.some((p) => p && p.length > 0);
+    if (m.combo === "No" && hasProducts) {
+      diagnostics.push({
+        type: "DATA INCONSISTENCY",
+        master_sku: m.master_sku,
+        context: "Mapper",
+        details: `Combo=No but has ${m.products.filter((p) => p).length} component(s). Edit in Mapper Row Editor.`,
+      });
+    } else if (m.combo === "Yes" && !hasProducts) {
+      diagnostics.push({
+        type: "CRITICAL",
+        master_sku: m.master_sku,
+        context: "Mapper",
+        details: "Combo=Yes but NO components listed. Combo cannot expand — data may be missing. Admin must resolve immediately in Mapper Row Editor.",
+      });
+    }
+  }
+  result.warnings.forEach((w) => {
+    diagnostics.push({
+      type: "WARNING",
+      master_sku: "",
+      context: "Conversion",
+      details: w,
+    });
+  });
+  // De-duplicate
+  const seen = new Set<string>();
+  const dedupedDiag = diagnostics.filter((d) => {
+    const key = `${d.type}|${d.master_sku}|${d.details}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  // Sort by severity: CRITICAL first, then DATA INCONSISTENCY, then NOT IN MAPPER, then others
+  const severityRank: Record<string, number> = { "CRITICAL": 0, "DATA INCONSISTENCY": 1, "NOT IN MAPPER": 2, "WARNING": 3 };
+  dedupedDiag.sort((a, b) => (severityRank[a.type] ?? 99) - (severityRank[b.type] ?? 99));
+  const diagData = dedupedDiag.length > 0
+    ? dedupedDiag.map((d) => ({ "Type": d.type, "Master SKU": d.master_sku, "Context": d.context, "Details": d.details }))
+    : [{ "Type": "OK", "Master SKU": "", "Context": "", "Details": "No issues found" }];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(diagData), "Diagnostics");
+
+  // 5. Mapper_Used (existing — unchanged)
   const mapData = mapperRows.map((m) => {
     const row: any = { "Master_SKU": m.master_sku, "Combo": m.combo };
     m.products.forEach((p, i) => { if (p) row[`P${i + 1}`] = p; });
     return row;
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(mapData), "Mapper_Used");
+
   return wb;
 }
 
@@ -184,6 +316,15 @@ export default function ComboConverterPage() {
   const [pendingSuggestions, setPendingSuggestions] = useState<any[]>([]);
   const [showApprovals, setShowApprovals] = useState(false);
   const [submitMsg, setSubmitMsg] = useState<string | null>(null);
+  // Row Editor (admin)
+  type EditorRow = { id: string | null; master_sku: string; is_combo: boolean; products: string; fg_code: string; dirty: boolean; saving: boolean; isNew: boolean };
+  const [rowEditorSetId, setRowEditorSetId] = useState<string | null>(null);
+  const [editorRows, setEditorRows] = useState<EditorRow[]>([]);
+  const [editorSearch, setEditorSearch] = useState("");
+  const [editorIssuesOnly, setEditorIssuesOnly] = useState(false);
+  const [editorLoading, setEditorLoading] = useState(false);
+  const [editorMsg, setEditorMsg] = useState<string | null>(null);
+  const [editorHistory, setEditorHistory] = useState<Array<{ ts: string; master_sku: string; action: string; details: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mapperFileRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
@@ -391,6 +532,228 @@ export default function ComboConverterPage() {
       if (selectedMapperSetId === setId) loadMapperData(setId);
     } catch (err: any) { setMapperMsg(`Error: ${err.message}`); }
     setUploadingMapper(false);
+  }
+
+  // ====== ROW EDITOR (Admin) ======
+
+  function parseProductsStr(s: string): string[] {
+    return s.split(",").map((p) => p.trim()).filter((p) => p.length > 0);
+  }
+
+  async function openRowEditor(setId: string) {
+    setRowEditorSetId(setId);
+    setEditorLoading(true);
+    setEditorMsg(null);
+    setEditorSearch("");
+    setEditorIssuesOnly(false);
+    const rows = await loadMapperSetRows(setId);
+    const ed: EditorRow[] = rows.map((r) => ({
+      id: null, // will use master_sku + setId as key for DB ops
+      master_sku: r.master_sku,
+      is_combo: r.is_combo,
+      products: r.products.join(", "),
+      fg_code: r.fg_code || "",
+      dirty: false,
+      saving: false,
+      isNew: false,
+    }));
+    // Sort: CRITICAL first, then other issues, then alphabetical
+    ed.sort((a, b) => {
+      const aCrit = isCriticalRow(a) ? 0 : 1;
+      const bCrit = isCriticalRow(b) ? 0 : 1;
+      if (aCrit !== bCrit) return aCrit - bCrit;
+      const aIssue = hasInconsistency(a) ? 0 : 1;
+      const bIssue = hasInconsistency(b) ? 0 : 1;
+      if (aIssue !== bIssue) return aIssue - bIssue;
+      return a.master_sku.localeCompare(b.master_sku);
+    });
+    setEditorRows(ed);
+    setEditorHistory([]);
+    setEditorLoading(false);
+  }
+
+  function hasInconsistency(r: { is_combo: boolean; products: string }): boolean {
+    const prods = parseProductsStr(r.products);
+    if (!r.is_combo && prods.length > 0) return true; // has products but not marked combo
+    if (r.is_combo && prods.length === 0) return true; // marked combo but no products
+    return false;
+  }
+
+  // CRITICAL: Combo=Yes but no components — combo cannot expand; likely data loss.
+  function isCriticalRow(r: { is_combo: boolean; products: string }): boolean {
+    const prods = parseProductsStr(r.products);
+    return r.is_combo && prods.length === 0;
+  }
+
+  function closeRowEditor() {
+    // Check for unsaved dirty rows
+    const dirty = editorRows.filter((r) => r.dirty).length;
+    if (dirty > 0 && !confirm(`${dirty} row(s) have unsaved changes. Close anyway?`)) return;
+    setRowEditorSetId(null);
+    setEditorRows([]);
+    setEditorMsg(null);
+    setEditorHistory([]);
+    // Refresh mapper data if this was the selected one
+    if (selectedMapperSetId === rowEditorSetId) loadMapperData(selectedMapperSetId);
+  }
+
+  function updateEditorRow(index: number, field: keyof EditorRow, value: any) {
+    setEditorRows((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value, dirty: true };
+      return next;
+    });
+  }
+
+  function addEditorRow() {
+    setEditorRows((prev) => [
+      { id: null, master_sku: "", is_combo: false, products: "", fg_code: "", dirty: true, saving: false, isNew: true },
+      ...prev,
+    ]);
+  }
+
+  async function saveEditorRow(index: number) {
+    const row = editorRows[index];
+    if (!row || !rowEditorSetId) return;
+    const sku = row.master_sku.trim();
+    if (!sku) {
+      setEditorMsg("Master SKU is required.");
+      return;
+    }
+
+    // Auto-correct SAFE direction only: products exist → force is_combo = true.
+    // DANGEROUS direction (Combo=Yes + no products) is BLOCKED — must be resolved by admin manually.
+    const prods = parseProductsStr(row.products);
+    let correctedIsCombo = row.is_combo;
+    let correction: string | null = null;
+    if (prods.length > 0 && !row.is_combo) {
+      correctedIsCombo = true;
+      correction = `Combo: No → Yes (auto-correct: has ${prods.length} component(s))`;
+    } else if (prods.length === 0 && row.is_combo) {
+      // Do NOT silently flip to No — this could mask data loss (missing components).
+      // Block the save and flag as CRITICAL. Admin must either add components or explicitly uncheck Combo.
+      setEditorRows((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], saving: false };
+        return next;
+      });
+      setEditorMsg(`CRITICAL: "${sku}" is marked Combo=Yes but has no components. Add components, or explicitly uncheck Combo before saving.`);
+      setTimeout(() => setEditorMsg(null), 8000);
+      return;
+    }
+
+    setEditorRows((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], saving: true };
+      return next;
+    });
+
+    const payload = {
+      mapper_set_id: rowEditorSetId,
+      master_sku: sku,
+      is_combo: correctedIsCombo,
+      products: prods,
+      fg_code: row.fg_code.trim() || null,
+    };
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    let opError: string | null = null;
+    if (row.isNew) {
+      // Check if SKU already exists
+      const { data: existing } = await supabase
+        .from("combo_mapper_rows")
+        .select("id")
+        .eq("mapper_set_id", rowEditorSetId)
+        .eq("master_sku", sku)
+        .limit(1);
+      if (existing && existing.length > 0) {
+        opError = `SKU "${sku}" already exists in this mapper.`;
+      } else {
+        const { error } = await supabase.from("combo_mapper_rows").insert(payload);
+        if (error) opError = error.message;
+      }
+    } else {
+      const { error } = await supabase
+        .from("combo_mapper_rows")
+        .update({ is_combo: payload.is_combo, products: payload.products, fg_code: payload.fg_code })
+        .eq("mapper_set_id", rowEditorSetId)
+        .eq("master_sku", sku);
+      if (error) opError = error.message;
+    }
+
+    if (opError) {
+      setEditorRows((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], saving: false };
+        return next;
+      });
+      setEditorMsg(`Save failed: ${opError}`);
+      setTimeout(() => setEditorMsg(null), 4000);
+      return;
+    }
+
+    // Audit log
+    await supabase.from("audit_log").insert({
+      user_id: user?.id,
+      user_email: user?.email,
+      action: row.isNew ? "mapper_row_insert" : "mapper_row_update",
+      table_name: "combo_mapper_rows",
+      record_id: null,
+      new_values: { mapper_set_id: rowEditorSetId, master_sku: sku, is_combo: correctedIsCombo, products: prods, fg_code: payload.fg_code, auto_correction: correction },
+    });
+
+    // Update local state
+    setEditorRows((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], is_combo: correctedIsCombo, products: prods.join(", "), dirty: false, saving: false, isNew: false };
+      return next;
+    });
+
+    // History log
+    const ts = new Date().toLocaleTimeString();
+    const historyEntries: typeof editorHistory = [];
+    historyEntries.push({ ts, master_sku: sku, action: row.isNew ? "Added" : "Updated", details: `Combo=${correctedIsCombo ? "Yes" : "No"}, ${prods.length} component(s)${payload.fg_code ? `, FG=${payload.fg_code}` : ""}` });
+    if (correction) {
+      historyEntries.push({ ts, master_sku: sku, action: "Auto-correct", details: correction });
+    }
+    setEditorHistory((prev) => [...historyEntries, ...prev].slice(0, 50));
+  }
+
+  async function deleteEditorRow(index: number) {
+    const row = editorRows[index];
+    if (!row || !rowEditorSetId) return;
+    if (row.isNew) {
+      // Just remove locally
+      setEditorRows((prev) => prev.filter((_, i) => i !== index));
+      return;
+    }
+    if (!confirm(`Delete "${row.master_sku}" from this mapper?`)) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase
+      .from("combo_mapper_rows")
+      .delete()
+      .eq("mapper_set_id", rowEditorSetId)
+      .eq("master_sku", row.master_sku);
+    if (error) {
+      setEditorMsg(`Delete failed: ${error.message}`);
+      setTimeout(() => setEditorMsg(null), 4000);
+      return;
+    }
+    await supabase.from("audit_log").insert({
+      user_id: user?.id,
+      user_email: user?.email,
+      action: "mapper_row_delete",
+      table_name: "combo_mapper_rows",
+      record_id: null,
+      new_values: { mapper_set_id: rowEditorSetId, master_sku: row.master_sku },
+    });
+    setEditorRows((prev) => prev.filter((_, i) => i !== index));
+    setEditorHistory((prev) => [
+      { ts: new Date().toLocaleTimeString(), master_sku: row.master_sku, action: "Deleted", details: "Removed from mapper" },
+      ...prev,
+    ].slice(0, 50));
   }
 
   async function deleteMapperSet(setId: string) {
@@ -728,6 +1091,9 @@ export default function ComboConverterPage() {
             {result && (
               <>
                 <button onClick={downloadResult} className="px-4 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition">Download Excel</button>
+                {isAdmin && mapperSource === "db" && selectedMapperSetId && (
+                  <button onClick={() => openRowEditor(selectedMapperSetId)} className="px-4 py-2 text-sm bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40 rounded-lg hover:bg-purple-500/30 transition">Edit Mapper</button>
+                )}
                 <button onClick={() => { setResult(null); setError(null); }} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">New Conversion</button>
               </>
             )}
@@ -785,6 +1151,7 @@ export default function ComboConverterPage() {
                           <button onClick={() => setDefaultMapper(ms.id)} className="text-xs text-gray-400 hover:text-green-400 transition">Set Default</button>
                         )}
                         <button onClick={() => downloadMapperSet(ms.id, ms.name)} disabled={uploadingMapper} className="text-xs text-blue-400 hover:text-blue-300 transition">Download</button>
+                        <button onClick={() => openRowEditor(ms.id)} disabled={uploadingMapper} className="text-xs text-purple-400 hover:text-purple-300 transition">Edit Rows</button>
                         <button onClick={() => resolveNestedForSet(ms.id)} disabled={uploadingMapper} className="text-xs text-green-400 hover:text-green-300 transition">Resolve Nested</button>
                         <label className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer transition">
                           Update
@@ -1099,7 +1466,11 @@ export default function ComboConverterPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {result.consolidated.map((row, i) => {
+                        {[...result.consolidated].sort((a, b) => {
+                          const aUnmapped = a.mapper_status === "NOT IN MAPPER" ? 0 : 1;
+                          const bUnmapped = b.mapper_status === "NOT IN MAPPER" ? 0 : 1;
+                          return aUnmapped - bUnmapped;
+                        }).map((row, i) => {
                           const isUnmapped = row.mapper_status === "NOT IN MAPPER";
                           const edit = unmappedEdits.get(row.master_sku);
                           const mapperRow = allMapperRows.find((m) => m.master_sku === row.master_sku);
@@ -1146,6 +1517,173 @@ export default function ComboConverterPage() {
           </div>
         )}
       </div>
+
+      {/* ====== ROW EDITOR MODAL (Admin) ====== */}
+      {rowEditorSetId && isAdmin && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) closeRowEditor(); }}>
+          <div className="bg-gray-900 border border-purple-500/30 rounded-xl w-full max-w-[1400px] max-h-[90vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-gray-800">
+              <div>
+                <h3 className="text-lg font-semibold text-purple-400">Mapper Row Editor</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {mapperSets.find((s) => s.id === rowEditorSetId)?.name} · {editorRows.length} row(s)
+                  {(() => {
+                    const critical = editorRows.filter((r) => isCriticalRow(r)).length;
+                    const issues = editorRows.filter((r) => hasInconsistency(r) && !isCriticalRow(r)).length;
+                    return (
+                      <>
+                        {critical > 0 && <span className="ml-2 text-red-400 font-semibold">· {critical} CRITICAL</span>}
+                        {issues > 0 && <span className="ml-2 text-amber-400">· {issues} with issues</span>}
+                      </>
+                    );
+                  })()}
+                  <span className="ml-2 text-gray-600">· Safe direction auto-corrected (silent, logged). Critical requires manual fix.</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={addEditorRow} className="px-3 py-1.5 text-xs bg-green-500/20 text-green-400 ring-1 ring-green-500/40 rounded-lg hover:bg-green-500/30 transition">+ Add Row</button>
+                <button onClick={closeRowEditor} className="px-3 py-1.5 text-xs bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">Close</button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-800">
+              <input
+                type="text"
+                placeholder="Search Master SKU or component..."
+                value={editorSearch}
+                onChange={(e) => setEditorSearch(e.target.value)}
+                className="flex-1 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+              />
+              <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                <input type="checkbox" checked={editorIssuesOnly} onChange={(e) => setEditorIssuesOnly(e.target.checked)} className="accent-purple-500" />
+                Issues only
+              </label>
+            </div>
+
+            {(() => {
+              const criticalRows = editorRows.filter((r) => isCriticalRow(r));
+              if (criticalRows.length === 0) return null;
+              return (
+                <div className="px-5 py-3 text-xs bg-red-950/60 text-red-200 border-b border-red-500/40">
+                  <div className="font-bold text-red-300 uppercase tracking-wider mb-1">⚠ {criticalRows.length} Critical row{criticalRows.length > 1 ? "s" : ""} — Admin action required</div>
+                  <div className="text-red-300/80">
+                    These rows have <span className="font-mono">Combo=Yes</span> but no components. Combos cannot expand into singles and will silently drop from conversions. Either add the component SKUs, or uncheck the Combo flag if the SKU is actually a single.
+                  </div>
+                </div>
+              );
+            })()}
+            {editorMsg && (
+              <div className="px-5 py-2 text-xs bg-red-900/40 text-red-300 border-b border-red-500/20">{editorMsg}</div>
+            )}
+
+            <div className="flex-1 overflow-hidden flex">
+              {/* Rows table */}
+              <div className="flex-1 overflow-auto">
+                {editorLoading ? (
+                  <div className="p-8 text-center text-gray-500 text-sm">Loading rows...</div>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-gray-900 z-10">
+                      <tr className="border-b border-gray-800">
+                        <th className="text-left py-2 px-3 text-gray-400 font-medium w-10">!</th>
+                        <th className="text-left py-2 px-3 text-gray-400 font-medium">Master SKU</th>
+                        <th className="text-left py-2 px-3 text-gray-400 font-medium w-20">Combo</th>
+                        <th className="text-left py-2 px-3 text-gray-400 font-medium w-28">FG Code</th>
+                        <th className="text-left py-2 px-3 text-gray-400 font-medium">Components (comma-separated)</th>
+                        <th className="text-right py-2 px-3 text-gray-400 font-medium w-32">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editorRows
+                        .map((r, origIdx) => ({ r, origIdx }))
+                        .filter(({ r }) => {
+                          if (editorIssuesOnly && !hasInconsistency(r)) return false;
+                          if (editorSearch) {
+                            const q = editorSearch.toLowerCase();
+                            if (!r.master_sku.toLowerCase().includes(q) && !r.products.toLowerCase().includes(q) && !r.fg_code.toLowerCase().includes(q)) return false;
+                          }
+                          return true;
+                        })
+                        .map(({ r, origIdx }) => {
+                          const critical = isCriticalRow(r);
+                          const issue = hasInconsistency(r);
+                          const rowBg = critical ? "bg-red-900/25 hover:bg-red-900/35" : issue ? "bg-amber-900/10" : r.isNew ? "bg-green-900/10" : "";
+                          return (
+                            <tr key={origIdx} className={`border-b border-gray-800/50 ${rowBg} ${r.dirty ? "ring-1 ring-blue-500/20" : ""}`}>
+                              <td className="py-1.5 px-3">
+                                {critical ? (
+                                  <span title="CRITICAL: Combo=Yes but no components — cannot expand" className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/30 text-red-200 font-bold text-[10px] uppercase ring-1 ring-red-500/60">⚠ Crit</span>
+                                ) : issue ? (
+                                  <span title="Inconsistent: Combo flag doesn't match components (will auto-correct on save)" className="text-amber-400">⚠</span>
+                                ) : r.dirty ? (
+                                  <span className="text-blue-400" title="Unsaved">●</span>
+                                ) : ""}
+                              </td>
+                              <td className="py-1.5 px-3">
+                                {r.isNew ? (
+                                  <input type="text" value={r.master_sku} onChange={(e) => updateEditorRow(origIdx, "master_sku", e.target.value)} placeholder="Master SKU" className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded font-mono text-xs" />
+                                ) : (
+                                  <span className="font-mono text-white">{r.master_sku}</span>
+                                )}
+                              </td>
+                              <td className="py-1.5 px-3">
+                                <select value={r.is_combo ? "Yes" : "No"} onChange={(e) => updateEditorRow(origIdx, "is_combo", e.target.value === "Yes")} className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs">
+                                  <option value="No">No</option>
+                                  <option value="Yes">Yes</option>
+                                </select>
+                              </td>
+                              <td className="py-1.5 px-3">
+                                <input type="text" value={r.fg_code} onChange={(e) => updateEditorRow(origIdx, "fg_code", e.target.value)} placeholder="FG Code" className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded font-mono text-xs" />
+                              </td>
+                              <td className="py-1.5 px-3">
+                                <textarea value={r.products} onChange={(e) => updateEditorRow(origIdx, "products", e.target.value)} placeholder="SKU_A, SKU_B, ..." rows={1} className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded font-mono text-xs resize-y min-h-[28px]" />
+                              </td>
+                              <td className="py-1.5 px-3 text-right">
+                                <div className="flex gap-1 justify-end">
+                                  <button onClick={() => saveEditorRow(origIdx)} disabled={r.saving || !r.dirty}
+                                    className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-300 rounded hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                                    {r.saving ? "..." : "Save"}
+                                  </button>
+                                  <button onClick={() => deleteEditorRow(origIdx)} disabled={r.saving}
+                                    className="px-2 py-0.5 text-xs bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition">
+                                    Del
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* History panel */}
+              <div className="w-72 border-l border-gray-800 flex flex-col">
+                <div className="px-4 py-2 text-xs font-semibold text-gray-400 border-b border-gray-800 bg-gray-900">Session History ({editorHistory.length})</div>
+                <div className="flex-1 overflow-auto">
+                  {editorHistory.length === 0 ? (
+                    <p className="p-4 text-xs text-gray-600">No changes yet this session. Auto-corrections will be logged here.</p>
+                  ) : (
+                    <div className="divide-y divide-gray-800/60">
+                      {editorHistory.map((h, i) => (
+                        <div key={i} className="p-3 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className={`font-mono ${h.action === "Auto-correct" ? "text-amber-400" : h.action === "Deleted" ? "text-red-400" : "text-green-400"}`}>{h.action}</span>
+                            <span className="text-gray-600">{h.ts}</span>
+                          </div>
+                          <div className="font-mono text-gray-300 mt-0.5 truncate" title={h.master_sku}>{h.master_sku}</div>
+                          <div className="text-gray-500 mt-0.5">{h.details}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
