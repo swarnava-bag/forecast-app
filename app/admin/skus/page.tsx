@@ -12,6 +12,7 @@ type SKU = {
   product_name: string;
   category: string;
   product_category: string;
+  mrp: number | null;
   is_active: boolean;
   discontinued_at: string | null;
 };
@@ -28,6 +29,7 @@ const emptyForm: FormData = {
   product_name: "",
   category: "",
   product_category: "",
+  mrp: null,
 };
 
 export default function SKUMasterPage() {
@@ -38,6 +40,7 @@ export default function SKUMasterPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("active");
+  const [mrpFilter, setMrpFilter] = useState<"all" | "missing" | "present">("all");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>(emptyForm);
@@ -106,8 +109,18 @@ export default function SKUMasterPage() {
       statusFilter === "all" ||
       (statusFilter === "active" && sku.is_active && !sku.discontinued_at) ||
       (statusFilter === "discontinued" && sku.discontinued_at);
-    return matchesSearch && matchesCategory && matchesStatus;
+    const mrpMissing = sku.mrp === null || sku.mrp === undefined;
+    const matchesMrp =
+      mrpFilter === "all" ||
+      (mrpFilter === "missing" && mrpMissing) ||
+      (mrpFilter === "present" && !mrpMissing);
+    return matchesSearch && matchesCategory && matchesStatus && matchesMrp;
   });
+
+  // Count of active SKUs missing MRP (drives the banner + download button)
+  const activeMissingMrp = skus.filter(
+    (s) => s.is_active && !s.discontinued_at && (s.mrp === null || s.mrp === undefined)
+  );
 
   // Load existing channel mappings for a SKU being edited
   async function loadSkuMappings(skuId: string) {
@@ -131,6 +144,7 @@ export default function SKUMasterPage() {
       product_name: sku.product_name,
       category: sku.category || "",
       product_category: sku.product_category || "",
+      mrp: sku.mrp ?? null,
     });
     loadSkuMappings(sku.id);
     setShowForm(true);
@@ -315,15 +329,20 @@ export default function SKUMasterPage() {
       const workbook = XLSX.read(data, { type: "binary" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json<any>(sheet);
-      const mapped: FormData[] = json.map((row: any) => ({
-        new_master_sku: String(row["New Master SKU"] || row["new_master_sku"] || "").trim(),
-        new_fg_code: String(row["New FG Code"] || row["new_fg_code"] || "").trim(),
-        master_sku: String(row["Master SKU"] || row["master_sku"] || "").trim(),
-        fg_code: String(row["FG Code"] || row["fg_code"] || "").trim(),
-        product_name: String(row["Product Name"] || row["product_name"] || "").trim(),
-        category: String(row["Category"] || row["category"] || "").trim(),
-        product_category: String(row["Product Category"] || row["product_category"] || "").trim(),
-      }));
+      const mapped: FormData[] = json.map((row: any) => {
+        const mrpRaw = row["MRP"] ?? row["mrp"] ?? null;
+        const mrpNum = mrpRaw === null || mrpRaw === "" ? null : Number(mrpRaw);
+        return {
+          new_master_sku: String(row["New Master SKU"] || row["new_master_sku"] || "").trim(),
+          new_fg_code: String(row["New FG Code"] || row["new_fg_code"] || "").trim(),
+          master_sku: String(row["Master SKU"] || row["master_sku"] || "").trim(),
+          fg_code: String(row["FG Code"] || row["fg_code"] || "").trim(),
+          product_name: String(row["Product Name"] || row["product_name"] || "").trim(),
+          category: String(row["Category"] || row["category"] || "").trim(),
+          product_category: String(row["Product Category"] || row["product_category"] || "").trim(),
+          mrp: mrpNum !== null && !isNaN(mrpNum) ? mrpNum : null,
+        };
+      });
       const valid = mapped.filter((m) => m.new_master_sku && m.product_name);
       setUploadPreview(valid);
       setShowUpload(true);
@@ -382,13 +401,54 @@ export default function SKUMasterPage() {
   function downloadTemplate() {
     const templateData = [{
       "New Master SKU": "EXAMPLE_SKU1", "New FG Code": "12345G", "Master SKU": "EX_SKU1",
-      "FG Code": "12345", "Product Name": "Example Product Name 50g", "Category": "Bars", "Product Category": "Breakfast Bar",
+      "FG Code": "12345", "Product Name": "Example Product Name 50g", "Category": "Bars", "Product Category": "Breakfast Bar", "MRP": 60,
     }];
     const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "SKU Template");
-    ws["!cols"] = [{ wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 40 }, { wch: 12 }, { wch: 18 }];
+    ws["!cols"] = [{ wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 40 }, { wch: 12 }, { wch: 18 }, { wch: 10 }];
     XLSX.writeFile(wb, "SKU_Upload_Template.xlsx");
+  }
+
+  // Download all currently-filtered SKUs pre-filled as an editable template.
+  // Admin can edit any field and re-upload via Bulk Upload (upsert on new_master_sku).
+  function downloadAllAsTemplate() {
+    if (filteredSKUs.length === 0) return;
+    const rows = filteredSKUs.map((s) => ({
+      "New Master SKU": s.new_master_sku,
+      "New FG Code": s.new_fg_code || "",
+      "Master SKU": s.master_sku || "",
+      "FG Code": s.fg_code || "",
+      "Product Name": s.product_name,
+      "Category": s.category || "",
+      "Product Category": s.product_category || "",
+      "MRP": s.mrp ?? "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "SKUs");
+    ws["!cols"] = [{ wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 40 }, { wch: 12 }, { wch: 18 }, { wch: 10 }];
+    XLSX.writeFile(wb, `SKU_Master_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  // Download active SKUs missing MRP — pre-filled with identifiers so admin can fill MRP and re-upload via Bulk Upload
+  function downloadMissingMrp() {
+    if (activeMissingMrp.length === 0) return;
+    const rows = activeMissingMrp.map((s) => ({
+      "New Master SKU": s.new_master_sku,
+      "New FG Code": s.new_fg_code || "",
+      "Master SKU": s.master_sku || "",
+      "FG Code": s.fg_code || "",
+      "Product Name": s.product_name,
+      "Category": s.category || "",
+      "Product Category": s.product_category || "",
+      "MRP": "", // empty — admin fills this
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Missing MRP");
+    ws["!cols"] = [{ wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 40 }, { wch: 12 }, { wch: 18 }, { wch: 10 }];
+    XLSX.writeFile(wb, `SKU_Missing_MRP_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   if (loading) {
@@ -406,6 +466,19 @@ export default function SKUMasterPage() {
         </div>
         <div className="flex gap-3">
           <button onClick={downloadTemplate} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">Download Template</button>
+          <button
+            onClick={downloadAllAsTemplate}
+            disabled={filteredSKUs.length === 0}
+            title="Export current list pre-filled. Edit and re-upload via Bulk Upload to update in bulk."
+            className="px-4 py-2 text-sm bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/40 rounded-lg hover:bg-amber-500/25 transition disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Download All ({filteredSKUs.length})
+          </button>
+          {activeMissingMrp.length > 0 && (
+            <button onClick={downloadMissingMrp} className="px-4 py-2 text-sm bg-red-900/30 text-red-300 ring-1 ring-red-500/40 rounded-lg hover:bg-red-900/50 transition">
+              Download Missing MRP ({activeMissingMrp.length})
+            </button>
+          )}
           <label className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition cursor-pointer">
             Bulk Upload
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} />
@@ -413,6 +486,25 @@ export default function SKUMasterPage() {
           <button onClick={handleAddNew} className="px-4 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition">+ Add SKU</button>
         </div>
       </div>
+
+      {activeMissingMrp.length > 0 && (
+        <div className="mb-4 p-4 bg-red-950/50 border border-red-500/40 rounded-xl">
+          <div className="flex items-start gap-3">
+            <span className="text-red-300 text-xl leading-none">⚠</span>
+            <div className="flex-1">
+              <div className="text-red-200 font-semibold text-sm">
+                {activeMissingMrp.length} active SKU{activeMissingMrp.length > 1 ? "s" : ""} missing MRP
+              </div>
+              <div className="text-red-300/80 text-xs mt-1">
+                MRP is required to split combo NTO into single NTO proportionally. Download the missing list, fill MRPs, and re-upload via Bulk Upload.
+              </div>
+            </div>
+            <button onClick={downloadMissingMrp} className="px-3 py-1.5 text-xs bg-red-500/20 text-red-200 ring-1 ring-red-500/50 rounded-lg hover:bg-red-500/30 transition whitespace-nowrap">
+              Download List
+            </button>
+          </div>
+        </div>
+      )}
 
       {successMsg && (
         <div className="mb-4 p-3 bg-green-900/50 border border-green-500 rounded-lg"><p className="text-green-300 text-sm">{successMsg}</p></div>
@@ -437,6 +529,7 @@ export default function SKUMasterPage() {
                     <th className="text-left py-2 px-3 text-gray-400 font-medium">Product Name</th>
                     <th className="text-left py-2 px-3 text-gray-400 font-medium">Category</th>
                     <th className="text-left py-2 px-3 text-gray-400 font-medium">FG Code</th>
+                    <th className="text-right py-2 px-3 text-gray-400 font-medium">MRP</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -446,6 +539,9 @@ export default function SKUMasterPage() {
                       <td className="py-2 px-3">{row.product_name}</td>
                       <td className="py-2 px-3 text-gray-400">{row.category}</td>
                       <td className="py-2 px-3 font-mono text-xs text-gray-400">{row.fg_code}</td>
+                      <td className="py-2 px-3 font-mono text-xs text-right">
+                        {row.mrp === null || row.mrp === undefined ? <span className="text-red-400">—</span> : `₹${Number(row.mrp).toFixed(2)}`}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -492,7 +588,7 @@ export default function SKUMasterPage() {
                 <label className="block text-sm text-gray-400 mb-1">Product Name *</label>
                 <input value={formData.product_name} onChange={(e) => setFormData({ ...formData, product_name: e.target.value })} placeholder="e.g. YB - 14244 - Breakfast Bar - Apricot Fig 45g (MRP 60)" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Category</label>
                   <input value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} placeholder="e.g. Bars" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
@@ -500,6 +596,22 @@ export default function SKUMasterPage() {
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Product Category</label>
                   <input value={formData.product_category} onChange={(e) => setFormData({ ...formData, product_category: e.target.value })} placeholder="e.g. Breakfast Bar" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">MRP (₹) <span className="text-amber-400/70">*</span></label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={formData.mrp ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData({ ...formData, mrp: v === "" ? null : Number(v) });
+                    }}
+                    placeholder="e.g. 60"
+                    className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 ${formData.mrp === null || formData.mrp === undefined ? "border-red-500/60" : "border-gray-700"}`}
+                  />
+                  {(formData.mrp === null || formData.mrp === undefined) && (
+                    <p className="text-[10px] text-red-400/80 mt-1">Required for combo NTO split by MRP ratio.</p>
+                  )}
                 </div>
               </div>
 
@@ -590,6 +702,11 @@ export default function SKUMasterPage() {
           <option value="discontinued">Discontinued</option>
           <option value="all">All</option>
         </select>
+        <select value={mrpFilter} onChange={(e) => setMrpFilter(e.target.value as "all" | "missing" | "present")} className="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <option value="all">All MRP</option>
+          <option value="missing">MRP Missing</option>
+          <option value="present">MRP Set</option>
+        </select>
       </div>
 
       {/* SKU Table */}
@@ -603,21 +720,32 @@ export default function SKUMasterPage() {
                 <th className="text-left py-3 px-4 text-gray-400 font-medium">Category</th>
                 <th className="text-left py-3 px-4 text-gray-400 font-medium">Product Category</th>
                 <th className="text-left py-3 px-4 text-gray-400 font-medium">FG Code</th>
+                <th className="text-right py-3 px-4 text-gray-400 font-medium">MRP (₹)</th>
                 <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
                 <th className="text-left py-3 px-4 text-gray-400 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredSKUs.length === 0 ? (
-                <tr><td colSpan={7} className="py-8 text-center text-gray-500">{searchTerm || categoryFilter ? "No SKUs match your filters." : "No SKUs added yet. Click '+ Add SKU' to get started."}</td></tr>
+                <tr><td colSpan={8} className="py-8 text-center text-gray-500">{searchTerm || categoryFilter ? "No SKUs match your filters." : "No SKUs added yet. Click '+ Add SKU' to get started."}</td></tr>
               ) : (
-                filteredSKUs.map((sku) => (
-                  <tr key={sku.id} className={`border-b border-gray-800/50 hover:bg-gray-800/30 transition ${sku.discontinued_at ? "opacity-60" : ""}`}>
+                filteredSKUs.map((sku) => {
+                  const mrpMissing = sku.mrp === null || sku.mrp === undefined;
+                  const highlightMissing = mrpMissing && !sku.discontinued_at;
+                  return (
+                  <tr key={sku.id} className={`border-b border-gray-800/50 hover:bg-gray-800/30 transition ${sku.discontinued_at ? "opacity-60" : ""} ${highlightMissing ? "bg-red-900/15" : ""}`}>
                     <td className="py-3 px-4 font-mono text-xs">{sku.new_master_sku}</td>
                     <td className="py-3 px-4">{sku.product_name}</td>
                     <td className="py-3 px-4 text-gray-400">{sku.category}</td>
                     <td className="py-3 px-4 text-gray-400">{sku.product_category}</td>
                     <td className="py-3 px-4 font-mono text-xs text-gray-400">{sku.fg_code}</td>
+                    <td className="py-3 px-4 text-right font-mono text-xs">
+                      {mrpMissing ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 ring-1 ring-red-500/40 text-[10px] uppercase font-semibold">Missing</span>
+                      ) : (
+                        <span className="text-white">₹{Number(sku.mrp).toFixed(2)}</span>
+                      )}
+                    </td>
                     <td className="py-3 px-4">
                       {sku.discontinued_at ? (
                         <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400">Discontinued</span>
@@ -634,7 +762,8 @@ export default function SKUMasterPage() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
