@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import AppShell from "@/app/components/AppShell";
 import * as XLSX from "xlsx";
 
 type SKU = {
@@ -121,50 +122,26 @@ export default function MasterDataPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white">
-        <nav className="border-b border-gray-800 bg-gray-900">
-          <div className="max-w-7xl mx-auto px-6 py-4">
-            <span className="text-lg font-bold text-white">Demand Planning Module - Yogabars</span>
-          </div>
-        </nav>
+      <AppShell>
         <div className="flex items-center justify-center h-64">
-          <p className="text-gray-400">Loading master data...</p>
+          <p style={{ color: "var(--atlas-ink-muted)" }}>Loading master data...</p>
         </div>
-      </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      {/* Top Navigation Bar */}
-      <nav className="border-b border-gray-800 bg-gray-900">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="text-lg font-bold text-white">
-              Demand Planning Module - Yogabars
-            </Link>
-            <div className="hidden md:flex items-center gap-4">
-              <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition">Dashboard</Link>
-              <Link href="/upload" className="text-sm text-gray-400 hover:text-white transition">Upload</Link>
-              <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Forecast View</Link>
-              <Link href="/combo-converter" className="text-sm text-gray-400 hover:text-white transition">Combo → Singles</Link>
-              <span className="text-sm text-amber-400 font-medium">Master Data</span>
-              {profile?.role === "admin" && <Link href="/admin" className="text-sm text-gray-400 hover:text-white transition">Admin</Link>}
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
+    <AppShell>
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold">Master Data</h1>
-            <p className="text-sm text-gray-400 mt-1">Product master reference — all SKUs, categories, and FG codes</p>
+            <p className="text-sm text-atlas-ink-muted mt-1">Product master reference — all SKUs, categories, and FG codes</p>
           </div>
           <button
             onClick={downloadMasterList}
-            className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition flex items-center gap-2"
+            className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             Download Excel
@@ -173,20 +150,20 @@ export default function MasterDataPage() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Total SKUs</p>
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
+            <p className="text-xs text-atlas-ink-muted uppercase tracking-wider">Total SKUs</p>
             <p className="text-2xl font-bold mt-1">{stats.total}</p>
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Active</p>
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
+            <p className="text-xs text-atlas-ink-muted uppercase tracking-wider">Active</p>
             <p className="text-2xl font-bold mt-1 text-green-400">{stats.active}</p>
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Discontinued</p>
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
+            <p className="text-xs text-atlas-ink-muted uppercase tracking-wider">Discontinued</p>
             <p className="text-2xl font-bold mt-1 text-orange-400">{stats.discontinued}</p>
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Categories</p>
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
+            <p className="text-xs text-atlas-ink-muted uppercase tracking-wider">Categories</p>
             <p className="text-2xl font-bold mt-1 text-amber-400">{stats.categories}</p>
           </div>
         </div>
@@ -198,12 +175,12 @@ export default function MasterDataPage() {
             placeholder="Search by name, SKU code, or FG code..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 min-w-[250px] px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="flex-1 min-w-[250px] px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-muted focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
           <select
             value={categoryFilter}
             onChange={(e) => { setCategoryFilter(e.target.value); setSubCategoryFilter(""); }}
-            className="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             <option value="">All Categories</option>
             {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
@@ -211,7 +188,7 @@ export default function MasterDataPage() {
           <select
             value={subCategoryFilter}
             onChange={(e) => setSubCategoryFilter(e.target.value)}
-            className="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             <option value="">All Sub-Categories</option>
             {subCategories.map((sc) => (<option key={sc} value={sc}>{sc}</option>))}
@@ -219,7 +196,7 @@ export default function MasterDataPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             <option value="active">Active Only</option>
             <option value="discontinued">Discontinued</option>
@@ -228,7 +205,7 @@ export default function MasterDataPage() {
         </div>
 
         {/* Result count */}
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-xs text-atlas-ink-muted mb-3">
           Showing {filteredSKUs.length} of {skus.length} SKUs
           {(searchTerm || categoryFilter || subCategoryFilter || statusFilter !== "active") && (
             <button onClick={() => { setSearchTerm(""); setCategoryFilter(""); setSubCategoryFilter(""); setStatusFilter("active"); }} className="ml-2 text-amber-400 hover:text-amber-300">
@@ -238,35 +215,35 @@ export default function MasterDataPage() {
         </p>
 
         {/* SKU Table */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-800 bg-gray-900/80">
-                  <th className="text-left py-3 px-4 text-gray-400 font-medium w-8">#</th>
-                  <th className="text-left py-3 px-4 text-gray-400 font-medium">New Master SKU</th>
-                  <th className="text-left py-3 px-4 text-gray-400 font-medium">Product Name</th>
-                  <th className="text-left py-3 px-4 text-gray-400 font-medium">Category</th>
-                  <th className="text-left py-3 px-4 text-gray-400 font-medium">Sub-Category</th>
-                  <th className="text-left py-3 px-4 text-gray-400 font-medium">New FG Code</th>
-                  <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
+                <tr className="border-b border-atlas-line bg-atlas-surface/80">
+                  <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium w-8">#</th>
+                  <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">New Master SKU</th>
+                  <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Product Name</th>
+                  <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Category</th>
+                  <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Sub-Category</th>
+                  <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">New FG Code</th>
+                  <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSKUs.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-gray-500">
+                    <td colSpan={7} className="py-12 text-center text-atlas-ink-muted">
                       {searchTerm || categoryFilter || subCategoryFilter ? "No SKUs match your filters." : "No SKUs found."}
                     </td>
                   </tr>
                 ) : (
                   filteredSKUs.map((sku, idx) => (
-                    <tr key={sku.id} className={`border-b border-gray-800/50 hover:bg-gray-800/30 transition ${sku.discontinued_at ? "opacity-60" : ""}`}>
-                      <td className="py-3 px-4 text-gray-600 text-xs">{idx + 1}</td>
+                    <tr key={sku.id} className={`border-b border-atlas-line/50 hover:bg-atlas-surface-soft/30 transition ${sku.discontinued_at ? "opacity-60" : ""}`}>
+                      <td className="py-3 px-4 text-atlas-ink-faint text-xs">{idx + 1}</td>
                       <td className="py-3 px-4 font-mono text-xs">{sku.new_master_sku}</td>
                       <td className="py-3 px-4">{sku.product_name}</td>
-                      <td className="py-3 px-4 text-gray-400">{sku.category}</td>
-                      <td className="py-3 px-4 text-gray-400">{sku.product_category}</td>
+                      <td className="py-3 px-4 text-atlas-ink-muted">{sku.category}</td>
+                      <td className="py-3 px-4 text-atlas-ink-muted">{sku.product_category}</td>
                       <td className="py-3 px-4 font-mono text-xs text-amber-400/80">{sku.new_fg_code}</td>
                       <td className="py-3 px-4">
                         {sku.discontinued_at ? (
@@ -283,6 +260,6 @@ export default function MasterDataPage() {
           </div>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

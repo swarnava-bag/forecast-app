@@ -37,7 +37,7 @@ export default function TestDB() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-8">
+    <main className="min-h-screen bg-atlas-bg text-atlas-ink p-8">
       <h1 className="text-2xl font-bold mb-6">Database Connection Test</h1>
 
       <button
@@ -56,7 +56,7 @@ export default function TestDB() {
       {data && (
         <div className="mt-6 space-y-6">
           <div className="p-4 bg-green-900/30 border border-green-500 rounded-lg">
-            <p className="text-green-300 font-semibold">✅ Connected Successfully!</p>
+            <p className="text-green-300 font-semibold">Connected Successfully!</p>
           </div>
 
           <div>
@@ -65,7 +65,7 @@ export default function TestDB() {
             </h2>
             <div className="flex flex-wrap gap-2">
               {data.clusters.map((c: any) => (
-                <span key={c.name} className="px-3 py-1 bg-gray-800 rounded text-sm">
+                <span key={c.name} className="px-3 py-1 bg-atlas-surface rounded text-sm">
                   {c.name}
                 </span>
               ))}
@@ -78,9 +78,9 @@ export default function TestDB() {
             </h2>
             <div className="flex flex-wrap gap-2">
               {data.channels.map((ch: any) => (
-                <span key={ch.name} className="px-3 py-1 bg-gray-800 rounded text-sm">
+                <span key={ch.name} className="px-3 py-1 bg-atlas-surface rounded text-sm">
                   {ch.name}
-                  <span className="text-gray-500 ml-1 text-xs">
+                  <span className="text-atlas-ink-faint ml-1 text-xs">
                     ({ch.clusters?.name})
                   </span>
                 </span>
@@ -92,7 +92,7 @@ export default function TestDB() {
             <h2 className="text-lg font-semibold mb-2 text-amber-400">
               SKUs in Master
             </h2>
-            <p className="text-gray-300">{data.skuCount} SKU(s) loaded</p>
+            <p className="text-atlas-ink">{data.skuCount} SKU(s) loaded</p>
           </div>
         </div>
       )}

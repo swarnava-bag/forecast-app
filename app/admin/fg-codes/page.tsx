@@ -555,7 +555,7 @@ export default function FGCodeManagerPage() {
   const criticalCombos = uniqueCombos.filter(c => c.is_combo && (!c.products || c.products.length === 0));
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><p className="text-gray-400">Loading...</p></div>;
+    return <div className="flex items-center justify-center h-64"><p className="text-atlas-ink-muted">Loading...</p></div>;
   }
 
   return (
@@ -563,10 +563,10 @@ export default function FGCodeManagerPage() {
       {/* Bulk Upload Confirmation Modal */}
       {bulkPreview && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
-            <div className="p-5 border-b border-gray-800">
-              <h3 className="text-lg font-bold text-white">Confirm Bulk Upload</h3>
-              <p className="text-sm text-gray-400 mt-1">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <div className="p-5 border-b border-atlas-line">
+              <h3 className="text-lg font-bold text-atlas-ink">Confirm Bulk Upload</h3>
+              <p className="text-sm text-atlas-ink-muted mt-1">
                 {bulkPreview.changes.filter(c => c.action !== "no_change").length} change(s) detected
                 {bulkPreview.changes.filter(c => c.action === "no_change").length > 0 && `, ${bulkPreview.changes.filter(c => c.action === "no_change").length} row(s) with no edits`}
                 {bulkPreview.skipped.length > 0 && `, ${bulkPreview.skipped.length} skipped`}
@@ -578,24 +578,24 @@ export default function FGCodeManagerPage() {
                   c.action === "delete" ? "bg-red-900/20 border border-red-800/30" :
                   c.action === "add" ? "bg-green-900/20 border border-green-800/30" :
                   c.action === "update" ? "bg-amber-900/20 border border-amber-800/30" :
-                  "bg-gray-800/50 border border-gray-800"
+                  "bg-atlas-surface-soft/50 border border-atlas-line"
                 }`}>
                   <span className={`text-xs font-bold uppercase mt-0.5 shrink-0 w-16 ${
                     c.action === "delete" ? "text-red-400" :
                     c.action === "add" ? "text-green-400" :
                     c.action === "update" ? "text-amber-400" :
-                    "text-gray-500"
+                    "text-atlas-ink-faint"
                   }`}>
                     {c.action === "no_change" ? "No Edit" : c.action}
                   </span>
                   <div>
-                    <span className="font-mono text-white">{c.sku}</span>
-                    <span className="text-gray-400 ml-2">— {c.details}</span>
+                    <span className="font-mono text-atlas-ink">{c.sku}</span>
+                    <span className="text-atlas-ink-muted ml-2">— {c.details}</span>
                   </div>
                 </div>
               ))}
               {bulkPreview.skipped.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-gray-800">
+                <div className="mt-3 pt-3 border-t border-atlas-line">
                   <p className="text-xs font-semibold text-red-400 mb-1">Skipped (FG code conflicts):</p>
                   {bulkPreview.skipped.map((s, i) => (
                     <p key={i} className="text-xs text-red-300/70 font-mono">{s}</p>
@@ -603,9 +603,9 @@ export default function FGCodeManagerPage() {
                 </div>
               )}
             </div>
-            <div className="p-5 border-t border-gray-800 flex items-center justify-end gap-3">
+            <div className="p-5 border-t border-atlas-line flex items-center justify-end gap-3">
               <button onClick={() => setBulkPreview(null)}
-                className="px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg hover:bg-gray-700 transition">
+                className="px-4 py-2 bg-atlas-surface-soft text-atlas-ink text-sm rounded-lg hover:bg-atlas-surface-soft transition">
                 Cancel
               </button>
               <button onClick={confirmBulkUpload} disabled={saving || bulkPreview.changes.filter(c => c.action !== "no_change").length === 0}
@@ -620,7 +620,7 @@ export default function FGCodeManagerPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold">FG Code Manager</h2>
-          <p className="text-sm text-gray-400 mt-1">Manage FG codes and product names for combos and singles</p>
+          <p className="text-sm text-atlas-ink-muted mt-1">Manage FG codes and product names for combos and singles</p>
         </div>
         <button
           onClick={() => setShowAddForm(!showAddForm)}
@@ -632,29 +632,29 @@ export default function FGCodeManagerPage() {
 
       {/* ── Add New Combo Form ── */}
       {showAddForm && (
-        <div className="mb-6 bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
-          <p className="text-sm font-medium text-gray-300">Add New Combo to Mapper</p>
+        <div className="mb-6 bg-atlas-surface border border-atlas-line rounded-xl p-5 space-y-4">
+          <p className="text-sm font-medium text-atlas-ink">Add New Combo to Mapper</p>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Master SKU *</label>
+              <label className="block text-xs text-atlas-ink-muted mb-1">Master SKU *</label>
               <input type="text" value={addMasterSku} onChange={(e) => setAddMasterSku(e.target.value)}
-                placeholder="e.g. BB_AFG_P12" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                placeholder="e.g. BB_AFG_P12" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">FG Code</label>
+              <label className="block text-xs text-atlas-ink-muted mb-1">FG Code</label>
               <input type="text" value={addFgCode} onChange={(e) => setAddFgCode(e.target.value)}
-                placeholder="e.g. 14244G" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                placeholder="e.g. 14244G" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Product Name</label>
+              <label className="block text-xs text-atlas-ink-muted mb-1">Product Name</label>
               <input type="text" value={addProductName} onChange={(e) => setAddProductName(e.target.value)}
-                placeholder="e.g. Protein Bar Almond 12-Pack" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                placeholder="e.g. Protein Bar Almond 12-Pack" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
             </div>
           </div>
 
           {/* Components */}
           <div>
-            <label className="block text-xs text-gray-500 mb-2">Components (Single Master SKUs) *</label>
+            <label className="block text-xs text-atlas-ink-muted mb-2">Components (Single Master SKUs) *</label>
             <div className="space-y-2">
               {addComponents.map((comp, i) => {
                 const resolved = comp.sku.trim() ? resolveComponent(comp.sku.trim(), comp.qty) : null;
@@ -666,16 +666,16 @@ export default function FGCodeManagerPage() {
                         updated[i] = { ...updated[i], sku: e.target.value };
                         setAddComponents(updated);
                       }}
-                      className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                      className="flex-1 px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm font-mono focus:outline-none focus:ring-1 focus:ring-amber-500" />
                     <div className="flex items-center gap-1">
-                      <span className="text-xs text-gray-500">x</span>
+                      <span className="text-xs text-atlas-ink-faint">x</span>
                       <input type="number" min={1} value={comp.qty}
                         onChange={(e) => {
                           const updated = [...addComponents];
                           updated[i] = { ...updated[i], qty: Math.max(1, parseInt(e.target.value) || 1) };
                           setAddComponents(updated);
                         }}
-                        className="w-16 px-2 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm text-center focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                        className="w-16 px-2 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm text-center focus:outline-none focus:ring-1 focus:ring-amber-500" />
                     </div>
                     <button onClick={() => setAddComponents(addComponents.filter((_, j) => j !== i))}
                       className="px-2 py-2 text-red-400 hover:text-red-300 text-sm">{"\u2715"}</button>
@@ -696,7 +696,7 @@ export default function FGCodeManagerPage() {
               {saving ? "Saving..." : "Save Combo"}
             </button>
             <button onClick={() => { setShowAddForm(false); setAddMasterSku(""); setAddFgCode(""); setAddProductName(""); setAddComponents([{ sku: "", qty: 1, resolved: null }]); }}
-              className="px-4 py-2 bg-gray-800 text-gray-400 text-sm rounded-lg hover:bg-gray-700 transition">Cancel</button>
+              className="px-4 py-2 bg-atlas-surface-soft text-atlas-ink-muted text-sm rounded-lg hover:bg-atlas-surface-soft transition">Cancel</button>
           </div>
         </div>
       )}
@@ -718,7 +718,7 @@ export default function FGCodeManagerPage() {
         {(["combos", "singles", "suggestions"] as const).map(t => (
           <button key={t} onClick={() => { setTab(t); setSearchTerm(""); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              tab === t ? "bg-amber-500/10 text-amber-400 border border-amber-500/30" : "bg-gray-800 text-gray-400 border border-transparent hover:bg-gray-700"
+              tab === t ? "bg-amber-500/10 text-amber-400 border border-amber-500/30" : "bg-atlas-surface-soft text-atlas-ink-muted border border-transparent hover:bg-atlas-surface-soft"
             }`}>
             {t === "combos" ? "Combo FG Codes" : t === "singles" ? "Single FG Codes" : `Pending Suggestions (${suggestions.length})`}
           </button>
@@ -730,13 +730,13 @@ export default function FGCodeManagerPage() {
         <div className="flex gap-3 mb-4 items-center">
           <input type="text" placeholder="Search SKU, FG Code, name, or components..."
             value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 max-w-md px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            className="flex-1 max-w-md px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
           {tab === "combos" && (
             <div className="flex gap-2">
               {(["all", "incomplete", "complete"] as const).map(f => (
                 <button key={f} onClick={() => setStatusFilter(f)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                    statusFilter === f ? "bg-amber-500/10 text-amber-400 border border-amber-500/30" : "bg-gray-800 text-gray-400 border border-transparent hover:bg-gray-700"
+                    statusFilter === f ? "bg-amber-500/10 text-amber-400 border border-amber-500/30" : "bg-atlas-surface-soft text-atlas-ink-muted border border-transparent hover:bg-atlas-surface-soft"
                   }`}>
                   {f === "all" ? `All (${uniqueCombos.length})` : f === "incomplete" ? `Incomplete (${incompleteCount})` : `Complete (${completeCount})`}
                 </button>
@@ -769,7 +769,7 @@ export default function FGCodeManagerPage() {
           )}
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <button onClick={downloadBulkTemplate}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg hover:bg-gray-700 transition">
+              className="px-3 py-1.5 bg-atlas-surface-soft border border-atlas-line text-atlas-ink text-xs rounded-lg hover:bg-atlas-surface-soft transition">
               Download Template
             </button>
             <label className="px-3 py-1.5 bg-amber-600/20 border border-amber-600/40 text-amber-300 text-xs rounded-lg hover:bg-amber-600/30 transition cursor-pointer">
@@ -787,17 +787,17 @@ export default function FGCodeManagerPage() {
             )}
           </div>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-gray-900 z-10">
-                  <tr className="border-b border-gray-800">
-                    <th className="text-center py-3 px-2 text-gray-400 font-medium w-10"></th>
-                    <th className="text-left py-3 px-3 text-gray-400 font-medium">Master SKU</th>
-                    <th className="text-left py-3 px-3 text-gray-400 font-medium">FG Code</th>
-                    <th className="text-left py-3 px-3 text-gray-400 font-medium">Product Name</th>
-                    <th className="text-left py-3 px-3 text-gray-400 font-medium">Components</th>
-                    <th className="text-left py-3 px-3 text-gray-400 font-medium w-28">Actions</th>
+                <thead className="sticky top-0 bg-atlas-surface z-10">
+                  <tr className="border-b border-atlas-line">
+                    <th className="text-center py-3 px-2 text-atlas-ink-muted font-medium w-10"></th>
+                    <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">Master SKU</th>
+                    <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">FG Code</th>
+                    <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">Product Name</th>
+                    <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">Components</th>
+                    <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium w-28">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -806,7 +806,7 @@ export default function FGCodeManagerPage() {
                     const isEditing = !!editingRow[combo.master_sku];
                     const isCritical = combo.is_combo && (!combo.products || combo.products.length === 0);
                     return (
-                      <tr key={combo.master_sku} className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${
+                      <tr key={combo.master_sku} className={`border-b border-atlas-line/50 hover:bg-atlas-surface-soft/30 ${
                         isCritical ? "bg-red-900/25 hover:bg-red-900/35" : status === "missing" ? "bg-red-900/5" : status === "partial" ? "bg-amber-900/5" : ""
                       }`}>
                         <td className="py-2 px-2 text-center">
@@ -824,10 +824,10 @@ export default function FGCodeManagerPage() {
                           {isEditing ? (
                             <input type="text" value={editingRow[combo.master_sku].fg_code}
                               onChange={(e) => setEditingRow(prev => ({ ...prev, [combo.master_sku]: { ...prev[combo.master_sku], fg_code: e.target.value } }))}
-                              className="w-28 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                              className="w-28 px-2 py-1 bg-atlas-surface-soft border border-atlas-line rounded text-atlas-ink text-xs font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
                               placeholder="e.g. 14244G" />
                           ) : (
-                            <span className={`font-mono text-xs ${combo.fg_code ? "text-white" : "text-gray-600"}`}>
+                            <span className={`font-mono text-xs ${combo.fg_code ? "text-atlas-ink" : "text-atlas-ink-faint"}`}>
                               {combo.fg_code || "\u2014"}
                             </span>
                           )}
@@ -836,10 +836,10 @@ export default function FGCodeManagerPage() {
                           {isEditing ? (
                             <input type="text" value={editingRow[combo.master_sku].product_name}
                               onChange={(e) => setEditingRow(prev => ({ ...prev, [combo.master_sku]: { ...prev[combo.master_sku], product_name: e.target.value } }))}
-                              className="w-48 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                              className="w-48 px-2 py-1 bg-atlas-surface-soft border border-atlas-line rounded text-atlas-ink text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
                               placeholder="Product name" />
                           ) : (
-                            <span className={`text-xs ${combo.product_name ? "text-white" : "text-gray-600"}`}>
+                            <span className={`text-xs ${combo.product_name ? "text-atlas-ink" : "text-atlas-ink-faint"}`}>
                               {combo.product_name || "\u2014"}
                             </span>
                           )}
@@ -848,7 +848,7 @@ export default function FGCodeManagerPage() {
                           {isEditing ? (
                             <input type="text" value={editingRow[combo.master_sku].components}
                               onChange={(e) => setEditingRow(prev => ({ ...prev, [combo.master_sku]: { ...prev[combo.master_sku], components: e.target.value } }))}
-                              className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                              className="w-full px-2 py-1 bg-atlas-surface-soft border border-atlas-line rounded text-atlas-ink text-xs font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
                               placeholder="SKU_A, SKU_B, SKU_C" />
                           ) : (() => {
                             const invalid = getInvalidComponents(combo.products);
@@ -864,7 +864,7 @@ export default function FGCodeManagerPage() {
                                 )}
                               </div>
                             ) : (
-                              <span className="text-gray-600">No components</span>
+                              <span className="text-atlas-ink-faint">No components</span>
                             );
                           })()}
                         </td>
@@ -874,12 +874,12 @@ export default function FGCodeManagerPage() {
                               <button onClick={() => saveInlineEdit(combo.master_sku)} disabled={saving}
                                 className="px-2 py-1 bg-green-600/20 border border-green-600/40 text-green-400 text-xs rounded hover:bg-green-600/30 transition">Save</button>
                               <button onClick={() => setEditingRow(prev => { const n = { ...prev }; delete n[combo.master_sku]; return n; })}
-                                className="px-2 py-1 bg-gray-700 text-gray-400 text-xs rounded hover:bg-gray-600 transition">Cancel</button>
+                                className="px-2 py-1 bg-atlas-surface-soft text-atlas-ink-muted text-xs rounded hover:bg-atlas-surface-soft transition">Cancel</button>
                             </div>
                           ) : (
                             <div className="flex gap-1">
                               <button onClick={() => setEditingRow(prev => ({ ...prev, [combo.master_sku]: { fg_code: combo.fg_code || "", product_name: combo.product_name || "", components: combo.products.join(", ") } }))}
-                                className="px-2 py-1 bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded hover:bg-gray-700 transition">Edit</button>
+                                className="px-2 py-1 bg-atlas-surface-soft border border-atlas-line text-atlas-ink text-xs rounded hover:bg-atlas-surface-soft transition">Edit</button>
                               <button onClick={() => deleteCombo(combo.master_sku)} disabled={saving}
                                 className="px-2 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-xs rounded hover:bg-red-900/40 transition">{"\u2715"}</button>
                             </div>
@@ -889,7 +889,7 @@ export default function FGCodeManagerPage() {
                     );
                   })}
                   {filteredCombos.length === 0 && (
-                    <tr><td colSpan={6} className="py-8 text-center text-gray-500">No combo SKUs found.</td></tr>
+                    <tr><td colSpan={6} className="py-8 text-center text-atlas-ink-faint">No combo SKUs found.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -901,29 +901,29 @@ export default function FGCodeManagerPage() {
       {/* ═══════ SINGLES TAB ═══════ */}
       {tab === "singles" && (
         <div>
-          <p className="text-sm text-gray-400 mb-4">{filteredSingles.length} single SKUs (edit in SKU Master page)</p>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <p className="text-sm text-atlas-ink-muted mb-4">{filteredSingles.length} single SKUs (edit in SKU Master page)</p>
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-gray-900 z-10">
-                  <tr className="border-b border-gray-800">
-                    <th className="text-left py-3 px-4 text-gray-400 font-medium">New Master SKU</th>
-                    <th className="text-left py-3 px-4 text-gray-400 font-medium">New FG Code</th>
-                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Product Name</th>
+                <thead className="sticky top-0 bg-atlas-surface z-10">
+                  <tr className="border-b border-atlas-line">
+                    <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">New Master SKU</th>
+                    <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">New FG Code</th>
+                    <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Product Name</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredSingles.map((s) => (
-                    <tr key={s.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                    <tr key={s.id} className="border-b border-atlas-line/50 hover:bg-atlas-surface-soft/30">
                       <td className="py-2 px-4 font-mono text-xs">{s.new_master_sku}</td>
-                      <td className={`py-2 px-4 font-mono text-xs ${s.new_fg_code ? "text-white" : "text-gray-600"}`}>
+                      <td className={`py-2 px-4 font-mono text-xs ${s.new_fg_code ? "text-atlas-ink" : "text-atlas-ink-faint"}`}>
                         {s.new_fg_code || "\u2014"}
                       </td>
-                      <td className="py-2 px-4 text-xs text-gray-300">{s.product_name}</td>
+                      <td className="py-2 px-4 text-xs text-atlas-ink">{s.product_name}</td>
                     </tr>
                   ))}
                   {filteredSingles.length === 0 && (
-                    <tr><td colSpan={3} className="py-8 text-center text-gray-500">No singles found.</td></tr>
+                    <tr><td colSpan={3} className="py-8 text-center text-atlas-ink-faint">No singles found.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -936,8 +936,8 @@ export default function FGCodeManagerPage() {
       {tab === "suggestions" && (
         <div>
           {suggestions.length === 0 ? (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-              <p className="text-gray-500">No pending suggestions.</p>
+            <div className="bg-atlas-surface border border-atlas-line rounded-xl p-8 text-center">
+              <p className="text-atlas-ink-faint">No pending suggestions.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -945,27 +945,27 @@ export default function FGCodeManagerPage() {
                 const isFgChange = !!s.suggested_fg_code;
                 const currentSku = singles.find(sk => sk.new_master_sku.toLowerCase() === s.master_sku.toLowerCase());
                 return (
-                  <div key={s.id} className={`bg-gray-900 border rounded-xl p-4 flex items-center justify-between ${isFgChange ? "border-amber-700/40" : "border-gray-800"}`}>
+                  <div key={s.id} className={`bg-atlas-surface border rounded-xl p-4 flex items-center justify-between ${isFgChange ? "border-amber-700/40" : "border-atlas-line"}`}>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-mono text-sm text-white">{s.master_sku}</p>
+                        <p className="font-mono text-sm text-atlas-ink">{s.master_sku}</p>
                         {isFgChange && <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 text-[10px] rounded font-medium">FG CODE CHANGE</span>}
                         {s.is_combo && <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-400 text-[10px] rounded">COMBO</span>}
                       </div>
                       {isFgChange && (
                         <div className="mt-1.5 flex items-center gap-2 text-sm">
-                          <span className="text-gray-500 font-mono">{currentSku?.new_fg_code || "(no current FG)"}</span>
-                          <span className="text-gray-600">→</span>
+                          <span className="text-atlas-ink-faint font-mono">{currentSku?.new_fg_code || "(no current FG)"}</span>
+                          <span className="text-atlas-ink-faint">→</span>
                           <span className="text-amber-400 font-mono font-medium">{s.suggested_fg_code}</span>
-                          {currentSku && <span className="text-xs text-gray-500 ml-2">({currentSku.product_name})</span>}
+                          {currentSku && <span className="text-xs text-atlas-ink-faint ml-2">({currentSku.product_name})</span>}
                         </div>
                       )}
-                      {s.notes && <p className="text-xs text-gray-400 mt-1">Reason: {s.notes}</p>}
-                      <p className="text-xs text-gray-500 mt-1">
+                      {s.notes && <p className="text-xs text-atlas-ink-muted mt-1">Reason: {s.notes}</p>}
+                      <p className="text-xs text-atlas-ink-faint mt-1">
                         Submitted by {s.submitted_by_email} on {new Date(s.created_at).toLocaleDateString()}
                       </p>
                       {s.products.length > 0 && (
-                        <p className="text-xs text-gray-500 mt-1">Components: {s.products.join(", ")}</p>
+                        <p className="text-xs text-atlas-ink-faint mt-1">Components: {s.products.join(", ")}</p>
                       )}
                     </div>
                     <div className="flex gap-2">

@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import AppShell from "@/app/components/AppShell";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Profile = { id: string; email: string; full_name: string; role: string };
@@ -298,42 +299,17 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
-        <p className="text-gray-400">Loading dashboard...</p>
-      </div>
+      <AppShell>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <p style={{ color: "var(--atlas-ink-muted)" }}>Loading dashboard...</p>
+        </div>
+      </AppShell>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white">
-      {/* ── Nav ── */}
-      <nav className="border-b border-gray-800 bg-gray-900">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="text-lg font-bold text-white">Demand Planning Module - Yogabars</Link>
-            <div className="hidden md:flex items-center gap-4">
-              <span className="text-sm text-amber-400 font-medium">Dashboard</span>
-              <Link href="/upload" className="text-sm text-gray-400 hover:text-white transition">Upload</Link>
-              <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Forecast View</Link>
-              <Link href="/combo-converter" className="text-sm text-gray-400 hover:text-white transition">Combo → Singles</Link>
-              <Link href="/master-data" className="text-sm text-gray-400 hover:text-white transition">Master Data</Link>
-              {profile?.role === "admin" && <Link href="/admin" className="text-sm text-gray-400 hover:text-white transition">Admin</Link>}
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm text-white">{profile?.full_name}</p>
-              <p className="text-xs text-gray-500">{roleLabel(profile?.role || "")}</p>
-            </div>
-            <button onClick={async () => { await supabase.auth.signOut(); router.push("/login"); router.refresh(); }}
-              className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">
-              Sign Out
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+    <AppShell>
+      <div className="max-w-7xl mx-auto space-y-8">
 
         {/* ── Unassigned users banner ── */}
         {profile?.role === "admin" && unassignedUsers.length > 0 && (
@@ -346,7 +322,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-            <Link href="/admin/users" className="px-4 py-2 text-sm bg-red-500 text-white font-semibold rounded-lg hover:bg-red-400 transition whitespace-nowrap ml-4">
+            <Link href="/admin/users" className="px-4 py-2 text-sm bg-red-500 text-atlas-ink font-semibold rounded-lg hover:bg-red-400 transition whitespace-nowrap ml-4">
               Assign Roles →
             </Link>
           </div>
@@ -356,14 +332,14 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold">Operations Dashboard</h2>
-            <p className="text-sm text-gray-400 mt-1">Real-time forecast submission tracking & version analysis</p>
+            <p className="text-sm text-atlas-ink-muted mt-1">Real-time forecast submission tracking & version analysis</p>
           </div>
           <div className="flex items-center gap-3">
-            <label className="text-xs text-gray-500 whitespace-nowrap">Active Cycle</label>
+            <label className="text-xs text-atlas-ink-muted whitespace-nowrap">Active Cycle</label>
             <select
               value={selectedCycleId}
               onChange={(e) => setSelectedCycleId(e.target.value)}
-              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 min-w-[180px]"
+              className="px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-sm text-atlas-ink focus:outline-none focus:ring-2 focus:ring-amber-500 min-w-[180px]"
             >
               <option value="">— Select cycle —</option>
               {allCycles.map((c) => (
@@ -378,9 +354,9 @@ export default function DashboardPage() {
         {/* ── Cycle info bar ── */}
         {selectedCycle && (
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 px-4 py-2 bg-gray-900 border border-gray-800 rounded-xl">
-              <span className="text-xs text-gray-400">Cycle</span>
-              <span className="text-sm font-semibold text-white">{fmtMonth(selectedCycle.forecast_month)} · V{selectedCycle.version}</span>
+            <div className="flex items-center gap-2 px-4 py-2 bg-atlas-surface border border-atlas-line rounded-xl">
+              <span className="text-xs text-atlas-ink-muted">Cycle</span>
+              <span className="text-sm font-semibold text-atlas-ink">{fmtMonth(selectedCycle.forecast_month)} · V{selectedCycle.version}</span>
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                 selectedCycle.status === "open" ? "bg-green-500/20 text-green-400" :
                 selectedCycle.status === "locked" ? "bg-amber-500/20 text-amber-400" :
@@ -392,7 +368,7 @@ export default function DashboardPage() {
                 <span className="text-sm">⏰</span>
                 <span className={`text-sm font-semibold ${dl.color}`}>{dl.label}</span>
                 {selectedCycle.deadline && (
-                  <span className="text-xs text-gray-500">({new Date(selectedCycle.deadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })})</span>
+                  <span className="text-xs text-atlas-ink-muted">({new Date(selectedCycle.deadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })})</span>
                 )}
               </div>
             )}
@@ -402,26 +378,26 @@ export default function DashboardPage() {
         {/* ── Summary stat cards ── */}
         {selectedCycleId && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="bg-gray-900 border border-green-800/40 rounded-xl p-4 text-center">
+            <div className="bg-atlas-surface border border-green-800/40 rounded-xl p-4 text-center">
               <p className="text-2xl font-bold text-green-400">{submittedCh}</p>
-              <p className="text-xs text-gray-400 mt-1">Channels Submitted</p>
+              <p className="text-xs text-atlas-ink-muted mt-1">Channels Submitted</p>
             </div>
-            <div className="bg-gray-900 border border-red-800/40 rounded-xl p-4 text-center">
+            <div className="bg-atlas-surface border border-red-800/40 rounded-xl p-4 text-center">
               <p className="text-2xl font-bold text-red-400">{pendingCh}</p>
-              <p className="text-xs text-gray-400 mt-1">Channels Pending</p>
+              <p className="text-xs text-atlas-ink-muted mt-1">Channels Pending</p>
             </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-white">{totalCh > 0 ? Math.round((submittedCh / totalCh) * 100) : 0}%</p>
-              <p className="text-xs text-gray-400 mt-1">Completion Rate</p>
+            <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4 text-center">
+              <p className="text-2xl font-bold text-atlas-ink">{totalCh > 0 ? Math.round((submittedCh / totalCh) * 100) : 0}%</p>
+              <p className="text-xs text-atlas-ink-muted mt-1">Completion Rate</p>
             </div>
-            <div className="bg-gray-900 border border-amber-800/40 rounded-xl p-4 text-center">
+            <div className="bg-atlas-surface border border-amber-800/40 rounded-xl p-4 text-center">
               <p className="text-2xl font-bold text-amber-400">{fmtQty(totalQtyInCycle)}</p>
-              <p className="text-xs text-gray-400 mt-1">Total Qty (all months)</p>
+              <p className="text-xs text-atlas-ink-muted mt-1">Total Qty (all months)</p>
             </div>
             {isAdminOrHead && (
-              <div className={`bg-gray-900 border rounded-xl p-4 text-center ${pendingKams > 0 ? "border-orange-800/40" : "border-green-800/40"}`}>
+              <div className={`bg-atlas-surface border rounded-xl p-4 text-center ${pendingKams > 0 ? "border-orange-800/40" : "border-green-800/40"}`}>
                 <p className={`text-2xl font-bold ${pendingKams > 0 ? "text-orange-400" : "text-green-400"}`}>{pendingKams}</p>
-                <p className="text-xs text-gray-400 mt-1">KAMs Pending · {completedKams} Done</p>
+                <p className="text-xs text-atlas-ink-muted mt-1">KAMs Pending · {completedKams} Done</p>
               </div>
             )}
           </div>
@@ -429,29 +405,29 @@ export default function DashboardPage() {
 
         {/* ── KAM Tracker (admin / head_kam) ── */}
         {isAdminOrHead && selectedCycleId && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-atlas-line flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-white">KAM Submission Tracker</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <h3 className="font-semibold text-atlas-ink">KAM Submission Tracker</h3>
+                <p className="text-xs text-atlas-ink-muted mt-0.5">
                   {cycleLoading ? "Loading..." : `${pendingKams} pending · ${completedKams} done out of ${kamStatuses.length} KAMs`}
                 </p>
               </div>
               {cycleLoading && <span className="text-xs text-amber-400 animate-pulse">Refreshing...</span>}
             </div>
             {kamStatuses.length === 0 ? (
-              <div className="px-5 py-10 text-center text-gray-500 text-sm">No KAMs with channel assignments found.</div>
+              <div className="px-5 py-10 text-center text-atlas-ink-muted text-sm">No KAMs with channel assignments found.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800 text-left bg-gray-900/50">
-                      <th className="px-4 py-3 text-xs text-gray-400 font-medium">Name</th>
-                      <th className="px-4 py-3 text-xs text-gray-400 font-medium">Role</th>
-                      <th className="px-4 py-3 text-xs text-gray-400 font-medium text-center">Channels</th>
-                      <th className="px-4 py-3 text-xs text-gray-400 font-medium">Progress</th>
-                      <th className="px-4 py-3 text-xs text-gray-400 font-medium">Last Upload</th>
-                      <th className="px-4 py-3 text-xs text-gray-400 font-medium">Status</th>
+                    <tr className="border-b border-atlas-line text-left bg-atlas-surface/50">
+                      <th className="px-4 py-3 text-xs text-atlas-ink-muted font-medium">Name</th>
+                      <th className="px-4 py-3 text-xs text-atlas-ink-muted font-medium">Role</th>
+                      <th className="px-4 py-3 text-xs text-atlas-ink-muted font-medium text-center">Channels</th>
+                      <th className="px-4 py-3 text-xs text-atlas-ink-muted font-medium">Progress</th>
+                      <th className="px-4 py-3 text-xs text-atlas-ink-muted font-medium">Last Upload</th>
+                      <th className="px-4 py-3 text-xs text-atlas-ink-muted font-medium">Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -460,10 +436,10 @@ export default function DashboardPage() {
                       const done = submitted.length === assigned.length && assigned.length > 0;
                       const partial = submitted.length > 0 && !done;
                       return (
-                        <tr key={kam.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
+                        <tr key={kam.id} className="border-b border-atlas-line/50 hover:bg-atlas-surface-soft/20">
                           <td className="px-4 py-3">
-                            <p className="text-sm font-medium text-white">{kam.full_name || "—"}</p>
-                            <p className="text-xs text-gray-500">{kam.email}</p>
+                            <p className="text-sm font-medium text-atlas-ink">{kam.full_name || "—"}</p>
+                            <p className="text-xs text-atlas-ink-muted">{kam.email}</p>
                           </td>
                           <td className="px-4 py-3">
                             <span className={`px-2 py-0.5 rounded text-xs font-medium ${
@@ -471,20 +447,20 @@ export default function DashboardPage() {
                             }`}>{roleLabel(kam.role)}</span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span className="text-sm font-mono text-gray-200">{submitted.length}<span className="text-gray-600">/{assigned.length}</span></span>
+                            <span className="text-sm font-mono text-atlas-ink">{submitted.length}<span className="text-atlas-ink-muted">/{assigned.length}</span></span>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2 min-w-[100px]">
-                              <div className="flex-1 bg-gray-800 rounded-full h-1.5">
+                              <div className="flex-1 bg-atlas-surface-soft rounded-full h-1.5">
                                 <div
                                   className={`h-1.5 rounded-full transition-all ${done ? "bg-green-500" : partial ? "bg-amber-500" : "bg-red-500/60"}`}
                                   style={{ width: `${pct}%` }}
                                 />
                               </div>
-                              <span className="text-xs text-gray-400 w-8">{pct}%</span>
+                              <span className="text-xs text-atlas-ink-muted w-8">{pct}%</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-xs text-gray-400">{fmtDateTime(lastUpload)}</td>
+                          <td className="px-4 py-3 text-xs text-atlas-ink-muted">{fmtDateTime(lastUpload)}</td>
                           <td className="px-4 py-3">
                             {done
                               ? <span className="px-2 py-0.5 rounded text-xs bg-green-500/20 text-green-400 font-medium">Done ✓</span>
@@ -505,20 +481,20 @@ export default function DashboardPage() {
 
         {/* ── Channel Submission Status (grouped by cluster) ── */}
         {selectedCycleId && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-800">
-              <h3 className="font-semibold text-white">Channel Forecast Status</h3>
-              <p className="text-xs text-gray-500 mt-0.5">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-atlas-line">
+              <h3 className="font-semibold text-atlas-ink">Channel Forecast Status</h3>
+              <p className="text-xs text-atlas-ink-muted mt-0.5">
                 {submittedCh} of {totalCh} channels submitted for {selectedCycle ? `${fmtMonth(selectedCycle.forecast_month)} V${selectedCycle.version}` : "this cycle"}
               </p>
             </div>
             <div className="p-5 space-y-5">
               {channelsByCluster.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-6">No channels in your scope.</p>
+                <p className="text-atlas-ink-muted text-sm text-center py-6">No channels in your scope.</p>
               ) : (
                 channelsByCluster.map(({ cluster, channels: chs }) => (
                   <div key={cluster.id}>
-                    <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-2">{cluster.name}</p>
+                    <p className="text-xs text-atlas-ink-muted uppercase tracking-widest font-semibold mb-2">{cluster.name}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                       {chs.map(({ channel, submitted, lastUpload, totalQty }) => (
                         <div
@@ -526,19 +502,19 @@ export default function DashboardPage() {
                           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
                             submitted
                               ? "bg-green-900/10 border-green-500/25"
-                              : "bg-gray-800/40 border-gray-700/50"
+                              : "bg-atlas-surface-soft/40 border-atlas-line/50"
                           }`}
                         >
-                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${submitted ? "bg-green-400" : "bg-gray-600"}`} />
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${submitted ? "bg-green-400" : "bg-atlas-ink-faint"}`} />
                           <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium truncate ${submitted ? "text-white" : "text-gray-400"}`}>{channel.name}</p>
+                            <p className={`text-sm font-medium truncate ${submitted ? "text-atlas-ink" : "text-atlas-ink-muted"}`}>{channel.name}</p>
                             {submitted ? (
-                              <p className="text-xs text-gray-500 truncate">{fmtQty(totalQty)} · {lastUpload ? fmtDateTime(lastUpload) : "—"}</p>
+                              <p className="text-xs text-atlas-ink-muted truncate">{fmtQty(totalQty)} · {lastUpload ? fmtDateTime(lastUpload) : "—"}</p>
                             ) : (
                               <p className="text-xs text-red-400/70">No forecast yet</p>
                             )}
                           </div>
-                          <span className={`text-sm flex-shrink-0 ${submitted ? "text-green-400" : "text-gray-600"}`}>
+                          <span className={`text-sm flex-shrink-0 ${submitted ? "text-green-400" : "text-atlas-ink-faint"}`}>
                             {submitted ? "✓" : "○"}
                           </span>
                         </div>
@@ -552,20 +528,20 @@ export default function DashboardPage() {
         )}
 
         {/* ── Version Comparison & Forecast Fidelity ── */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-800">
-            <h3 className="font-semibold text-white">Version Comparison & Forecast Fidelity</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Compare any two versions for the same forecast month to measure revision rate</p>
+        <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-atlas-line">
+            <h3 className="font-semibold text-atlas-ink">Version Comparison & Forecast Fidelity</h3>
+            <p className="text-xs text-atlas-ink-muted mt-0.5">Compare any two versions for the same forecast month to measure revision rate</p>
           </div>
           <div className="p-5">
             {/* Selectors */}
             <div className="flex flex-wrap gap-3 mb-5">
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Forecast Month</label>
+                <label className="block text-xs text-atlas-ink-muted mb-1.5">Forecast Month</label>
                 <select
                   value={vcMonth}
                   onChange={(e) => { setVcMonth(e.target.value); setVcCycleA(""); setVcCycleB(""); setRawVcA([]); setRawVcB([]); setVcTriggered(false); }}
-                  className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-sm text-atlas-ink focus:outline-none focus:ring-1 focus:ring-amber-500"
                 >
                   <option value="">Select month...</option>
                   {vcMonths.map((m) => (
@@ -576,11 +552,11 @@ export default function DashboardPage() {
               {vcMonth && (
                 <>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Version A <span className="text-blue-400">(Base)</span></label>
+                    <label className="block text-xs text-atlas-ink-muted mb-1.5">Version A <span className="text-blue-400">(Base)</span></label>
                     <select
                       value={vcCycleA}
                       onChange={(e) => { setVcCycleA(e.target.value); setRawVcA([]); setRawVcB([]); setVcTriggered(false); }}
-                      className="px-3 py-2 bg-gray-800 border border-blue-500/40 rounded-lg text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="px-3 py-2 bg-atlas-surface-soft border border-blue-500/40 rounded-lg text-sm text-atlas-ink focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
                       <option value="">Select V...</option>
                       {cyclesForVcMonth.map((c) => (
@@ -591,11 +567,11 @@ export default function DashboardPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Version B <span className="text-purple-400">(Compare)</span></label>
+                    <label className="block text-xs text-atlas-ink-muted mb-1.5">Version B <span className="text-purple-400">(Compare)</span></label>
                     <select
                       value={vcCycleB}
                       onChange={(e) => { setVcCycleB(e.target.value); setRawVcA([]); setRawVcB([]); setVcTriggered(false); }}
-                      className="px-3 py-2 bg-gray-800 border border-purple-500/40 rounded-lg text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      className="px-3 py-2 bg-atlas-surface-soft border border-purple-500/40 rounded-lg text-sm text-atlas-ink focus:outline-none focus:ring-1 focus:ring-purple-500"
                     >
                       <option value="">Select V...</option>
                       {cyclesForVcMonth.map((c) => (
@@ -620,14 +596,14 @@ export default function DashboardPage() {
 
             {/* No month selected */}
             {!vcMonth && (
-              <div className="py-10 text-center text-gray-600 text-sm">
+              <div className="py-10 text-center text-atlas-ink-faint text-sm">
                 Select a forecast month to begin comparing versions.
               </div>
             )}
 
             {/* Triggered but no data */}
             {vcTriggered && !vcLoading && vcRows.length === 0 && vcCycleA && vcCycleB && (
-              <div className="py-8 text-center text-gray-500 text-sm">No forecast data found for the selected versions.</div>
+              <div className="py-8 text-center text-atlas-ink-muted text-sm">No forecast data found for the selected versions.</div>
             )}
 
             {/* Results */}
@@ -636,15 +612,15 @@ export default function DashboardPage() {
                 {/* Fidelity + summary cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
                   <div className="bg-blue-950/30 border border-blue-500/20 rounded-xl p-4">
-                    <p className="text-xs text-gray-400 mb-1">V{cycleA?.version} Total <span className="text-gray-600">(Base)</span></p>
+                    <p className="text-xs text-atlas-ink-muted mb-1">V{cycleA?.version} Total <span className="text-atlas-ink-faint">(Base)</span></p>
                     <p className="text-xl font-bold text-blue-400">{fmtQty(vcTotalA)}</p>
                   </div>
                   <div className="bg-purple-950/30 border border-purple-500/20 rounded-xl p-4">
-                    <p className="text-xs text-gray-400 mb-1">V{cycleB?.version} Total</p>
+                    <p className="text-xs text-atlas-ink-muted mb-1">V{cycleB?.version} Total</p>
                     <p className="text-xl font-bold text-purple-400">{fmtQty(vcTotalB)}</p>
                   </div>
                   <div className={`rounded-xl p-4 border ${vcDelta >= 0 ? "bg-green-950/30 border-green-500/20" : "bg-red-950/30 border-red-500/20"}`}>
-                    <p className="text-xs text-gray-400 mb-1">Net Change</p>
+                    <p className="text-xs text-atlas-ink-muted mb-1">Net Change</p>
                     <p className={`text-xl font-bold ${vcDelta >= 0 ? "text-green-400" : "text-red-400"}`}>
                       {vcDelta >= 0 ? "+" : ""}{fmtQty(vcDelta)}
                     </p>
@@ -659,50 +635,50 @@ export default function DashboardPage() {
                     vcFidelity !== null && vcFidelity >= 70 ? "bg-amber-950/30 border-amber-500/20" :
                     "bg-red-950/30 border-red-500/20"
                   }`}>
-                    <p className="text-xs text-gray-400 mb-1">Forecast Fidelity</p>
+                    <p className="text-xs text-atlas-ink-muted mb-1">Forecast Fidelity</p>
                     <p className={`text-xl font-bold ${
                       vcFidelity !== null && vcFidelity >= 90 ? "text-green-400" :
                       vcFidelity !== null && vcFidelity >= 70 ? "text-amber-400" : "text-red-400"
                     }`}>{vcFidelity !== null ? `${vcFidelity}%` : "—"}</p>
-                    <p className="text-xs text-gray-600 mt-0.5">Lower revision = higher fidelity</p>
+                    <p className="text-xs text-atlas-ink-faint mt-0.5">Lower revision = higher fidelity</p>
                   </div>
                 </div>
 
                 {/* Channel-wise comparison table */}
-                <div className="overflow-x-auto rounded-xl border border-gray-800">
+                <div className="overflow-x-auto rounded-xl border border-atlas-line">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-800/50 border-b border-gray-800 text-left">
-                        <th className="px-4 py-3 text-xs text-gray-400 font-medium">Channel</th>
+                      <tr className="bg-atlas-surface-soft/50 border-b border-atlas-line text-left">
+                        <th className="px-4 py-3 text-xs text-atlas-ink-muted font-medium">Channel</th>
                         <th className="px-4 py-3 text-xs text-blue-400 font-medium text-right">V{cycleA?.version}</th>
                         <th className="px-4 py-3 text-xs text-purple-400 font-medium text-right">V{cycleB?.version}</th>
-                        <th className="px-4 py-3 text-xs text-gray-400 font-medium text-right">Δ Qty</th>
-                        <th className="px-4 py-3 text-xs text-gray-400 font-medium text-right">Δ %</th>
-                        <th className="px-4 py-3 text-xs text-gray-400 font-medium w-28">Revision</th>
+                        <th className="px-4 py-3 text-xs text-atlas-ink-muted font-medium text-right">Δ Qty</th>
+                        <th className="px-4 py-3 text-xs text-atlas-ink-muted font-medium text-right">Δ %</th>
+                        <th className="px-4 py-3 text-xs text-atlas-ink-muted font-medium w-28">Revision</th>
                       </tr>
                     </thead>
                     <tbody>
                       {vcRows.map(({ channel, cluster, qA, qB, delta, deltaPct }) => (
-                        <tr key={channel.id} className="border-b border-gray-800/40 hover:bg-gray-800/20">
+                        <tr key={channel.id} className="border-b border-atlas-line/40 hover:bg-atlas-surface-soft/20">
                           <td className="px-4 py-3">
-                            <p className="text-sm text-white">{channel.name}</p>
-                            {cluster && <p className="text-xs text-gray-500">{cluster.name}</p>}
+                            <p className="text-sm text-atlas-ink">{channel.name}</p>
+                            {cluster && <p className="text-xs text-atlas-ink-muted">{cluster.name}</p>}
                           </td>
                           <td className="px-4 py-3 text-right font-mono text-blue-300 text-sm">{fmtQty(qA)}</td>
                           <td className="px-4 py-3 text-right font-mono text-purple-300 text-sm">{fmtQty(qB)}</td>
-                          <td className={`px-4 py-3 text-right font-mono font-medium text-sm ${delta > 0 ? "text-green-400" : delta < 0 ? "text-red-400" : "text-gray-600"}`}>
+                          <td className={`px-4 py-3 text-right font-mono font-medium text-sm ${delta > 0 ? "text-green-400" : delta < 0 ? "text-red-400" : "text-atlas-ink-faint"}`}>
                             {delta > 0 ? "+" : ""}{fmtQty(delta)}
                           </td>
-                          <td className={`px-4 py-3 text-right text-sm ${deltaPct !== null && deltaPct > 0 ? "text-green-400" : deltaPct !== null && deltaPct < 0 ? "text-red-400" : "text-gray-600"}`}>
+                          <td className={`px-4 py-3 text-right text-sm ${deltaPct !== null && deltaPct > 0 ? "text-green-400" : deltaPct !== null && deltaPct < 0 ? "text-red-400" : "text-atlas-ink-faint"}`}>
                             {deltaPct !== null ? `${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%` : "—"}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
-                              <span className={`text-base ${delta > 0 ? "text-green-400" : delta < 0 ? "text-red-400" : "text-gray-600"}`}>
+                              <span className={`text-base ${delta > 0 ? "text-green-400" : delta < 0 ? "text-red-400" : "text-atlas-ink-faint"}`}>
                                 {delta > 0 ? "↑" : delta < 0 ? "↓" : "—"}
                               </span>
                               {deltaPct !== null && Math.abs(deltaPct) > 0.1 && (
-                                <div className="flex-1 bg-gray-800 rounded-full h-1 max-w-[64px]">
+                                <div className="flex-1 bg-atlas-surface-soft rounded-full h-1 max-w-[64px]">
                                   <div
                                     className={`h-1 rounded-full ${delta >= 0 ? "bg-green-500" : "bg-red-500"}`}
                                     style={{ width: `${Math.min(Math.abs(deltaPct), 100)}%` }}
@@ -715,8 +691,8 @@ export default function DashboardPage() {
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-gray-800/40 border-t border-gray-700">
-                        <td className="px-4 py-3 text-sm font-semibold text-white">Total</td>
+                      <tr className="bg-atlas-surface-soft/40 border-t border-atlas-line">
+                        <td className="px-4 py-3 text-sm font-semibold text-atlas-ink">Total</td>
                         <td className="px-4 py-3 text-right font-mono font-bold text-blue-400">{fmtQty(vcTotalA)}</td>
                         <td className="px-4 py-3 text-right font-mono font-bold text-purple-400">{fmtQty(vcTotalB)}</td>
                         <td className={`px-4 py-3 text-right font-mono font-bold ${vcDelta >= 0 ? "text-green-400" : "text-red-400"}`}>
@@ -737,29 +713,29 @@ export default function DashboardPage() {
 
         {/* ── Quick Actions ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link href="/upload" className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-amber-500/40 transition group">
+          <Link href="/upload" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-amber-500/40 transition group">
             <p className="text-sm font-semibold group-hover:text-amber-400 transition">Upload Forecast</p>
-            <p className="text-xs text-gray-500 mt-1">Submit channel forecast data</p>
+            <p className="text-xs text-atlas-ink-muted mt-1">Submit channel forecast data</p>
           </Link>
-          <Link href="/channels" className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-amber-500/40 transition group">
+          <Link href="/channels" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-amber-500/40 transition group">
             <p className="text-sm font-semibold group-hover:text-amber-400 transition">Forecast View</p>
-            <p className="text-xs text-gray-500 mt-1">Analyse by channel, cluster, SKU</p>
+            <p className="text-xs text-atlas-ink-muted mt-1">Analyse by channel, cluster, SKU</p>
           </Link>
           {profile?.role === "admin" && (
-            <Link href="/admin/cycles" className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-amber-500/40 transition group">
+            <Link href="/admin/cycles" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-amber-500/40 transition group">
               <p className="text-sm font-semibold group-hover:text-amber-400 transition">Manage Cycles</p>
-              <p className="text-xs text-gray-500 mt-1">Open, lock, publish cycles</p>
+              <p className="text-xs text-atlas-ink-muted mt-1">Open, lock, publish cycles</p>
             </Link>
           )}
           {profile?.role === "admin" && (
-            <Link href="/admin/users" className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-amber-500/40 transition group">
+            <Link href="/admin/users" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-amber-500/40 transition group">
               <p className="text-sm font-semibold group-hover:text-amber-400 transition">Manage Users</p>
-              <p className="text-xs text-gray-500 mt-1">Assign roles and channels</p>
+              <p className="text-xs text-atlas-ink-muted mt-1">Assign roles and channels</p>
             </Link>
           )}
         </div>
 
       </div>
-    </main>
+    </AppShell>
   );
 }

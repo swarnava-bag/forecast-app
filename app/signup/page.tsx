@@ -39,13 +39,11 @@ export default function SignupPage() {
     setError(null);
     setMessage(null);
 
-    // Validate passwords match
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
 
-    // Validate password strength
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
       return;
@@ -76,21 +74,21 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-atlas-bg flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">
+          <h1 className="text-3xl font-bold text-atlas-ink mb-2">
             Demand Planning Module - Yogabars
           </h1>
-          <p className="text-gray-400">Create your account</p>
+          <p className="text-atlas-ink-muted">Create your account</p>
         </div>
 
         {/* Form Card */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-8">
+        <div className="bg-atlas-surface border border-atlas-line rounded-xl p-8">
           <form onSubmit={handleSignup} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label className="block text-sm font-medium text-atlas-ink mb-1.5">
                 Full Name
               </label>
               <input
@@ -99,12 +97,12 @@ export default function SignupPage() {
                 onChange={(e) => setFullName(e.target.value)}
                 required
                 placeholder="Enter your full name"
-                className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+                className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label className="block text-sm font-medium text-atlas-ink mb-1.5">
                 Email
               </label>
               <input
@@ -113,12 +111,12 @@ export default function SignupPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="you@company.com"
-                className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+                className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label className="block text-sm font-medium text-atlas-ink mb-1.5">
                 Password
               </label>
               <div className="relative">
@@ -129,12 +127,12 @@ export default function SignupPage() {
                   required
                   minLength={6}
                   placeholder="Minimum 6 characters"
-                  className="w-full px-4 py-2.5 pr-12 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+                  className="w-full px-4 py-2.5 pr-12 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-atlas-ink-muted hover:text-atlas-ink transition"
                 >
                   {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
@@ -142,7 +140,7 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label className="block text-sm font-medium text-atlas-ink mb-1.5">
                 Confirm Password
               </label>
               <div className="relative">
@@ -153,16 +151,16 @@ export default function SignupPage() {
                   required
                   minLength={6}
                   placeholder="Re-enter your password"
-                  className={`w-full px-4 py-2.5 pr-12 bg-gray-800 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition ${
+                  className={`w-full px-4 py-2.5 pr-12 bg-atlas-surface-soft border rounded-lg text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition ${
                     confirmPassword && confirmPassword !== password
                       ? "border-red-500"
-                      : "border-gray-700"
+                      : "border-atlas-line"
                   }`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-atlas-ink-muted hover:text-atlas-ink transition"
                 >
                   {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
@@ -193,7 +191,7 @@ export default function SignupPage() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-400">
+          <p className="mt-6 text-center text-sm text-atlas-ink-muted">
             Already have an account?{" "}
             <Link href="/login" className="text-amber-400 hover:text-amber-300">
               Log in

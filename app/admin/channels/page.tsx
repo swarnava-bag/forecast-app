@@ -142,52 +142,30 @@ export default function AdminChannelsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white">
-        <nav className="border-b border-gray-800 bg-gray-900"><div className="max-w-7xl mx-auto px-6 py-4"><Link href="/dashboard" className="text-lg font-bold text-white">Demand Planning Module - Yogabars</Link></div></nav>
-        <div className="flex items-center justify-center h-64"><p className="text-gray-400">Loading...</p></div>
-      </div>
+      <div className="flex items-center justify-center h-64"><p style={{ color: "var(--atlas-ink-muted)" }}>Loading...</p></div>
     );
   }
 
   if (profile?.role !== "admin") {
     return (
-      <div className="min-h-screen bg-gray-950 text-white">
-        <nav className="border-b border-gray-800 bg-gray-900"><div className="max-w-7xl mx-auto px-6 py-4"><Link href="/dashboard" className="text-lg font-bold text-white">Demand Planning Module - Yogabars</Link></div></nav>
-        <div className="max-w-7xl mx-auto px-6 py-16 text-center">
-          <h2 className="text-2xl font-bold mb-4">Access Restricted</h2>
-          <p className="text-gray-400">Admin access required.</p>
-          <Link href="/dashboard" className="inline-block mt-6 px-6 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700 transition">Back to Dashboard</Link>
-        </div>
+      <div className="py-16 text-center">
+        <h2 className="text-2xl font-bold mb-4">Access Restricted</h2>
+        <p style={{ color: "var(--atlas-ink-muted)" }}>Admin access required.</p>
+        <Link href="/dashboard" className="inline-block mt-6 px-6 py-2 bg-atlas-surface-soft rounded-lg text-sm hover:bg-atlas-surface-soft transition">Back to Dashboard</Link>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <nav className="border-b border-gray-800 bg-gray-900">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="text-lg font-bold text-white">Demand Planning Module - Yogabars</Link>
-            <div className="hidden md:flex items-center gap-4">
-              <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition">Dashboard</Link>
-              <Link href="/upload" className="text-sm text-gray-400 hover:text-white transition">Upload</Link>
-              <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Forecast View</Link>
-              <Link href="/combo-converter" className="text-sm text-gray-400 hover:text-white transition">Combo → Singles</Link>
-              <Link href="/admin" className="text-sm text-gray-400 hover:text-white transition">Admin</Link>
-              <span className="text-sm text-amber-400 font-medium">Channels & Clusters</span>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <div className="max-w-5xl mx-auto px-6 py-8">
+    <div>
+      <div className="max-w-5xl mx-auto">
         <div className="flex items-start justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold">Channels & Clusters</h2>
-            <p className="text-sm text-gray-400 mt-1">{clusters.length} clusters, {channels.length} channels ({channels.filter((c) => c.is_active).length} active)</p>
+            <p className="text-sm text-atlas-ink-muted mt-1">{clusters.length} clusters, {channels.length} channels ({channels.filter((c) => c.is_active).length} active)</p>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => openClusterForm()} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">+ Cluster</button>
+            <button onClick={() => openClusterForm()} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">+ Cluster</button>
             <button onClick={() => openChannelForm()} className="px-4 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition">+ Channel</button>
           </div>
         </div>
@@ -197,61 +175,61 @@ export default function AdminChannelsPage() {
 
         {/* CLUSTER FORM */}
         {showClusterForm && (
-          <div className="mb-6 bg-gray-900 border border-blue-500/30 rounded-xl p-6">
+          <div className="mb-6 bg-atlas-surface border border-blue-500/30 rounded-xl p-6">
             <h3 className="text-lg font-semibold text-blue-400 mb-4">{editingCluster ? "Edit Cluster" : "New Cluster"}</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div className="md:col-span-2">
-                <label className="block text-xs text-gray-400 mb-1">Cluster Name</label>
+                <label className="block text-xs text-atlas-ink-muted mb-1">Cluster Name</label>
                 <input type="text" value={clusterName} onChange={(e) => setClusterName(e.target.value)} placeholder="e.g. E-Commerce"
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Display Order</label>
+                <label className="block text-xs text-atlas-ink-muted mb-1">Display Order</label>
                 <input type="number" value={clusterOrder} onChange={(e) => setClusterOrder(Number(e.target.value))}
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>
             <div className="flex gap-3">
               <button onClick={saveCluster} disabled={savingCluster}
-                className="px-5 py-2 text-sm bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-400 disabled:opacity-50 transition">
+                className="px-5 py-2 text-sm bg-blue-500 text-atlas-ink font-semibold rounded-lg hover:bg-blue-400 disabled:opacity-50 transition">
                 {savingCluster ? "Saving..." : editingCluster ? "Update Cluster" : "Create Cluster"}
               </button>
               <button onClick={() => { setShowClusterForm(false); setEditingCluster(null); setError(null); }}
-                className="px-5 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">Cancel</button>
+                className="px-5 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">Cancel</button>
             </div>
           </div>
         )}
 
         {/* CHANNEL FORM */}
         {showChannelForm && (
-          <div className="mb-6 bg-gray-900 border border-amber-500/30 rounded-xl p-6">
+          <div className="mb-6 bg-atlas-surface border border-amber-500/30 rounded-xl p-6">
             <h3 className="text-lg font-semibold text-amber-400 mb-4">{editingChannel ? "Edit Channel" : "New Channel"}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Channel Name</label>
+                <label className="block text-xs text-atlas-ink-muted mb-1">Channel Name</label>
                 <input type="text" value={channelName} onChange={(e) => setChannelName(e.target.value)} placeholder="e.g. Amazon"
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Cluster</label>
+                <label className="block text-xs text-atlas-ink-muted mb-1">Cluster</label>
                 <select value={channelCluster} onChange={(e) => setChannelCluster(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                  className="w-full px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                   <option value="">Select cluster...</option>
                   {clusters.map((cl) => (<option key={cl.id} value={cl.id}>{cl.name}</option>))}
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Display Order</label>
+                <label className="block text-xs text-atlas-ink-muted mb-1">Display Order</label>
                 <input type="number" value={channelOrder} onChange={(e) => setChannelOrder(Number(e.target.value))}
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Status</label>
+                <label className="block text-xs text-atlas-ink-muted mb-1">Status</label>
                 <div className="flex items-center gap-3 mt-1">
                   <button onClick={() => setChannelActive(true)}
-                    className={`px-4 py-2 text-sm rounded-lg transition ${channelActive ? "bg-green-500/20 text-green-400 ring-1 ring-green-500" : "bg-gray-800 text-gray-400"}`}>Active</button>
+                    className={`px-4 py-2 text-sm rounded-lg transition ${channelActive ? "bg-green-500/20 text-green-400 ring-1 ring-green-500" : "bg-atlas-surface-soft text-atlas-ink-muted"}`}>Active</button>
                   <button onClick={() => setChannelActive(false)}
-                    className={`px-4 py-2 text-sm rounded-lg transition ${!channelActive ? "bg-red-500/20 text-red-400 ring-1 ring-red-500" : "bg-gray-800 text-gray-400"}`}>Inactive</button>
+                    className={`px-4 py-2 text-sm rounded-lg transition ${!channelActive ? "bg-red-500/20 text-red-400 ring-1 ring-red-500" : "bg-atlas-surface-soft text-atlas-ink-muted"}`}>Inactive</button>
                 </div>
               </div>
             </div>
@@ -261,16 +239,16 @@ export default function AdminChannelsPage() {
                 {savingChannel ? "Saving..." : editingChannel ? "Update Channel" : "Create Channel"}
               </button>
               <button onClick={() => { setShowChannelForm(false); setEditingChannel(null); setError(null); }}
-                className="px-5 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">Cancel</button>
+                className="px-5 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">Cancel</button>
             </div>
           </div>
         )}
 
         {/* CLUSTERS & CHANNELS LIST */}
         {clusters.length === 0 ? (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-            <p className="text-gray-500 mb-4">No clusters yet. Create your first cluster, then add channels to it.</p>
-            <button onClick={() => openClusterForm()} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">+ Create Cluster</button>
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl p-12 text-center">
+            <p className="text-atlas-ink-muted mb-4">No clusters yet. Create your first cluster, then add channels to it.</p>
+            <button onClick={() => openClusterForm()} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">+ Create Cluster</button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -279,50 +257,50 @@ export default function AdminChannelsPage() {
               const activeCount = clChannels.filter((c) => c.is_active).length;
               const isExpanded = expandedClusters.has(cl.id);
               return (
-                <div key={cl.id} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                  <div className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-800/30 transition" onClick={() => toggleCluster(cl.id)}>
+                <div key={cl.id} className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-atlas-surface-soft/30 transition" onClick={() => toggleCluster(cl.id)}>
                     <div className="flex items-center gap-3">
-                      <span className="text-gray-500 text-sm w-5">{isExpanded ? "\u25BC" : "\u25B6"}</span>
+                      <span className="text-atlas-ink-muted text-sm w-5">{isExpanded ? "\u25BC" : "\u25B6"}</span>
                       <div>
-                        <span className="font-medium text-white">{cl.name}</span>
-                        <span className="ml-3 text-xs text-gray-500">{clChannels.length} channel{clChannels.length !== 1 ? "s" : ""} ({activeCount} active)</span>
+                        <span className="font-medium text-atlas-ink">{cl.name}</span>
+                        <span className="ml-3 text-xs text-atlas-ink-muted">{clChannels.length} channel{clChannels.length !== 1 ? "s" : ""} ({activeCount} active)</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-xs text-gray-600 mr-2">Order: {cl.display_order}</span>
+                      <span className="text-xs text-atlas-ink-faint mr-2">Order: {cl.display_order}</span>
                       <button onClick={() => openChannelForm(undefined, cl.id)} className="text-xs text-amber-400 hover:text-amber-300 transition">+ Channel</button>
                       <button onClick={() => openClusterForm(cl)} className="text-xs text-blue-400 hover:text-blue-300 transition ml-2">Edit</button>
                       <button onClick={() => deleteCluster(cl)} className="text-xs text-red-400 hover:text-red-300 transition ml-2">Delete</button>
                     </div>
                   </div>
                   {isExpanded && (
-                    <div className="border-t border-gray-800">
+                    <div className="border-t border-atlas-line">
                       {clChannels.length === 0 ? (
                         <div className="px-6 py-4 text-center">
-                          <p className="text-gray-600 text-sm">No channels in this cluster.</p>
+                          <p className="text-atlas-ink-faint text-sm">No channels in this cluster.</p>
                           <button onClick={() => openChannelForm(undefined, cl.id)} className="mt-2 text-xs text-amber-400 hover:text-amber-300">+ Add Channel</button>
                         </div>
                       ) : (
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="bg-gray-800/30">
-                              <th className="text-left py-2 px-6 text-gray-500 font-medium text-xs">Channel</th>
-                              <th className="text-center py-2 px-4 text-gray-500 font-medium text-xs">Status</th>
-                              <th className="text-center py-2 px-4 text-gray-500 font-medium text-xs">Order</th>
-                              <th className="text-right py-2 px-6 text-gray-500 font-medium text-xs">Actions</th>
+                            <tr className="bg-atlas-surface-soft/30">
+                              <th className="text-left py-2 px-6 text-atlas-ink-muted font-medium text-xs">Channel</th>
+                              <th className="text-center py-2 px-4 text-atlas-ink-muted font-medium text-xs">Status</th>
+                              <th className="text-center py-2 px-4 text-atlas-ink-muted font-medium text-xs">Order</th>
+                              <th className="text-right py-2 px-6 text-atlas-ink-muted font-medium text-xs">Actions</th>
                             </tr>
                           </thead>
                           <tbody>
                             {clChannels.map((ch) => (
-                              <tr key={ch.id} className="border-t border-gray-800/50 hover:bg-gray-800/20 transition">
-                                <td className="py-3 px-6"><span className={ch.is_active ? "text-white" : "text-gray-500 line-through"}>{ch.name}</span></td>
+                              <tr key={ch.id} className="border-t border-atlas-line/50 hover:bg-atlas-surface-soft/20 transition">
+                                <td className="py-3 px-6"><span className={ch.is_active ? "text-atlas-ink" : "text-atlas-ink-muted line-through"}>{ch.name}</span></td>
                                 <td className="py-3 px-4 text-center">
                                   <button onClick={() => toggleChannelActive(ch)}
                                     className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition ${ch.is_active ? "bg-green-500/20 text-green-400 hover:bg-green-500/30" : "bg-red-500/20 text-red-400 hover:bg-red-500/30"}`}>
                                     {ch.is_active ? "Active" : "Inactive"}
                                   </button>
                                 </td>
-                                <td className="py-3 px-4 text-center text-xs text-gray-500">{ch.display_order}</td>
+                                <td className="py-3 px-4 text-center text-xs text-atlas-ink-muted">{ch.display_order}</td>
                                 <td className="py-3 px-6 text-right">
                                   <div className="flex items-center justify-end gap-3">
                                     <button onClick={() => openChannelForm(ch)} className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>

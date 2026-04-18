@@ -1,1 +1,863 @@
 @import "tailwindcss";
+
+/* ==========================================================================
+   Yogabars Atlas — Design Tokens
+   ==========================================================================
+   Source of truth: design-system-atlas/colors_and_type.css
+   This file imports Atlas tokens into the app and wires them to Tailwind v4.
+
+   Phase 1: tokens + typography only. Components still use hardcoded
+   Tailwind classes — token-based migration happens in later phases.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   :root — Atlas Editorial Light palette (default)
+   -------------------------------------------------------------------------- */
+:root {
+  /* Paper & ink */
+  --atlas-bg:            #F5F1E8;
+  --atlas-surface:       #FFFFFF;
+  --atlas-surface-soft:  #FBF8F0;
+  --atlas-navy:          #0B1B2B;
+  --atlas-navy-soft:     #1E3048;
+
+  /* Text hierarchy */
+  --atlas-ink:           #0B1B2B;
+  --atlas-ink-soft:      #3A4D64;
+  --atlas-ink-muted:     #5C6E82;
+  --atlas-ink-faint:     #7A8A9B;
+
+  /* Lines */
+  --atlas-line:          #D6CFC0;
+  --atlas-line-soft:     #E4DDCE;
+
+  /* Accent — amber (single brand hue) */
+  --atlas-accent:        #D97706;
+  --atlas-accent-light:  #F59E0B;
+  --atlas-accent-deep:   #B45309;
+  --atlas-accent-bg:     rgba(217, 119, 6, 0.10);
+
+  /* Semantic */
+  --atlas-green:         #0F7A4F;
+  --atlas-green-bg:      rgba(15, 122, 79, 0.08);
+  --atlas-red:           #B91C1C;
+  --atlas-red-bg:        rgba(185, 28, 28, 0.07);
+  --atlas-amber-warn:    #D97706;
+  --atlas-amber-bg:      rgba(217, 119, 6, 0.10);
+  --atlas-blue:          #2563EB;
+  --atlas-blue-bg:       rgba(37, 99, 235, 0.08);
+
+  /* Semantic aliases (resolve to light by default) */
+  --bg-page:             var(--atlas-bg);
+  --bg-surface:          var(--atlas-surface);
+  --bg-surface-soft:     var(--atlas-surface-soft);
+  --border-subtle:       var(--atlas-line-soft);
+  --border-default:      var(--atlas-line);
+  --fg-1:                var(--atlas-ink);
+  --fg-2:                var(--atlas-ink-soft);
+  --fg-3:                var(--atlas-ink-muted);
+  --fg-4:                var(--atlas-ink-faint);
+  --accent:              var(--atlas-accent);
+  --accent-bg:           var(--atlas-accent-bg);
+
+  /* Typography tokens */
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-sans:    "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:    "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Type scale */
+  --text-xs:    0.6875rem;  /* 11px */
+  --text-sm:    0.8125rem;  /* 13px */
+  --text-base:  0.9375rem;  /* 15px */
+  --text-md:    1.0625rem;  /* 17px */
+  --text-lg:    1.25rem;    /* 20px */
+  --text-xl:    1.5rem;     /* 24px */
+  --text-2xl:   2rem;       /* 32px */
+  --text-3xl:   2.5rem;     /* 40px */
+  --text-5xl:   4rem;       /* 64px */
+
+  /* Leading */
+  --leading-tight:  1.05;
+  --leading-snug:   1.25;
+  --leading-normal: 1.5;
+  --leading-loose:  1.6;
+
+  /* Tracking */
+  --tracking-display: -0.02em;
+  --tracking-tight:   -0.015em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.04em;
+  --tracking-widest:  0.18em;
+
+  /* Spacing — 4px grid */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+  --space-24:  96px;
+
+  /* Radii */
+  --radius-sm:    6px;
+  --radius-md:    8px;
+  --radius-lg:    12px;
+  --radius-xl:    14px;
+  --radius-2xl:   20px;
+  --radius-full:  9999px;
+
+  /* Shadows */
+  --shadow-xs:     0 1px 2px rgba(11, 27, 43, 0.04);
+  --shadow-sm:     0 2px 4px rgba(11, 27, 43, 0.06);
+  --shadow-md:     0 8px 16px -6px rgba(11, 27, 43, 0.10);
+  --shadow-lg:     0 30px 60px -20px rgba(11, 27, 43, 0.25);
+  --shadow-accent: 0 10px 20px -10px rgba(217, 119, 6, 0.5);
+  --shadow-focus:  0 0 0 3px rgba(217, 119, 6, 0.25);
+
+  /* Motion */
+  --duration-fast: 140ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --------------------------------------------------------------------------
+   [data-theme="dark"] — Atlas dark overrides
+   -------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  --atlas-bg:            #0A1524;
+  --atlas-surface:       #102136;
+  --atlas-surface-soft:  #0D1B2C;
+  --atlas-ink:           #F5F1E8;
+  --atlas-ink-soft:      #B8C4D2;
+  --atlas-ink-muted:     #6A7D94;
+  --atlas-ink-faint:     #4A5D74;
+  --atlas-line:          #1E3048;
+  --atlas-line-soft:     #172537;
+  --atlas-accent:        #F59E0B;
+  --atlas-accent-light:  #FBBF24;
+  --atlas-green:         #4ADE80;
+  --atlas-green-bg:      rgba(34, 197, 94, 0.12);
+  --atlas-red:           #F87171;
+  --atlas-red-bg:        rgba(239, 68, 68, 0.12);
+  --atlas-amber-bg:      rgba(245, 158, 11, 0.14);
+  --atlas-blue:          #60A5FA;
+  --atlas-blue-bg:       rgba(96, 165, 250, 0.12);
+}
+
+/* --------------------------------------------------------------------------
+   [data-theme="light"] — Force light tokens (nested override for dark parent)
+   -------------------------------------------------------------------------- */
+[data-theme="light"] {
+  --atlas-bg:            #F5F1E8;
+  --atlas-surface:       #FFFFFF;
+  --atlas-surface-soft:  #FBF8F0;
+  --atlas-ink:           #0B1B2B;
+  --atlas-ink-soft:      #3A4D64;
+  --atlas-ink-muted:     #5C6E82;
+  --atlas-ink-faint:     #7A8A9B;
+  --atlas-line:          #D6CFC0;
+  --atlas-line-soft:     #E4DDCE;
+  --atlas-accent:        #D97706;
+  --atlas-accent-light:  #F59E0B;
+  --atlas-green:         #0F7A4F;
+  --atlas-green-bg:      rgba(15, 122, 79, 0.08);
+  --atlas-red:           #B91C1C;
+  --atlas-red-bg:        rgba(185, 28, 28, 0.07);
+  --atlas-amber-bg:      rgba(217, 119, 6, 0.10);
+  --atlas-blue:          #2563EB;
+  --atlas-blue-bg:       rgba(37, 99, 235, 0.08);
+}
+
+/* --------------------------------------------------------------------------
+   @theme — Register Atlas tokens as Tailwind v4 utilities
+   --------------------------------------------------------------------------
+   This makes classes like `font-display`, `bg-atlas-bg`, `text-atlas-ink`,
+   `border-atlas-line`, `rounded-atlas-lg` etc. available in components.
+   -------------------------------------------------------------------------- */
+@theme {
+  /* Fonts — maps to font-sans, font-mono, font-display */
+  --font-sans:    "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:    "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+
+  /* Atlas colors — usage: bg-atlas-bg, text-atlas-ink, border-atlas-line etc. */
+  --color-atlas-bg:           var(--atlas-bg);
+  --color-atlas-surface:      var(--atlas-surface);
+  --color-atlas-surface-soft: var(--atlas-surface-soft);
+  --color-atlas-navy:         var(--atlas-navy);
+  --color-atlas-navy-soft:    var(--atlas-navy-soft);
+  --color-atlas-ink:          var(--atlas-ink);
+  --color-atlas-ink-soft:     var(--atlas-ink-soft);
+  --color-atlas-ink-muted:    var(--atlas-ink-muted);
+  --color-atlas-ink-faint:    var(--atlas-ink-faint);
+  --color-atlas-line:         var(--atlas-line);
+  --color-atlas-line-soft:    var(--atlas-line-soft);
+  --color-atlas-accent:       var(--atlas-accent);
+  --color-atlas-accent-light: var(--atlas-accent-light);
+  --color-atlas-accent-deep:  var(--atlas-accent-deep);
+  --color-atlas-accent-bg:    var(--atlas-accent-bg);
+  --color-atlas-green:        var(--atlas-green);
+  --color-atlas-green-bg:     var(--atlas-green-bg);
+  --color-atlas-red:          var(--atlas-red);
+  --color-atlas-red-bg:       var(--atlas-red-bg);
+  --color-atlas-amber-warn:   var(--atlas-amber-warn);
+  --color-atlas-amber-bg:     var(--atlas-amber-bg);
+  --color-atlas-blue:         var(--atlas-blue);
+  --color-atlas-blue-bg:      var(--atlas-blue-bg);
+}
+
+/* ==========================================================================
+   Atlas Landing Page — Component Styles
+   ========================================================================== */
+
+/* Background mesh — radial amber glows + horizontal rule lines */
+.atlas-mesh {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(217,119,6,0.10), transparent 35%),
+    radial-gradient(circle at 92% 88%, rgba(11,27,43,0.06), transparent 40%),
+    radial-gradient(circle at 50% 30%, rgba(245,158,11,0.04), transparent 55%),
+    var(--atlas-bg);
+}
+[data-theme="dark"] .atlas-mesh {
+  background:
+    radial-gradient(circle at 8% 12%, rgba(245,158,11,0.12), transparent 40%),
+    radial-gradient(circle at 92% 88%, rgba(245,158,11,0.05), transparent 45%),
+    var(--atlas-bg);
+}
+/* Re-apply light mesh when nested inside [data-theme="light"] */
+[data-theme="light"] .atlas-mesh {
+  background:
+    radial-gradient(circle at 8% 12%, rgba(217,119,6,0.10), transparent 35%),
+    radial-gradient(circle at 92% 88%, rgba(11,27,43,0.06), transparent 40%),
+    radial-gradient(circle at 50% 30%, rgba(245,158,11,0.04), transparent 55%),
+    var(--atlas-bg);
+}
+.atlas-mesh::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(var(--atlas-line-soft) 1px, transparent 1px);
+  background-size: 100% 48px;
+  opacity: 0.35;
+}
+
+/* Wordmark */
+.atlas-wordmark-mark {
+  position: relative;
+}
+.atlas-wordmark-mark::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: -10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--atlas-accent);
+}
+
+/* Eyebrow label */
+.atlas-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--atlas-accent);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.atlas-eyebrow::before {
+  content: "";
+  width: 32px;
+  height: 1px;
+  background: var(--atlas-accent);
+  flex-shrink: 0;
+}
+
+/* Login card */
+.atlas-login-card {
+  background: var(--atlas-surface);
+  border: 1px solid var(--atlas-line);
+  border-radius: 16px;
+  padding: 36px 34px 30px;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.5) inset,
+    0 20px 50px -15px rgba(11,27,43,0.15);
+}
+[data-theme="dark"] .atlas-login-card {
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.04) inset,
+    0 20px 50px -15px rgba(0,0,0,0.5);
+}
+[data-theme="light"] .atlas-login-card {
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.5) inset,
+    0 20px 50px -15px rgba(11,27,43,0.15);
+}
+
+/* Card stack — rotated amber card behind */
+.atlas-card-behind {
+  position: absolute;
+  inset: -10px -10px auto auto;
+  width: calc(100% + 10px);
+  height: calc(100% + 10px);
+  background: var(--atlas-accent);
+  border-radius: 18px;
+  transform: rotate(2deg);
+  opacity: 0.9;
+  z-index: -1;
+}
+[data-theme="dark"] .atlas-card-behind {
+  opacity: 0.6;
+}
+[data-theme="light"] .atlas-card-behind {
+  opacity: 0.9;
+}
+
+/* Bottom-border-only input style */
+.atlas-input {
+  width: 100%;
+  padding: 12px 14px 12px 2px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--atlas-line);
+  border-radius: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--atlas-ink);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.atlas-input::placeholder {
+  color: var(--atlas-ink-muted);
+}
+.atlas-input:focus {
+  border-bottom-color: var(--atlas-accent);
+}
+
+/* Submit button */
+.atlas-submit {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 24px;
+  background: var(--atlas-navy);
+  color: #F5F1E8;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: var(--text-base);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+.atlas-submit:hover {
+  background: var(--atlas-accent);
+  color: var(--atlas-navy);
+}
+.atlas-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.atlas-submit .arrow {
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.atlas-submit:hover .arrow {
+  transform: translateX(4px);
+}
+[data-theme="dark"] .atlas-submit {
+  background: var(--atlas-accent);
+  color: var(--atlas-navy);
+}
+[data-theme="dark"] .atlas-submit:hover {
+  background: var(--atlas-accent-light);
+}
+[data-theme="light"] .atlas-submit {
+  background: var(--atlas-navy);
+  color: #F5F1E8;
+}
+[data-theme="light"] .atlas-submit:hover {
+  background: var(--atlas-accent);
+  color: var(--atlas-navy);
+}
+
+/* SSO button */
+.atlas-sso-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--atlas-surface-soft);
+  border: 1px solid var(--atlas-line);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--atlas-ink);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+.atlas-sso-btn:hover {
+  border-color: var(--atlas-accent);
+  color: var(--atlas-navy);
+}
+[data-theme="dark"] .atlas-sso-btn:hover {
+  color: var(--atlas-ink);
+}
+[data-theme="light"] .atlas-sso-btn:hover {
+  color: var(--atlas-navy);
+}
+
+/* OR divider */
+.atlas-divider-or {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--atlas-ink-muted);
+}
+.atlas-divider-or::before,
+.atlas-divider-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--atlas-line-soft);
+}
+
+/* Toolkit status badges */
+.atlas-status-live {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--atlas-accent);
+  border: 1px solid rgba(217,119,6,0.25);
+  background: rgba(217,119,6,0.06);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.atlas-status-live::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--atlas-accent);
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.atlas-status-soon {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: var(--text-sm);
+  color: var(--atlas-ink-muted);
+}
+
+/* Footer meta strip */
+.atlas-corner-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--atlas-ink-muted);
+}
+.atlas-corner-meta .rule {
+  flex: 1;
+  height: 1px;
+  background: var(--atlas-line);
+}
+
+/* Two-column composition — responsive */
+.atlas-composition {
+  grid-template-columns: 1fr;
+}
+@media (min-width: 1024px) {
+  .atlas-composition {
+    grid-template-columns: 1.15fr 1fr;
+  }
+}
+
+/* ==========================================================================
+   Atlas Shell — Sidebar + Topbar + Page layout
+   ========================================================================== */
+
+.atlas-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--atlas-bg);
+  color: var(--atlas-ink);
+}
+
+/* ── Sidebar ────────────────────────────────────────────────────────────── */
+
+.atlas-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  background: var(--atlas-surface);
+  border-right: 1px solid var(--atlas-line);
+  z-index: 40;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: width var(--duration-base) var(--ease-standard),
+              transform var(--duration-base) var(--ease-standard);
+}
+
+/* Collapsed sidebar — icons only */
+@media (min-width: 1024px) {
+  .atlas-shell--collapsed .atlas-sidebar {
+    width: 56px;
+  }
+  .atlas-shell--collapsed .atlas-sidebar-brand-link {
+    display: none;
+  }
+  .atlas-shell--collapsed .atlas-sidebar-section-label {
+    justify-content: center;
+    font-size: 0;
+    gap: 0;
+  }
+  .atlas-shell--collapsed .atlas-sidebar-section-label .atlas-sidebar-badge {
+    font-size: 10px;
+  }
+  .atlas-shell--collapsed .atlas-sidebar-link span {
+    display: none;
+  }
+  .atlas-shell--collapsed .atlas-sidebar-link {
+    justify-content: center;
+    padding: 10px;
+  }
+  .atlas-shell--collapsed .atlas-sidebar-user-info {
+    display: none;
+  }
+  .atlas-shell--collapsed .atlas-sidebar-footer {
+    justify-content: center;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .atlas-shell--collapsed .atlas-sidebar-user {
+    justify-content: center;
+  }
+  .atlas-shell--collapsed .atlas-main {
+    margin-left: 56px;
+  }
+}
+
+/* Mobile: hidden by default, slides in with .open */
+@media (max-width: 1023px) {
+  .atlas-sidebar {
+    transform: translateX(-100%);
+  }
+  .atlas-sidebar.open {
+    transform: translateX(0);
+  }
+}
+
+.atlas-sidebar-overlay {
+  display: none;
+}
+@media (max-width: 1023px) {
+  .atlas-sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 35;
+  }
+}
+
+/* Brand block */
+.atlas-sidebar-brand {
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid var(--atlas-line-soft);
+}
+.atlas-sidebar-collapse-btn {
+  padding: 6px;
+  border: none;
+  background: none;
+  color: var(--atlas-ink-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+.atlas-sidebar-collapse-btn:hover {
+  color: var(--atlas-ink);
+  background: var(--atlas-accent-bg);
+}
+.atlas-sidebar-brand-yb {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--atlas-ink-muted);
+}
+.atlas-sidebar-brand-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--atlas-line);
+  flex-shrink: 0;
+}
+.atlas-sidebar-brand-atlas {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--atlas-ink);
+}
+
+/* Nav sections */
+.atlas-sidebar-nav {
+  padding: 12px 12px 8px;
+}
+.atlas-sidebar-section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--atlas-ink-muted);
+  padding: 4px 10px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.atlas-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--atlas-ink-soft);
+  text-decoration: none;
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+.atlas-sidebar-link:hover {
+  color: var(--atlas-ink);
+  background: var(--atlas-accent-bg);
+}
+.atlas-sidebar-link.active {
+  color: var(--atlas-accent);
+  background: var(--atlas-accent-bg);
+  font-weight: 500;
+}
+.atlas-sidebar-link svg {
+  flex-shrink: 0;
+  opacity: 0.65;
+}
+.atlas-sidebar-link.active svg {
+  opacity: 1;
+  stroke: var(--atlas-accent);
+}
+
+/* Badge (unassigned count) */
+.atlas-sidebar-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--atlas-red);
+  color: #fff;
+  border-radius: var(--radius-full);
+  padding: 0 5px;
+}
+
+/* User footer */
+.atlas-sidebar-footer {
+  margin-top: auto;
+  padding: 12px 14px;
+  border-top: 1px solid var(--atlas-line-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.atlas-sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.atlas-sidebar-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--atlas-accent-bg);
+  color: var(--atlas-accent);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.atlas-sidebar-user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.atlas-sidebar-user-name {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--atlas-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.atlas-sidebar-user-role {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--atlas-ink-muted);
+  text-transform: uppercase;
+}
+.atlas-sidebar-signout {
+  padding: 6px;
+  border: none;
+  background: none;
+  color: var(--atlas-ink-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+.atlas-sidebar-signout:hover {
+  color: var(--atlas-red);
+  background: var(--atlas-red-bg);
+}
+
+/* ── Main area ──────────────────────────────────────────────────────────── */
+
+.atlas-main {
+  flex: 1;
+  margin-left: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+@media (min-width: 1024px) {
+  .atlas-main {
+    margin-left: 220px;
+  }
+}
+
+/* ── Topbar ─────────────────────────────────────────────────────────────── */
+
+.atlas-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 24px;
+  background: color-mix(in srgb, var(--atlas-surface) 85%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--atlas-line-soft);
+}
+
+.atlas-topbar-hamburger {
+  display: none;
+  padding: 6px;
+  border: none;
+  background: none;
+  color: var(--atlas-ink-soft);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+@media (max-width: 1023px) {
+  .atlas-topbar-hamburger {
+    display: flex;
+    align-items: center;
+  }
+}
+
+.atlas-topbar-breadcrumb {
+  color: var(--atlas-ink-soft);
+  flex: 1;
+  min-width: 0;
+}
+
+.atlas-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.atlas-theme-toggle {
+  padding: 7px;
+  border: 1px solid var(--atlas-line);
+  background: var(--atlas-surface-soft);
+  color: var(--atlas-ink-muted);
+  cursor: pointer;
+  border-radius: var(--radius-full);
+  transition: all var(--duration-fast) var(--ease-standard);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.atlas-theme-toggle:hover {
+  color: var(--atlas-accent);
+  border-color: var(--atlas-accent);
+  background: var(--atlas-accent-bg);
+}
+.atlas-topbar-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.atlas-topbar-user-name {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--atlas-ink);
+}
+.atlas-topbar-user-role {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--atlas-ink-muted);
+  text-transform: uppercase;
+}
+
+/* ── Page content area ──────────────────────────────────────────────────── */
+
+.atlas-page {
+  flex: 1;
+  padding: 24px;
+}
+@media (min-width: 1024px) {
+  .atlas-page {
+    padding: 28px 32px;
+  }
+}
