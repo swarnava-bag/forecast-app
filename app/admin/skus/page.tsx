@@ -470,7 +470,7 @@ export default function SKUMasterPage() {
             onClick={downloadAllAsTemplate}
             disabled={filteredSKUs.length === 0}
             title="Export current list pre-filled. Edit and re-upload via Bulk Upload to update in bulk."
-            className="px-4 py-2 text-sm bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/40 rounded-lg hover:bg-amber-500/25 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-2 text-sm bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/40 rounded-lg hover:bg-blue-500/25 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Download All ({filteredSKUs.length})
           </button>
@@ -483,7 +483,7 @@ export default function SKUMasterPage() {
             Bulk Upload
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} />
           </label>
-          <button onClick={handleAddNew} className="px-4 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition">+ Add SKU</button>
+          <button onClick={handleAddNew} className="px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition">+ Add SKU</button>
         </div>
       </div>
 
@@ -519,7 +519,7 @@ export default function SKUMasterPage() {
           <div className="bg-atlas-surface border border-atlas-line rounded-xl w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-atlas-line">
               <h3 className="text-lg font-semibold">Bulk Upload Preview — {uploadPreview.length} SKUs</h3>
-              <p className="text-sm text-atlas-ink-muted mt-1">Existing SKUs will be updated. <span className="text-amber-400">All channels will be enabled by default</span> for new SKUs.</p>
+              <p className="text-sm text-atlas-ink-muted mt-1">Existing SKUs will be updated. <span className="text-blue-400">All channels will be enabled by default</span> for new SKUs.</p>
             </div>
             <div className="overflow-auto flex-1 p-6">
               <table className="w-full text-sm">
@@ -549,7 +549,7 @@ export default function SKUMasterPage() {
             </div>
             <div className="p-6 border-t border-atlas-line flex justify-end gap-3">
               <button onClick={() => { setShowUpload(false); setUploadPreview([]); }} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">Cancel</button>
-              <button onClick={handleBulkUpload} disabled={uploading} className="px-6 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
+              <button onClick={handleBulkUpload} disabled={uploading} className="px-6 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 transition">
                 {uploading ? "Uploading..." : `Upload ${uploadPreview.length} SKUs`}
               </button>
             </div>
@@ -569,36 +569,36 @@ export default function SKUMasterPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-atlas-ink-muted mb-1">New Master SKU *</label>
-                  <input value={formData.new_master_sku} onChange={(e) => setFormData({ ...formData, new_master_sku: e.target.value })} placeholder="e.g. BB_AFG" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <input value={formData.new_master_sku} onChange={(e) => setFormData({ ...formData, new_master_sku: e.target.value })} placeholder="e.g. BB_AFG" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm text-atlas-ink-muted mb-1">New FG Code</label>
-                  <input value={formData.new_fg_code} onChange={(e) => setFormData({ ...formData, new_fg_code: e.target.value })} placeholder="e.g. 14244G" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <input value={formData.new_fg_code} onChange={(e) => setFormData({ ...formData, new_fg_code: e.target.value })} placeholder="e.g. 14244G" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm text-atlas-ink-muted mb-1">Master SKU</label>
-                  <input value={formData.master_sku} onChange={(e) => setFormData({ ...formData, master_sku: e.target.value })} placeholder="e.g. BB_AF" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <input value={formData.master_sku} onChange={(e) => setFormData({ ...formData, master_sku: e.target.value })} placeholder="e.g. BB_AF" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm text-atlas-ink-muted mb-1">FG Code</label>
-                  <input value={formData.fg_code} onChange={(e) => setFormData({ ...formData, fg_code: e.target.value })} placeholder="e.g. 14244" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <input value={formData.fg_code} onChange={(e) => setFormData({ ...formData, fg_code: e.target.value })} placeholder="e.g. 14244" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <div>
                 <label className="block text-sm text-atlas-ink-muted mb-1">Product Name *</label>
-                <input value={formData.product_name} onChange={(e) => setFormData({ ...formData, product_name: e.target.value })} placeholder="e.g. YB - 14244 - Breakfast Bar - Apricot Fig 45g (MRP 60)" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                <input value={formData.product_name} onChange={(e) => setFormData({ ...formData, product_name: e.target.value })} placeholder="e.g. YB - 14244 - Breakfast Bar - Apricot Fig 45g (MRP 60)" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm text-atlas-ink-muted mb-1">Category</label>
-                  <input value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} placeholder="e.g. Bars" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <input value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} placeholder="e.g. Bars" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm text-atlas-ink-muted mb-1">Product Category</label>
-                  <input value={formData.product_category} onChange={(e) => setFormData({ ...formData, product_category: e.target.value })} placeholder="e.g. Breakfast Bar" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <input value={formData.product_category} onChange={(e) => setFormData({ ...formData, product_category: e.target.value })} placeholder="e.g. Breakfast Bar" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label className="block text-sm text-atlas-ink-muted mb-1">MRP (₹) <span className="text-amber-400/70">*</span></label>
+                  <label className="block text-sm text-atlas-ink-muted mb-1">MRP (₹) <span className="text-blue-400/70">*</span></label>
                   <input
                     type="number" step="0.01" min="0"
                     value={formData.mrp ?? ""}
@@ -607,7 +607,7 @@ export default function SKUMasterPage() {
                       setFormData({ ...formData, mrp: v === "" ? null : Number(v) });
                     }}
                     placeholder="e.g. 60"
-                    className={`w-full px-3 py-2 bg-atlas-surface-soft border rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 ${formData.mrp === null || formData.mrp === undefined ? "border-red-500/60" : "border-atlas-line"}`}
+                    className={`w-full px-3 py-2 bg-atlas-surface-soft border rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${formData.mrp === null || formData.mrp === undefined ? "border-red-500/60" : "border-atlas-line"}`}
                   />
                   {(formData.mrp === null || formData.mrp === undefined) && (
                     <p className="text-[10px] text-red-400/80 mt-1">Required for combo NTO split by MRP ratio.</p>
@@ -621,7 +621,7 @@ export default function SKUMasterPage() {
                   <label className="block text-sm font-medium text-atlas-ink">Active Channels</label>
                   <button
                     onClick={toggleAllFormChannels}
-                    className="text-xs text-amber-400 hover:text-amber-300 transition"
+                    className="text-xs text-blue-400 hover:text-blue-300 transition"
                   >
                     {formChannelIds.length === channels.length ? "Deselect All" : "Select All"}
                   </button>
@@ -643,8 +643,8 @@ export default function SKUMasterPage() {
                           className="flex items-center gap-2 mb-1.5 group"
                         >
                           <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] transition ${
-                            allInCluster ? "bg-amber-500 border-amber-500 text-black" :
-                            someInCluster ? "border-amber-500 bg-amber-500/30" :
+                            allInCluster ? "bg-blue-500 border-blue-500 text-white" :
+                            someInCluster ? "border-blue-500 bg-blue-500/30" :
                             "border-atlas-line group-hover:border-atlas-line"
                           }`}>
                             {allInCluster && "✓"}
@@ -660,7 +660,7 @@ export default function SKUMasterPage() {
                               onClick={() => toggleFormChannel(ch.id)}
                               className={`px-2.5 py-1 rounded text-xs transition ${
                                 formChannelIds.includes(ch.id)
-                                  ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/50"
+                                  ? "bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/50"
                                   : "bg-atlas-surface-soft text-atlas-ink-faint hover:bg-atlas-surface-soft"
                               }`}
                             >
@@ -682,7 +682,7 @@ export default function SKUMasterPage() {
             </div>
             <div className="p-6 border-t border-atlas-line flex justify-end gap-3">
               <button onClick={() => { setShowForm(false); setError(null); }} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="px-6 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
+              <button onClick={handleSave} disabled={saving} className="px-6 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 transition">
                 {saving ? "Saving..." : editingId ? "Update SKU" : "Add SKU"}
               </button>
             </div>
@@ -692,17 +692,17 @@ export default function SKUMasterPage() {
 
       {/* Filters */}
       <div className="flex gap-4 mb-4">
-        <input type="text" placeholder="Search by name, SKU code, or FG code..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="flex-1 px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-amber-500" />
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+        <input type="text" placeholder="Search by name, SKU code, or FG code..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="flex-1 px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="">All Categories</option>
           {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
         </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="active">Active Only</option>
           <option value="discontinued">Discontinued</option>
           <option value="all">All</option>
         </select>
-        <select value={mrpFilter} onChange={(e) => setMrpFilter(e.target.value as "all" | "missing" | "present")} className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+        <select value={mrpFilter} onChange={(e) => setMrpFilter(e.target.value as "all" | "missing" | "present")} className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="all">All MRP</option>
           <option value="missing">MRP Missing</option>
           <option value="present">MRP Set</option>
@@ -748,14 +748,14 @@ export default function SKUMasterPage() {
                     </td>
                     <td className="py-3 px-4">
                       {sku.discontinued_at ? (
-                        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400">Discontinued</span>
+                        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400">Discontinued</span>
                       ) : (
                         <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">Active</span>
                       )}
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex gap-3">
-                        <button onClick={() => handleEdit(sku)} className="text-amber-400 hover:text-amber-300 text-xs font-medium transition">Edit</button>
+                        <button onClick={() => handleEdit(sku)} className="text-blue-400 hover:text-blue-300 text-xs font-medium transition">Edit</button>
                         <button onClick={() => handleDiscontinue(sku)} className={`text-xs font-medium transition ${sku.discontinued_at ? "text-green-400 hover:text-green-300" : "text-red-400 hover:text-red-300"}`}>
                           {sku.discontinued_at ? "Reactivate" : "Discontinue"}
                         </button>

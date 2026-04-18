@@ -753,7 +753,7 @@ export default function UploadPage() {
                   a.href = url; a.download = "warning_report.csv"; a.click();
                   URL.revokeObjectURL(url);
                 }}
-                className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 bg-amber-600/20 border border-amber-600/50 text-amber-300 text-sm rounded-lg hover:bg-amber-600/30 transition"
+                className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 bg-blue-600/20 border border-blue-600/50 text-blue-300 text-sm rounded-lg hover:bg-blue-600/30 transition"
               >
                 ⚠ Download Warning Report ({warningReport.length} rows)
               </button>
@@ -772,7 +772,7 @@ export default function UploadPage() {
                   onClick={() => { setUploadIdentifier("sku"); setError(null); }}
                   className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${
                     uploadIdentifier === "sku"
-                      ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500"
+                      ? "bg-blue-500/10 text-blue-400 border-blue-500/30 ring-1 ring-blue-500"
                       : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"
                   }`}
                 >
@@ -783,7 +783,7 @@ export default function UploadPage() {
                   onClick={() => { setUploadIdentifier("fg"); setError(null); }}
                   className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${
                     uploadIdentifier === "fg"
-                      ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500"
+                      ? "bg-blue-500/10 text-blue-400 border-blue-500/30 ring-1 ring-blue-500"
                       : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"
                   }`}
                 >
@@ -802,7 +802,7 @@ export default function UploadPage() {
                     onClick={() => { setUploadMode("single"); setError(null); }}
                     className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${
                       uploadMode === "single"
-                        ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500"
+                        ? "bg-blue-500/10 text-blue-400 border-blue-500/30 ring-1 ring-blue-500"
                         : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"
                     }`}
                   >
@@ -813,7 +813,7 @@ export default function UploadPage() {
                     onClick={() => { setUploadMode("multi"); setSelectedChannel(""); setError(null); }}
                     className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${
                       uploadMode === "multi"
-                        ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500"
+                        ? "bg-blue-500/10 text-blue-400 border-blue-500/30 ring-1 ring-blue-500"
                         : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"
                     }`}
                   >
@@ -836,7 +836,7 @@ export default function UploadPage() {
                     <p className="text-sm text-red-400">No channels assigned to you. Contact admin.</p>
                   ) : (
                     <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                      className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                       <option value="">Choose a channel...</option>
                       {getChannelsByCluster().map((group) => (
                         <optgroup key={group.cluster.id} label={group.cluster.name}>
@@ -861,7 +861,7 @@ export default function UploadPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => setSelectedChannelIds(allowedChannels.map(c => c.id))}
-                        className="text-xs text-amber-400 hover:text-amber-300 transition"
+                        className="text-xs text-blue-400 hover:text-blue-300 transition"
                       >Select All</button>
                       <span className="text-atlas-ink-faint text-xs">|</span>
                       <button
@@ -888,7 +888,7 @@ export default function UploadPage() {
                                   )}
                                   className={`px-2.5 py-1 rounded-lg text-xs transition border ${
                                     active
-                                      ? "bg-amber-500/15 text-amber-300 border-amber-500/40"
+                                      ? "bg-blue-500/15 text-blue-300 border-blue-500/40"
                                       : "bg-atlas-surface-soft text-atlas-ink-muted border-atlas-line hover:border-atlas-line"
                                   }`}
                                 >
@@ -918,7 +918,7 @@ export default function UploadPage() {
                   </p>
                 ) : (
                   <select value={selectedCycle} onChange={(e) => setSelectedCycle(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="">Choose a cycle...</option>
                     {cycles.map((cycle) => (
                       <option key={cycle.id} value={cycle.id}>
@@ -945,7 +945,7 @@ export default function UploadPage() {
                       {canUseMultiMode ? "4" : "3"}. Download Template & Upload
                     </h3>
                     <p className="text-xs text-atlas-ink-muted">
-                      Columns: <span className="text-atlas-ink">Channel</span>, <span className="text-atlas-ink">New Master SKU</span>, <span className="text-amber-400">{m1Label}</span>, <span className="text-blue-400">{m2Label}</span>, <span className="text-purple-400">{m3Label}</span>.
+                      Columns: <span className="text-atlas-ink">Channel</span>, <span className="text-atlas-ink">New Master SKU</span>, <span className="text-blue-400">{m1Label}</span>, <span className="text-blue-400">{m2Label}</span>, <span className="text-purple-400">{m3Label}</span>.
                       Fill only the rows you need — no Cartesian product. Combo SKUs are auto-converted to singles.
                       See the <span className="text-atlas-ink">Reference</span> sheet for the channel and SKU lists.
                     </p>
@@ -970,7 +970,7 @@ export default function UploadPage() {
                       <select
                         value={comboMapperId}
                         onChange={(e) => setComboMapperId(e.target.value)}
-                        className="flex-1 px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="flex-1 px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Choose mapper...</option>
                         {comboMapperSets.map(ms => (
@@ -989,7 +989,7 @@ export default function UploadPage() {
                               .order("created_at", { ascending: false });
                             if (data) setComboMapperSets(data);
                           }}
-                          className="px-3 py-2 text-xs bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/20 transition whitespace-nowrap"
+                          className="px-3 py-2 text-xs bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition whitespace-nowrap"
                         >
                           Set as Default
                         </button>
@@ -1009,7 +1009,7 @@ export default function UploadPage() {
                     </div>
                     <p className="text-xs text-atlas-ink-faint">
                       To upload or update a mapper, go to{" "}
-                      <a href="/combo-converter" className="text-amber-400 hover:underline">Combo → Singles</a>
+                      <a href="/combo-converter" className="text-blue-400 hover:underline">Combo → Singles</a>
                       {" "}→ Manage Mappers.
                     </p>
                   </div>
@@ -1042,7 +1042,7 @@ export default function UploadPage() {
             {readyToUpload && !isDeadlinePassed && (
               <div onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition ${dragActive ? "border-amber-500 bg-amber-500/5" : "border-atlas-line hover:border-atlas-line hover:bg-atlas-surface/50"}`}>
+                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition ${dragActive ? "border-blue-500 bg-blue-500/5" : "border-atlas-line hover:border-atlas-line hover:bg-atlas-surface/50"}`}>
                 <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileInput} />
                 <div className="text-4xl mb-3">{"\uD83D\uDCC4"}</div>
                 <p className="text-atlas-ink font-medium mb-1">Drag & drop your Excel file here</p>
@@ -1059,20 +1059,20 @@ export default function UploadPage() {
                   <div className="flex-1 min-w-[160px]">
                     <label className="text-xs text-atlas-ink-muted mb-1 block">Master SKU</label>
                     <input value={suggestSku} onChange={(e) => setSuggestSku(e.target.value)} placeholder="e.g. ENB_Mini_CPBG"
-                      className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                      className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
                   </div>
                   <div className="flex-1 min-w-[130px]">
                     <label className="text-xs text-atlas-ink-muted mb-1 block">New FG Code</label>
                     <input value={suggestNewFg} onChange={(e) => setSuggestNewFg(e.target.value)} placeholder="e.g. 18651G"
-                      className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                      className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
                   </div>
                   <div className="flex-1 min-w-[160px]">
                     <label className="text-xs text-atlas-ink-muted mb-1 block">Reason (optional)</label>
                     <input value={suggestNotes} onChange={(e) => setSuggestNotes(e.target.value)} placeholder="e.g. MRP change"
-                      className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                      className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
                   </div>
                   <button onClick={submitFgChangeSuggestion} disabled={suggestSubmitting || !suggestSku.trim() || !suggestNewFg.trim()}
-                    className="px-4 py-2 bg-amber-500 text-black text-sm font-semibold rounded-lg hover:bg-amber-400 transition disabled:opacity-50 whitespace-nowrap">
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-500 transition disabled:opacity-50 whitespace-nowrap">
                     {suggestSubmitting ? "Submitting..." : "Submit"}
                   </button>
                 </div>
@@ -1151,8 +1151,8 @@ export default function UploadPage() {
                   <p className="text-xs text-atlas-ink-muted">Warnings</p>
                 </div>
               )}
-              <div className="bg-atlas-surface border border-amber-800/50 rounded-xl p-3 text-center">
-                <p className="text-xl font-bold text-amber-400">{totalM1.toLocaleString()}</p>
+              <div className="bg-atlas-surface border border-blue-800/50 rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-blue-400">{totalM1.toLocaleString()}</p>
                 <p className="text-xs text-atlas-ink-muted">{m1Label}</p>
               </div>
               <div className="bg-atlas-surface border border-blue-800/50 rounded-xl p-3 text-center">
@@ -1173,7 +1173,7 @@ export default function UploadPage() {
             <div className="flex items-center gap-4 mb-4 text-sm text-atlas-ink-muted flex-wrap">
               <span>Cycle: <span className="text-atlas-ink font-medium">{m1Label} V{selectedCycleData?.version}</span></span>
               <span>&#8226;</span>
-              <span>Rolling: <span className="text-amber-400">{m1Label}</span> + <span className="text-blue-400">{m2Label}</span> + <span className="text-purple-400">{m3Label}</span></span>
+              <span>Rolling: <span className="text-blue-400">{m1Label}</span> + <span className="text-blue-400">{m2Label}</span> + <span className="text-purple-400">{m3Label}</span></span>
               {uniqueChannels.length <= 6 && (
                 <>
                   <span>&#8226;</span>
@@ -1202,7 +1202,7 @@ export default function UploadPage() {
                       <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">SKU</th>
                       <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">FG Code</th>
                       <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">Channel</th>
-                      <th className="text-right py-3 px-3 text-amber-400 font-medium">{m1Label}</th>
+                      <th className="text-right py-3 px-3 text-blue-400 font-medium">{m1Label}</th>
                       <th className="text-right py-3 px-3 text-blue-400 font-medium">{m2Label}</th>
                       <th className="text-right py-3 px-3 text-purple-400 font-medium">{m3Label}</th>
                       <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">Status</th>
@@ -1238,7 +1238,7 @@ export default function UploadPage() {
                                         const ok = await submitFgSuggestion(row.new_master_sku);
                                         if (!ok) alert("Failed to submit suggestion.");
                                       }}
-                                      className="ml-2 text-amber-400 underline hover:text-amber-300"
+                                      className="ml-2 text-blue-400 underline hover:text-blue-300"
                                     >
                                       Submit for Review
                                     </button>
@@ -1293,7 +1293,7 @@ export default function UploadPage() {
                   </>
                 )}
                 <button onClick={handleSave} disabled={saving || validCount === 0}
-                  className="px-6 py-2.5 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                  className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition">
                   {saving ? "Saving..." : `Save ${validCount} Rows as Draft`}
                 </button>
               </div>

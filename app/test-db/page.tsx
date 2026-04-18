@@ -42,7 +42,7 @@ export default function TestDB() {
 
       <button
         onClick={testConnection}
-        className="px-6 py-3 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition"
+        className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition"
       >
         Test Connection
       </button>
@@ -60,7 +60,7 @@ export default function TestDB() {
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold mb-2 text-amber-400">
+            <h2 className="text-lg font-semibold mb-2 text-blue-400">
               Clusters ({data.clusters.length})
             </h2>
             <div className="flex flex-wrap gap-2">
@@ -73,7 +73,7 @@ export default function TestDB() {
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold mb-2 text-amber-400">
+            <h2 className="text-lg font-semibold mb-2 text-blue-400">
               Channels ({data.channels.length})
             </h2>
             <div className="flex flex-wrap gap-2">
@@ -89,7 +89,7 @@ export default function TestDB() {
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold mb-2 text-amber-400">
+            <h2 className="text-lg font-semibold mb-2 text-blue-400">
               SKUs in Master
             </h2>
             <p className="text-atlas-ink">{data.skuCount} SKU(s) loaded</p>

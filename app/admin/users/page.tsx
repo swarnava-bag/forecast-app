@@ -15,11 +15,11 @@ const ROLES = [
 ];
 
 const roleColors: Record<string, string> = {
-  admin: "bg-amber-500/20 text-amber-400",
-  head_kam: "bg-purple-500/20 text-purple-400",
-  channel_kam: "bg-blue-500/20 text-blue-400",
-  supply_chain: "bg-green-500/20 text-green-400",
-  viewer: "bg-atlas-surface-soft text-atlas-ink",
+  admin: "bg-rose-100 text-rose-700 ring-1 ring-rose-300",
+  head_kam: "bg-purple-100 text-purple-700 ring-1 ring-purple-300",
+  channel_kam: "bg-blue-100 text-blue-700 ring-1 ring-blue-300",
+  supply_chain: "bg-green-100 text-green-700 ring-1 ring-green-300",
+  viewer: "bg-gray-100 text-gray-700 ring-1 ring-gray-300",
 };
 
 const roleLabels: Record<string, string> = {
@@ -185,7 +185,7 @@ export default function ManageUsersPage() {
             <div className="divide-y divide-atlas-line/50 max-h-[600px] overflow-y-auto">
               {users.map((user) => (
                 <button key={user.id} onClick={() => selectUser(user)}
-                  className={`w-full text-left px-4 py-3 transition ${selectedUser?.id === user.id ? "bg-amber-500/10 border-l-2 border-amber-500" : "hover:bg-atlas-surface-soft/50 border-l-2 border-transparent"}`}>
+                  className={`w-full text-left px-4 py-3 transition ${selectedUser?.id === user.id ? "bg-blue-500/10 border-l-2 border-blue-500" : "hover:bg-atlas-surface-soft/50 border-l-2 border-transparent"}`}>
                   <p className="text-sm font-medium text-atlas-ink">{user.full_name || "No name"}</p>
                   <p className="text-xs text-atlas-ink-muted">{user.email}</p>
                   <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium ${roleColors[user.role] || roleColors.viewer}`}>
@@ -280,7 +280,7 @@ export default function ManageUsersPage() {
                 )}
 
                 <button onClick={handleSave} disabled={saving}
-                  className="px-6 py-2.5 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
+                  className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 transition">
                   {saving ? "Saving..." : "Save Changes"}
                 </button>
               </div>

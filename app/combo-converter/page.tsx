@@ -1705,7 +1705,7 @@ export default function ComboConverterPage() {
           <div className="flex gap-3">
             {result && (
               <>
-                <button onClick={downloadResult} className="px-4 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition">Download Excel</button>
+                <button onClick={downloadResult} className="px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition">Download Excel</button>
                 {isAdmin && mapperSource === "db" && selectedMapperSetId && (
                   <button onClick={() => openRowEditor(selectedMapperSetId)} className="px-4 py-2 text-sm bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40 rounded-lg hover:bg-purple-500/30 transition">Edit Mapper</button>
                 )}
@@ -1727,7 +1727,7 @@ export default function ComboConverterPage() {
                 </button>
                 {pendingSuggestions.length > 0 && (
                   <button onClick={() => { setShowApprovals(!showApprovals); setShowMapperManager(false); }}
-                    className={`px-4 py-2 text-sm rounded-lg transition relative ${showApprovals ? "bg-orange-500/20 text-orange-400 ring-1 ring-orange-500" : "bg-atlas-surface-soft text-atlas-ink hover:bg-atlas-surface-soft"}`}>
+                    className={`px-4 py-2 text-sm rounded-lg transition relative ${showApprovals ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500" : "bg-atlas-surface-soft text-atlas-ink hover:bg-atlas-surface-soft"}`}>
                     Approvals
                     <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 bg-red-500 text-white text-xs rounded-full">{pendingSuggestions.length}</span>
                   </button>
@@ -1768,7 +1768,7 @@ export default function ComboConverterPage() {
                         <button onClick={() => downloadMapperSet(ms.id, ms.name)} disabled={uploadingMapper} className="text-xs text-blue-400 hover:text-blue-300 transition">Download</button>
                         <button onClick={() => openRowEditor(ms.id)} disabled={uploadingMapper} className="text-xs text-purple-400 hover:text-purple-300 transition">Edit Rows</button>
                         <button onClick={() => resolveNestedForSet(ms.id)} disabled={uploadingMapper} className="text-xs text-green-400 hover:text-green-300 transition">Resolve Nested</button>
-                        <label className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer transition">
+                        <label className="text-xs text-blue-400 hover:text-blue-300 cursor-pointer transition">
                           Update
                           <input type="file" accept=".xlsx,.xls" className="hidden"
                             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpdateMapper(ms.id, f); e.target.value = ""; }} />
@@ -1810,8 +1810,8 @@ export default function ComboConverterPage() {
 
         {/* ====== APPROVALS PANEL (Admin) ====== */}
         {showApprovals && isAdmin && !result && pendingSuggestions.length > 0 && (
-          <div className="mb-6 bg-atlas-surface border border-orange-500/30 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-orange-400 mb-4">Pending Mapper Suggestions ({pendingSuggestions.length})</h3>
+          <div className="mb-6 bg-atlas-surface border border-blue-500/30 rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-blue-400 mb-4">Pending Mapper Suggestions ({pendingSuggestions.length})</h3>
             <div className="space-y-3">
               {pendingSuggestions.map((s) => (
                 <SuggestionCard key={s.id} suggestion={s} mapperSets={mapperSets}
@@ -2078,12 +2078,12 @@ export default function ComboConverterPage() {
               {isAdmin ? (
                 <div className="flex gap-3">
                   <button onClick={() => setMapperSource("file")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${mapperSource === "file" ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500" : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"}`}>
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${mapperSource === "file" ? "bg-blue-500/10 text-blue-400 border-blue-500/30 ring-1 ring-blue-500" : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"}`}>
                     <p className="font-medium">From File (Admin)</p>
                     <p className="text-xs mt-0.5 opacity-70">Excel with both "Combo" and "Mapper" sheets</p>
                   </button>
                   <button onClick={() => setMapperSource("db")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${mapperSource === "db" ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500" : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"}`}>
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${mapperSource === "db" ? "bg-blue-500/10 text-blue-400 border-blue-500/30 ring-1 ring-blue-500" : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"}`}>
                     <p className="font-medium">Database Mapper</p>
                     <p className="text-xs mt-0.5 opacity-70">{mapperSets.length > 0 ? `${mapperSets.length} mappers available` : "None uploaded yet"}</p>
                   </button>
@@ -2103,7 +2103,7 @@ export default function ComboConverterPage() {
                     <div>
                       <label className="block text-xs text-atlas-ink-muted mb-1.5">Select mapper:</label>
                       <select value={selectedMapperSetId} onChange={(e) => setSelectedMapperSetId(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <option value="">Choose a mapper...</option>
                         {mapperSets.map((ms) => (
                           <option key={ms.id} value={ms.id}>
@@ -2131,11 +2131,11 @@ export default function ComboConverterPage() {
                 onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => { e.preventDefault(); setDragActive(false); const f = e.dataTransfer.files?.[0]; if (f) handleComboFile(f); }}
-                className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition ${dragActive ? "border-amber-500 bg-amber-500/5" : "border-atlas-line hover:border-atlas-line"}`}>
+                className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition ${dragActive ? "border-blue-500 bg-blue-500/5" : "border-atlas-line hover:border-atlas-line"}`}>
                 <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleComboFile(f); if (fileInputRef.current) fileInputRef.current.value = ""; }} />
                 {processing ? (
-                  <p className="text-amber-400 font-medium">Processing...</p>
+                  <p className="text-blue-400 font-medium">Processing...</p>
                 ) : (
                   <>
                     <div className="text-3xl mb-2">{"\uD83D\uDD04"}</div>
@@ -2151,7 +2151,7 @@ export default function ComboConverterPage() {
               <h3 className="text-sm font-medium text-atlas-ink mb-3">Expected Format</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                 <div>
-                  <p className="text-amber-400 font-medium mb-1">Combo Sheet</p>
+                  <p className="text-blue-400 font-medium mb-1">Combo Sheet</p>
                   <div className="bg-atlas-surface-soft rounded p-3 font-mono">
                     <p className="text-atlas-ink-muted">Master SKU | Amazon | Flipkart | ...</p>
                     <p className="text-atlas-ink">SKU_ABC    | 500    | 300      | ...</p>
@@ -2184,9 +2184,9 @@ export default function ComboConverterPage() {
                 <p className="text-xs text-green-400">Singles Output</p>
                 <p className="text-2xl font-bold text-green-400">{result.singles.length}</p>
               </div>
-              <div className="bg-atlas-surface border border-amber-800/30 rounded-xl p-4">
-                <p className="text-xs text-amber-400">Combos Resolved</p>
-                <p className="text-2xl font-bold text-amber-400">{result.consolidated.filter((r) => ["yes", "y"].includes(r.combo.toLowerCase())).length}</p>
+              <div className="bg-atlas-surface border border-blue-800/30 rounded-xl p-4">
+                <p className="text-xs text-blue-400">Combos Resolved</p>
+                <p className="text-2xl font-bold text-blue-400">{result.consolidated.filter((r) => ["yes", "y"].includes(r.combo.toLowerCase())).length}</p>
               </div>
               <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
                 <p className="text-xs text-atlas-ink-muted">Qty Columns</p>
@@ -2216,7 +2216,7 @@ export default function ComboConverterPage() {
                 Singles ({result.singles.length})
               </button>
               <button onClick={() => setActiveTab("consolidated")}
-                className={`px-4 py-2 text-sm rounded-lg transition ${activeTab === "consolidated" ? "bg-amber-500/20 text-amber-400 ring-1 ring-amber-500" : "bg-atlas-surface-soft text-atlas-ink-muted hover:bg-atlas-surface-soft"}`}>
+                className={`px-4 py-2 text-sm rounded-lg transition ${activeTab === "consolidated" ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500" : "bg-atlas-surface-soft text-atlas-ink-muted hover:bg-atlas-surface-soft"}`}>
                 Consolidated ({result.consolidated.length})
               </button>
             </div>
@@ -2260,7 +2260,7 @@ export default function ComboConverterPage() {
                       <tr className="bg-atlas-surface-soft/50">
                         <td className="py-3 px-4 font-semibold" colSpan={4}>Total</td>
                         {result.qtyColumns.map((col) => (
-                          <td key={col} className="py-3 px-4 text-right font-mono font-bold text-amber-400">
+                          <td key={col} className="py-3 px-4 text-right font-mono font-bold text-blue-400">
                             {Math.round(result.singles.reduce((s, r) => s + (r.quantities[col] || 0), 0) * 100) / 100}
                           </td>
                         ))}
@@ -2297,14 +2297,14 @@ export default function ComboConverterPage() {
 
                 {/* Submit banner — visible whenever there are NOT_IN_MAPPER rows */}
                 {result.consolidated.some((r) => r.mapper_status === "NOT IN MAPPER") && (
-                  <div className="mb-4 p-4 bg-orange-900/20 border border-orange-500/30 rounded-xl">
+                  <div className="mb-4 p-4 bg-orange-900/20 border border-blue-500/30 rounded-xl">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-orange-300 font-medium">Submit unmapped SKUs for admin approval</p>
-                        <p className="text-xs text-orange-400/60 mt-0.5">Fill in Combo & Components for unmapped SKUs above, then submit to add them permanently to a mapper.</p>
+                        <p className="text-sm text-blue-300 font-medium">Submit unmapped SKUs for admin approval</p>
+                        <p className="text-xs text-blue-400/60 mt-0.5">Fill in Combo & Components for unmapped SKUs above, then submit to add them permanently to a mapper.</p>
                       </div>
                       <button onClick={submitSuggestions}
-                        className="px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-400 transition whitespace-nowrap">
+                        className="px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition whitespace-nowrap">
                         Submit to Mapper
                       </button>
                     </div>
@@ -2350,7 +2350,7 @@ export default function ComboConverterPage() {
                                 {isUnmapped && edit ? (
                                   <select value={edit.combo}
                                     onChange={(e) => { const next = new Map(unmappedEdits); next.set(row.master_sku, { ...edit, combo: e.target.value }); setUnmappedEdits(next); }}
-                                    className="w-20 px-2 py-1 bg-atlas-surface-soft border border-amber-500/50 rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-amber-500">
+                                    className="w-20 px-2 py-1 bg-atlas-surface-soft border border-blue-500/50 rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-blue-500">
                                     <option value="No">No</option>
                                     <option value="Yes">Yes</option>
                                   </select>
@@ -2362,7 +2362,7 @@ export default function ComboConverterPage() {
                                 {isUnmapped && edit ? (
                                   <input type="text" value={edit.products} placeholder="SKU_A, SKU_B, ..."
                                     onChange={(e) => { const next = new Map(unmappedEdits); next.set(row.master_sku, { ...edit, products: e.target.value }); setUnmappedEdits(next); }}
-                                    className="w-full min-w-[200px] px-2 py-1 bg-atlas-surface-soft border border-amber-500/50 rounded text-xs text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                                    className="w-full min-w-[200px] px-2 py-1 bg-atlas-surface-soft border border-blue-500/50 rounded text-xs text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-1 focus:ring-blue-500" />
                                 ) : (
                                   <span className="text-atlas-ink-muted max-w-[300px] truncate block">{row.products.filter((p) => p).join(", ") || <span className="text-atlas-ink-faint">-</span>}</span>
                                 )}
@@ -2395,7 +2395,7 @@ export default function ComboConverterPage() {
                     return (
                       <>
                         {critical > 0 && <span className="ml-2 text-red-400 font-semibold">· {critical} CRITICAL</span>}
-                        {issues > 0 && <span className="ml-2 text-amber-400">· {issues} with issues</span>}
+                        {issues > 0 && <span className="ml-2 text-blue-400">· {issues} with issues</span>}
                       </>
                     );
                   })()}
@@ -2595,7 +2595,7 @@ function SuggestionCard({ suggestion, mapperSets, onApprove, onReject }: {
         <div>
           <label className="block text-xs text-atlas-ink-muted mb-1">Combo</label>
           <select value={editCombo} onChange={(e) => setEditCombo(e.target.value)}
-            className="w-full px-2 py-1.5 bg-atlas-surface border border-atlas-line rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-orange-500">
+            className="w-full px-2 py-1.5 bg-atlas-surface border border-atlas-line rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-blue-500">
             <option value="No">No</option>
             <option value="Yes">Yes</option>
           </select>
@@ -2603,7 +2603,7 @@ function SuggestionCard({ suggestion, mapperSets, onApprove, onReject }: {
         <div>
           <label className="block text-xs text-atlas-ink-muted mb-1">Components (comma-separated)</label>
           <input type="text" value={editProducts} onChange={(e) => setEditProducts(e.target.value)}
-            className="w-full px-2 py-1.5 bg-atlas-surface border border-atlas-line rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-orange-500" />
+            className="w-full px-2 py-1.5 bg-atlas-surface border border-atlas-line rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-blue-500" />
         </div>
       </div>
 

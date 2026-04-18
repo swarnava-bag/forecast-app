@@ -312,7 +312,7 @@ export default function ChannelsPage() {
   }
   function sortIcon(col: string) {
     if (sortCol !== col) return <span className="text-atlas-ink-faint ml-1">↕</span>;
-    return <span className="text-amber-400 ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
+    return <span className="text-blue-400 ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
   }
 
   // === SKU counts per channel ===
@@ -411,7 +411,7 @@ export default function ChannelsPage() {
                 onClick={() => setViewMode(key)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
                   viewMode === key
-                    ? "bg-amber-500 text-black"
+                    ? "bg-blue-600 text-white"
                     : "text-atlas-ink-muted hover:text-atlas-ink hover:bg-atlas-surface-soft"
                 }`}
               >
@@ -435,13 +435,13 @@ export default function ChannelsPage() {
               {viewMode === "skuXChannel" && `SKU × Channel pivot — ${pivotMonthShort}`}
               {viewMode === "skuXCluster" && `SKU × Cluster pivot — ${pivotMonthShort}`}
               {viewMode === "original" && canEdit && viewLevel !== "cluster" && (
-                <span className="text-amber-400 ml-2">· Editing enabled</span>
+                <span className="text-blue-400 ml-2">· Editing enabled</span>
               )}
             </p>
           </div>
           <div className="flex items-center gap-3">
             <select value={selectedCycle} onChange={(e) => setSelectedCycle(e.target.value)}
-              className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+              className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               {cycles.length === 0 && <option value="">No cycles created</option>}
               {cycles.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -450,7 +450,7 @@ export default function ChannelsPage() {
               ))}
             </select>
             {selectedCycle && <button onClick={downloadCombos} className="px-4 py-2 text-sm bg-blue-600 text-atlas-ink font-semibold rounded-lg hover:bg-blue-500 transition">Download Combos</button>}
-            {canDownload && <button onClick={downloadExcel} className="px-4 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition">Download Excel</button>}
+            {canDownload && <button onClick={downloadExcel} className="px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition">Download Excel</button>}
           </div>
         </div>
 
@@ -463,9 +463,9 @@ export default function ChannelsPage() {
             <p className="text-xs text-atlas-ink-muted">Total (3M)</p>
             <p className="text-2xl font-bold">{grandTotal.toLocaleString()}</p>
           </div>
-          <div className="bg-atlas-surface border border-amber-800/30 rounded-xl p-4">
-            <p className="text-xs text-amber-400">{m1Label}</p>
-            <p className="text-xl font-bold text-amber-400">{grandM1.toLocaleString()}</p>
+          <div className="bg-atlas-surface border border-blue-800/30 rounded-xl p-4">
+            <p className="text-xs text-blue-400">{m1Label}</p>
+            <p className="text-xl font-bold text-blue-400">{grandM1.toLocaleString()}</p>
           </div>
           <div className="bg-atlas-surface border border-blue-800/30 rounded-xl p-4">
             <p className="text-xs text-blue-400">{m2Label}</p>
@@ -478,7 +478,7 @@ export default function ChannelsPage() {
           <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
             <p className="text-xs text-atlas-ink-muted">{pendingEdits.size > 0 ? "Pending" : "Status"}</p>
             {pendingEdits.size > 0 ? (
-              <p className="text-xl font-bold text-amber-400">{pendingEdits.size} edits</p>
+              <p className="text-xl font-bold text-blue-400">{pendingEdits.size} edits</p>
             ) : (
               <span className={`inline-block mt-1 px-2.5 py-1 rounded-full text-xs font-medium ${selectedCycleData?.status === "published" ? "bg-blue-500/20 text-blue-400" : selectedCycleData?.status === "locked" ? "bg-amber-500/20 text-amber-400" : "bg-green-500/20 text-green-400"}`}>
                 {selectedCycleData?.status ? selectedCycleData.status.charAt(0).toUpperCase() + selectedCycleData.status.slice(1) : "None"}
@@ -493,12 +493,12 @@ export default function ChannelsPage() {
             {/* Breadcrumb */}
             {viewLevel !== "cluster" && (
               <div className="flex items-center gap-2 mb-4 text-sm">
-                <button onClick={() => { setViewLevel("cluster"); setSelectedCluster(null); setSelectedChannel(null); }} className="text-amber-400 hover:text-amber-300">All Clusters</button>
+                <button onClick={() => { setViewLevel("cluster"); setSelectedCluster(null); setSelectedChannel(null); }} className="text-blue-400 hover:text-blue-300">All Clusters</button>
                 <span className="text-atlas-ink-faint">→</span>
                 {viewLevel === "channel" && <span className="text-atlas-ink font-medium">{selectedClusterData?.name}</span>}
                 {viewLevel === "sku" && (
                   <>
-                    <button onClick={goBack} className="text-amber-400 hover:text-amber-300">{selectedClusterData?.name}</button>
+                    <button onClick={goBack} className="text-blue-400 hover:text-blue-300">{selectedClusterData?.name}</button>
                     <span className="text-atlas-ink-faint">→</span>
                     <span className="text-atlas-ink font-medium">{selectedChannelData?.name}</span>
                   </>
@@ -513,7 +513,7 @@ export default function ChannelsPage() {
                   <thead>
                     <tr className="border-b border-atlas-line bg-atlas-surface/80">
                       <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Cluster</th>
-                      <th className="text-right py-3 px-4 text-amber-400 font-medium">{m1Short}</th>
+                      <th className="text-right py-3 px-4 text-blue-400 font-medium">{m1Short}</th>
                       <th className="text-right py-3 px-4 text-blue-400 font-medium">{m2Short}</th>
                       <th className="text-right py-3 px-4 text-purple-400 font-medium">{m3Short}</th>
                       <th className="text-right py-3 px-4 text-atlas-ink-muted font-medium">Total</th>
@@ -530,7 +530,7 @@ export default function ChannelsPage() {
                       return (
                         <tr key={cl.id} onClick={() => drillToCluster(cl.id)} className="border-b border-atlas-line/50 hover:bg-atlas-surface-soft/30 cursor-pointer transition">
                           <td className="py-4 px-4 font-medium text-atlas-ink">{cl.name}</td>
-                          <td className="py-4 px-4 text-right font-mono text-amber-400/80">{d.m1 > 0 ? d.m1.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
+                          <td className="py-4 px-4 text-right font-mono text-blue-400/80">{d.m1 > 0 ? d.m1.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                           <td className="py-4 px-4 text-right font-mono text-blue-400/80">{d.m2 > 0 ? d.m2.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                           <td className="py-4 px-4 text-right font-mono text-purple-400/80">{d.m3 > 0 ? d.m3.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                           <td className="py-4 px-4 text-right font-mono font-medium">{tot > 0 ? tot.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
@@ -547,7 +547,7 @@ export default function ChannelsPage() {
                   <tfoot>
                     <tr className="bg-atlas-surface-soft/50">
                       <td className="py-3 px-4 font-semibold">Grand Total</td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-amber-400">{grandM1.toLocaleString()}</td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-blue-400">{grandM1.toLocaleString()}</td>
                       <td className="py-3 px-4 text-right font-mono font-bold text-blue-400">{grandM2.toLocaleString()}</td>
                       <td className="py-3 px-4 text-right font-mono font-bold text-purple-400">{grandM3.toLocaleString()}</td>
                       <td className="py-3 px-4 text-right font-mono font-bold text-atlas-ink">{grandTotal.toLocaleString()}</td>
@@ -573,7 +573,7 @@ export default function ChannelsPage() {
                       <thead>
                         <tr className="border-b border-atlas-line bg-atlas-surface/80">
                           <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Channel</th>
-                          <th className="text-right py-3 px-4 text-amber-400 font-medium">{m1Short}</th>
+                          <th className="text-right py-3 px-4 text-blue-400 font-medium">{m1Short}</th>
                           <th className="text-right py-3 px-4 text-blue-400 font-medium">{m2Short}</th>
                           <th className="text-right py-3 px-4 text-purple-400 font-medium">{m3Short}</th>
                           <th className="text-right py-3 px-4 text-atlas-ink-muted font-medium">Total</th>
@@ -588,7 +588,7 @@ export default function ChannelsPage() {
                           return (
                             <tr key={ch.id} className="border-b border-atlas-line/50 hover:bg-atlas-surface-soft/30 transition">
                               <td className="py-4 px-4 font-medium text-atlas-ink cursor-pointer" onClick={() => drillToChannel(ch.id)}>{ch.name}</td>
-                              <td className="py-4 px-4 text-right font-mono text-amber-400/80">{d.m1 > 0 ? d.m1.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
+                              <td className="py-4 px-4 text-right font-mono text-blue-400/80">{d.m1 > 0 ? d.m1.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                               <td className="py-4 px-4 text-right font-mono text-blue-400/80">{d.m2 > 0 ? d.m2.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                               <td className="py-4 px-4 text-right font-mono text-purple-400/80">{d.m3 > 0 ? d.m3.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                               <td className="py-4 px-4 text-right font-mono font-medium">{tot > 0 ? tot.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
@@ -598,7 +598,7 @@ export default function ChannelsPage() {
                                 {d.drafts === 0 && d.pubs === 0 && <span className="text-atlas-ink-faint text-xs">No data</span>}
                               </td>
                               <td className="py-4 px-4 text-center">
-                                <button onClick={() => drillToChannel(ch.id)} className="text-xs text-amber-400 hover:text-amber-300">View →</button>
+                                <button onClick={() => drillToChannel(ch.id)} className="text-xs text-blue-400 hover:text-blue-300">View →</button>
                               </td>
                             </tr>
                           );
@@ -607,7 +607,7 @@ export default function ChannelsPage() {
                       <tfoot>
                         <tr className="bg-atlas-surface-soft/50">
                           <td className="py-3 px-4 font-semibold">{selectedClusterData?.name} Total</td>
-                          <td className="py-3 px-4 text-right font-mono font-bold text-amber-400">{clM1.toLocaleString()}</td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-blue-400">{clM1.toLocaleString()}</td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-blue-400">{clM2.toLocaleString()}</td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-purple-400">{clM3.toLocaleString()}</td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-atlas-ink">{(clM1 + clM2 + clM3).toLocaleString()}</td>
@@ -626,9 +626,9 @@ export default function ChannelsPage() {
                 <button onClick={goBack} className="mb-4 text-sm text-atlas-ink-muted hover:text-atlas-ink transition">← Back to {selectedClusterData?.name}</button>
                 <div className="flex gap-4 mb-4">
                   <input type="text" placeholder="Search SKU..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                    className="flex-1 px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-muted focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                    className="flex-1 px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-muted focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="">All Categories</option>
                     {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
                   </select>
@@ -636,8 +636,8 @@ export default function ChannelsPage() {
 
                 {/* Diff Panel */}
                 {showDiff && pendingEdits.size > 0 && (
-                  <div className="mb-4 bg-atlas-surface border border-amber-500/30 rounded-xl p-4">
-                    <h4 className="text-sm font-medium text-amber-400 mb-3">Pending Changes ({pendingEdits.size})</h4>
+                  <div className="mb-4 bg-atlas-surface border border-blue-500/30 rounded-xl p-4">
+                    <h4 className="text-sm font-medium text-blue-400 mb-3">Pending Changes ({pendingEdits.size})</h4>
                     <div className="space-y-1 max-h-[200px] overflow-y-auto">
                       {Array.from(pendingEdits.values()).filter((e) => e.channelId === selectedChannel).map((edit, i) => {
                         const sku = skus.find((s) => s.id === edit.skuId);
@@ -663,7 +663,7 @@ export default function ChannelsPage() {
                           <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">New Master SKU</th>
                           <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">Product Name</th>
                           <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">Category</th>
-                          <th className="text-right py-3 px-3 text-amber-400 font-medium">{m1Short}</th>
+                          <th className="text-right py-3 px-3 text-blue-400 font-medium">{m1Short}</th>
                           <th className="text-right py-3 px-3 text-blue-400 font-medium">{m2Short}</th>
                           <th className="text-right py-3 px-3 text-purple-400 font-medium">{m3Short}</th>
                           <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">Status</th>
@@ -677,7 +677,7 @@ export default function ChannelsPage() {
                           const editable = canEditChannel(selectedChannel);
                           const isEdited = sku.hasEdit;
                           return (
-                            <tr key={sku.id} className={`border-b border-atlas-line/50 transition ${isEdited ? "bg-amber-500/5" : "hover:bg-atlas-surface-soft/20"}`}>
+                            <tr key={sku.id} className={`border-b border-atlas-line/50 transition ${isEdited ? "bg-blue-500/5" : "hover:bg-atlas-surface-soft/20"}`}>
                               <td className="py-2.5 px-3 font-mono text-xs">{sku.new_master_sku}</td>
                               <td className="py-2.5 px-3 text-atlas-ink text-sm">{sku.product_name}</td>
                               {/* FIX: show product_category, fall back to category */}
@@ -712,7 +712,7 @@ export default function ChannelsPage() {
                         <tfoot>
                           <tr className="bg-atlas-surface-soft/50">
                             <td colSpan={3} className="py-3 px-3 font-semibold">{selectedChannelData?.name} Total</td>
-                            <td className="py-3 px-3 text-right font-mono font-bold text-amber-400">{skuRows.reduce((s, r) => s + r.q1, 0).toLocaleString()}</td>
+                            <td className="py-3 px-3 text-right font-mono font-bold text-blue-400">{skuRows.reduce((s, r) => s + r.q1, 0).toLocaleString()}</td>
                             <td className="py-3 px-3 text-right font-mono font-bold text-blue-400">{skuRows.reduce((s, r) => s + r.q2, 0).toLocaleString()}</td>
                             <td className="py-3 px-3 text-right font-mono font-bold text-purple-400">{skuRows.reduce((s, r) => s + r.q3, 0).toLocaleString()}</td>
                             <td></td><td></td>
@@ -746,7 +746,7 @@ export default function ChannelsPage() {
           <div>
             <div className="flex gap-3 mb-4">
               <select value={clusterFilter} onChange={(e) => setClusterFilter(e.target.value)}
-                className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">All Clusters</option>
                 {clusters.map((cl) => (<option key={cl.id} value={cl.id}>{cl.name}</option>))}
               </select>
@@ -758,7 +758,7 @@ export default function ChannelsPage() {
                   <tr className="border-b border-atlas-line bg-atlas-surface/80">
                     <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Cluster</th>
                     <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium cursor-pointer select-none" onClick={() => toggleSort("name")}>Channel{sortIcon("name")}</th>
-                    <th className="text-right py-3 px-4 text-amber-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m1")}>{m1Short}{sortIcon("m1")}</th>
+                    <th className="text-right py-3 px-4 text-blue-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m1")}>{m1Short}{sortIcon("m1")}</th>
                     <th className="text-right py-3 px-4 text-blue-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m2")}>{m2Short}{sortIcon("m2")}</th>
                     <th className="text-right py-3 px-4 text-purple-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m3")}>{m3Short}{sortIcon("m3")}</th>
                     <th className="text-right py-3 px-4 text-atlas-ink-muted font-medium cursor-pointer select-none" onClick={() => toggleSort("total")}>Total{sortIcon("total")}</th>
@@ -771,7 +771,7 @@ export default function ChannelsPage() {
                     <tr key={ch.id} className="border-b border-atlas-line/50 hover:bg-atlas-surface-soft/20 transition">
                       <td className="py-3 px-4 text-atlas-ink-muted text-xs">{cl?.name}</td>
                       <td className="py-3 px-4 font-medium text-atlas-ink">{ch.name}</td>
-                      <td className="py-3 px-4 text-right font-mono text-amber-400/80">{v1 > 0 ? v1.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
+                      <td className="py-3 px-4 text-right font-mono text-blue-400/80">{v1 > 0 ? v1.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                       <td className="py-3 px-4 text-right font-mono text-blue-400/80">{v2 > 0 ? v2.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                       <td className="py-3 px-4 text-right font-mono text-purple-400/80">{v3 > 0 ? v3.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                       <td className="py-3 px-4 text-right font-mono font-medium">{tot > 0 ? tot.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
@@ -779,7 +779,7 @@ export default function ChannelsPage() {
                         {pct > 0 ? (
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-16 h-1.5 bg-atlas-surface-soft rounded-full overflow-hidden">
-                              <div className="h-full bg-amber-500/60 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
+                              <div className="h-full bg-blue-500/60 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
                             </div>
                             <span className="text-xs text-atlas-ink-muted w-10 text-right">{pct.toFixed(1)}%</span>
                           </div>
@@ -792,7 +792,7 @@ export default function ChannelsPage() {
                 <tfoot>
                   <tr className="bg-atlas-surface-soft/50">
                     <td colSpan={2} className="py-3 px-4 font-semibold">Total ({rows.length} channels)</td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-amber-400">{rows.reduce((s, r) => s + r.m1, 0).toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right font-mono font-bold text-blue-400">{rows.reduce((s, r) => s + r.m1, 0).toLocaleString()}</td>
                     <td className="py-3 px-4 text-right font-mono font-bold text-blue-400">{rows.reduce((s, r) => s + r.m2, 0).toLocaleString()}</td>
                     <td className="py-3 px-4 text-right font-mono font-bold text-purple-400">{rows.reduce((s, r) => s + r.m3, 0).toLocaleString()}</td>
                     <td className="py-3 px-4 text-right font-mono font-bold text-atlas-ink">{filtTotal.toLocaleString()}</td>
@@ -825,7 +825,7 @@ export default function ChannelsPage() {
               <thead>
                 <tr className="border-b border-atlas-line bg-atlas-surface/80">
                   <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium cursor-pointer select-none" onClick={() => toggleSort("name")}>Cluster{sortIcon("name")}</th>
-                  <th className="text-right py-3 px-4 text-amber-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m1")}>{m1Short}{sortIcon("m1")}</th>
+                  <th className="text-right py-3 px-4 text-blue-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m1")}>{m1Short}{sortIcon("m1")}</th>
                   <th className="text-right py-3 px-4 text-blue-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m2")}>{m2Short}{sortIcon("m2")}</th>
                   <th className="text-right py-3 px-4 text-purple-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m3")}>{m3Short}{sortIcon("m3")}</th>
                   <th className="text-right py-3 px-4 text-atlas-ink-muted font-medium cursor-pointer select-none" onClick={() => toggleSort("total")}>Total{sortIcon("total")}</th>
@@ -837,7 +837,7 @@ export default function ChannelsPage() {
                 {rows.map(({ cl, m1: v1, m2: v2, m3: v3, tot, pct, chCount }) => (
                   <tr key={cl.id} className="border-b border-atlas-line/50 hover:bg-atlas-surface-soft/20 transition">
                     <td className="py-4 px-4 font-medium text-atlas-ink">{cl.name}</td>
-                    <td className="py-4 px-4 text-right font-mono text-amber-400/80">{v1 > 0 ? v1.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
+                    <td className="py-4 px-4 text-right font-mono text-blue-400/80">{v1 > 0 ? v1.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                     <td className="py-4 px-4 text-right font-mono text-blue-400/80">{v2 > 0 ? v2.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                     <td className="py-4 px-4 text-right font-mono text-purple-400/80">{v3 > 0 ? v3.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                     <td className="py-4 px-4 text-right font-mono font-medium">{tot > 0 ? tot.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
@@ -845,7 +845,7 @@ export default function ChannelsPage() {
                       {pct > 0 ? (
                         <div className="flex items-center justify-end gap-2">
                           <div className="w-20 h-1.5 bg-atlas-surface-soft rounded-full overflow-hidden">
-                            <div className="h-full bg-amber-500/60 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
+                            <div className="h-full bg-blue-500/60 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
                           </div>
                           <span className="text-xs text-atlas-ink-muted w-10 text-right">{pct.toFixed(1)}%</span>
                         </div>
@@ -858,7 +858,7 @@ export default function ChannelsPage() {
               <tfoot>
                 <tr className="bg-atlas-surface-soft/50">
                   <td className="py-3 px-4 font-semibold">Grand Total</td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-amber-400">{grandM1.toLocaleString()}</td>
+                  <td className="py-3 px-4 text-right font-mono font-bold text-blue-400">{grandM1.toLocaleString()}</td>
                   <td className="py-3 px-4 text-right font-mono font-bold text-blue-400">{grandM2.toLocaleString()}</td>
                   <td className="py-3 px-4 text-right font-mono font-bold text-purple-400">{grandM3.toLocaleString()}</td>
                   <td className="py-3 px-4 text-right font-mono font-bold text-atlas-ink">{grandTotal.toLocaleString()}</td>
@@ -884,9 +884,9 @@ export default function ChannelsPage() {
           <div>
             <div className="flex gap-3 mb-4">
               <input type="text" placeholder="Search SKU or product name..." value={globalSearchTerm} onChange={(e) => setGlobalSearchTerm(e.target.value)}
-                className="flex-1 px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-muted focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                className="flex-1 px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-muted focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <select value={globalCategoryFilter} onChange={(e) => setGlobalCategoryFilter(e.target.value)}
-                className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">All Categories</option>
                 {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
               </select>
@@ -900,7 +900,7 @@ export default function ChannelsPage() {
                       <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">SKU Code</th>
                       <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium cursor-pointer select-none" onClick={() => toggleSort("name")}>Product Name{sortIcon("name")}</th>
                       <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">Category</th>
-                      <th className="text-right py-3 px-3 text-amber-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m1")}>{m1Short}{sortIcon("m1")}</th>
+                      <th className="text-right py-3 px-3 text-blue-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m1")}>{m1Short}{sortIcon("m1")}</th>
                       <th className="text-right py-3 px-3 text-blue-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m2")}>{m2Short}{sortIcon("m2")}</th>
                       <th className="text-right py-3 px-3 text-purple-400 font-medium cursor-pointer select-none" onClick={() => toggleSort("m3")}>{m3Short}{sortIcon("m3")}</th>
                       <th className="text-right py-3 px-3 text-atlas-ink-muted font-medium cursor-pointer select-none" onClick={() => toggleSort("total")}>Total{sortIcon("total")}</th>
@@ -918,7 +918,7 @@ export default function ChannelsPage() {
                           <td className="py-2.5 px-3 font-mono text-xs">{s.new_master_sku}</td>
                           <td className="py-2.5 px-3 text-atlas-ink">{s.product_name}</td>
                           <td className="py-2.5 px-3 text-atlas-ink-muted text-xs">{s.product_category || s.category}</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-amber-400/80">{s.m1 > 0 ? s.m1.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-blue-400/80">{s.m1 > 0 ? s.m1.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                           <td className="py-2.5 px-3 text-right font-mono text-blue-400/80">{s.m2 > 0 ? s.m2.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                           <td className="py-2.5 px-3 text-right font-mono text-purple-400/80">{s.m3 > 0 ? s.m3.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
                           <td className="py-2.5 px-3 text-right font-mono font-medium">{tot > 0 ? tot.toLocaleString() : <span className="text-atlas-ink-faint">-</span>}</td>
@@ -931,7 +931,7 @@ export default function ChannelsPage() {
                     <tfoot>
                       <tr className="bg-atlas-surface-soft/50">
                         <td colSpan={3} className="py-3 px-3 font-semibold">Total ({sorted.length} SKUs)</td>
-                        <td className="py-3 px-3 text-right font-mono font-bold text-amber-400">{sorted.reduce((s, r) => s + r.m1, 0).toLocaleString()}</td>
+                        <td className="py-3 px-3 text-right font-mono font-bold text-blue-400">{sorted.reduce((s, r) => s + r.m1, 0).toLocaleString()}</td>
                         <td className="py-3 px-3 text-right font-mono font-bold text-blue-400">{sorted.reduce((s, r) => s + r.m2, 0).toLocaleString()}</td>
                         <td className="py-3 px-3 text-right font-mono font-bold text-purple-400">{sorted.reduce((s, r) => s + r.m3, 0).toLocaleString()}</td>
                         <td className="py-3 px-3 text-right font-mono font-bold text-atlas-ink">{skuGrandTotal.toLocaleString()}</td>
@@ -954,21 +954,21 @@ export default function ChannelsPage() {
               <div className="flex rounded-lg overflow-hidden border border-atlas-line">
                 {(["m1", "m2", "m3"] as const).map((m) => (
                   <button key={m} onClick={() => setPivotMonth(m)}
-                    className={`px-4 py-2 text-sm font-medium transition ${pivotMonth === m ? "bg-amber-500 text-black" : "bg-atlas-surface text-atlas-ink-muted hover:text-atlas-ink"}`}>
+                    className={`px-4 py-2 text-sm font-medium transition ${pivotMonth === m ? "bg-blue-600 text-white" : "bg-atlas-surface text-atlas-ink-muted hover:text-atlas-ink"}`}>
                     {m === "m1" ? m1Short : m === "m2" ? m2Short : m3Short}
                   </button>
                 ))}
               </div>
               {/* Cluster filter to limit columns */}
               <select value={clusterFilter} onChange={(e) => setClusterFilter(e.target.value)}
-                className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">All Clusters</option>
                 {clusters.map((cl) => (<option key={cl.id} value={cl.id}>{cl.name}</option>))}
               </select>
               <input type="text" placeholder="Search SKU..." value={globalSearchTerm} onChange={(e) => setGlobalSearchTerm(e.target.value)}
-                className="flex-1 min-w-[160px] px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-muted focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                className="flex-1 min-w-[160px] px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-muted focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <select value={globalCategoryFilter} onChange={(e) => setGlobalCategoryFilter(e.target.value)}
-                className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">All Categories</option>
                 {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
               </select>
@@ -1037,15 +1037,15 @@ export default function ChannelsPage() {
               <div className="flex rounded-lg overflow-hidden border border-atlas-line">
                 {(["m1", "m2", "m3"] as const).map((m) => (
                   <button key={m} onClick={() => setPivotMonth(m)}
-                    className={`px-4 py-2 text-sm font-medium transition ${pivotMonth === m ? "bg-amber-500 text-black" : "bg-atlas-surface text-atlas-ink-muted hover:text-atlas-ink"}`}>
+                    className={`px-4 py-2 text-sm font-medium transition ${pivotMonth === m ? "bg-blue-600 text-white" : "bg-atlas-surface text-atlas-ink-muted hover:text-atlas-ink"}`}>
                     {m === "m1" ? m1Short : m === "m2" ? m2Short : m3Short}
                   </button>
                 ))}
               </div>
               <input type="text" placeholder="Search SKU..." value={globalSearchTerm} onChange={(e) => setGlobalSearchTerm(e.target.value)}
-                className="flex-1 min-w-[160px] px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-muted focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                className="flex-1 min-w-[160px] px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-muted focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <select value={globalCategoryFilter} onChange={(e) => setGlobalCategoryFilter(e.target.value)}
-                className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">All Categories</option>
                 {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
               </select>
@@ -1118,7 +1118,7 @@ export default function ChannelsPage() {
             </div>
             <div className="flex items-center gap-3">
               <button onClick={() => setPendingEdits(new Map())} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">Discard</button>
-              <button onClick={handleSaveAll} disabled={saving} className="px-6 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
+              <button onClick={handleSaveAll} disabled={saving} className="px-6 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 transition">
                 {saving ? "Saving..." : "Save All Changes"}
               </button>
             </div>

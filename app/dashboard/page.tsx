@@ -339,7 +339,7 @@ export default function DashboardPage() {
             <select
               value={selectedCycleId}
               onChange={(e) => setSelectedCycleId(e.target.value)}
-              className="px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-sm text-atlas-ink focus:outline-none focus:ring-2 focus:ring-amber-500 min-w-[180px]"
+              className="px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-sm text-atlas-ink focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[180px]"
             >
               <option value="">— Select cycle —</option>
               {allCycles.map((c) => (
@@ -390,13 +390,13 @@ export default function DashboardPage() {
               <p className="text-2xl font-bold text-atlas-ink">{totalCh > 0 ? Math.round((submittedCh / totalCh) * 100) : 0}%</p>
               <p className="text-xs text-atlas-ink-muted mt-1">Completion Rate</p>
             </div>
-            <div className="bg-atlas-surface border border-amber-800/40 rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-amber-400">{fmtQty(totalQtyInCycle)}</p>
+            <div className="bg-atlas-surface border border-blue-800/40 rounded-xl p-4 text-center">
+              <p className="text-2xl font-bold text-blue-400">{fmtQty(totalQtyInCycle)}</p>
               <p className="text-xs text-atlas-ink-muted mt-1">Total Qty (all months)</p>
             </div>
             {isAdminOrHead && (
-              <div className={`bg-atlas-surface border rounded-xl p-4 text-center ${pendingKams > 0 ? "border-orange-800/40" : "border-green-800/40"}`}>
-                <p className={`text-2xl font-bold ${pendingKams > 0 ? "text-orange-400" : "text-green-400"}`}>{pendingKams}</p>
+              <div className={`bg-atlas-surface border rounded-xl p-4 text-center ${pendingKams > 0 ? "border-amber-800/40" : "border-green-800/40"}`}>
+                <p className={`text-2xl font-bold ${pendingKams > 0 ? "text-amber-400" : "text-green-400"}`}>{pendingKams}</p>
                 <p className="text-xs text-atlas-ink-muted mt-1">KAMs Pending · {completedKams} Done</p>
               </div>
             )}
@@ -413,7 +413,7 @@ export default function DashboardPage() {
                   {cycleLoading ? "Loading..." : `${pendingKams} pending · ${completedKams} done out of ${kamStatuses.length} KAMs`}
                 </p>
               </div>
-              {cycleLoading && <span className="text-xs text-amber-400 animate-pulse">Refreshing...</span>}
+              {cycleLoading && <span className="text-xs text-blue-400 animate-pulse">Refreshing...</span>}
             </div>
             {kamStatuses.length === 0 ? (
               <div className="px-5 py-10 text-center text-atlas-ink-muted text-sm">No KAMs with channel assignments found.</div>
@@ -443,7 +443,7 @@ export default function DashboardPage() {
                           </td>
                           <td className="px-4 py-3">
                             <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                              kam.role === "head_kam" ? "bg-purple-500/20 text-purple-300" : "bg-blue-500/20 text-blue-300"
+                              kam.role === "head_kam" ? "bg-purple-100 text-purple-700 ring-1 ring-purple-300" : "bg-blue-100 text-blue-700 ring-1 ring-blue-300"
                             }`}>{roleLabel(kam.role)}</span>
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -541,7 +541,7 @@ export default function DashboardPage() {
                 <select
                   value={vcMonth}
                   onChange={(e) => { setVcMonth(e.target.value); setVcCycleA(""); setVcCycleB(""); setRawVcA([]); setRawVcB([]); setVcTriggered(false); }}
-                  className="px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-sm text-atlas-ink focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-sm text-atlas-ink focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   <option value="">Select month...</option>
                   {vcMonths.map((m) => (
@@ -585,7 +585,7 @@ export default function DashboardPage() {
                     <button
                       onClick={runVersionComparison}
                       disabled={!vcCycleA || !vcCycleB || vcCycleA === vcCycleB || vcLoading}
-                      className="px-5 py-2 bg-amber-500 text-black text-sm font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                      className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition"
                     >
                       {vcLoading ? "Loading..." : "Compare →"}
                     </button>
@@ -713,23 +713,23 @@ export default function DashboardPage() {
 
         {/* ── Quick Actions ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link href="/upload" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-amber-500/40 transition group">
-            <p className="text-sm font-semibold group-hover:text-amber-400 transition">Upload Forecast</p>
+          <Link href="/upload" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-blue-500/40 transition group">
+            <p className="text-sm font-semibold group-hover:text-blue-400 transition">Upload Forecast</p>
             <p className="text-xs text-atlas-ink-muted mt-1">Submit channel forecast data</p>
           </Link>
-          <Link href="/channels" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-amber-500/40 transition group">
-            <p className="text-sm font-semibold group-hover:text-amber-400 transition">Forecast View</p>
+          <Link href="/channels" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-blue-500/40 transition group">
+            <p className="text-sm font-semibold group-hover:text-blue-400 transition">Forecast View</p>
             <p className="text-xs text-atlas-ink-muted mt-1">Analyse by channel, cluster, SKU</p>
           </Link>
           {profile?.role === "admin" && (
-            <Link href="/admin/cycles" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-amber-500/40 transition group">
-              <p className="text-sm font-semibold group-hover:text-amber-400 transition">Manage Cycles</p>
+            <Link href="/admin/cycles" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-blue-500/40 transition group">
+              <p className="text-sm font-semibold group-hover:text-blue-400 transition">Manage Cycles</p>
               <p className="text-xs text-atlas-ink-muted mt-1">Open, lock, publish cycles</p>
             </Link>
           )}
           {profile?.role === "admin" && (
-            <Link href="/admin/users" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-amber-500/40 transition group">
-              <p className="text-sm font-semibold group-hover:text-amber-400 transition">Manage Users</p>
+            <Link href="/admin/users" className="bg-atlas-surface border border-atlas-line rounded-xl p-4 hover:border-blue-500/40 transition group">
+              <p className="text-sm font-semibold group-hover:text-blue-400 transition">Manage Users</p>
               <p className="text-xs text-atlas-ink-muted mt-1">Assign roles and channels</p>
             </Link>
           )}
