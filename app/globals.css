@@ -31,11 +31,11 @@
   --atlas-line:          #D6CFC0;
   --atlas-line-soft:     #E4DDCE;
 
-  /* Accent — amber (single brand hue) */
-  --atlas-accent:        #D97706;
-  --atlas-accent-light:  #F59E0B;
-  --atlas-accent-deep:   #B45309;
-  --atlas-accent-bg:     rgba(217, 119, 6, 0.10);
+  /* Accent — deep blue (brand hue) */
+  --atlas-accent:        #1E40AF;
+  --atlas-accent-light:  #2563EB;
+  --atlas-accent-deep:   #1E3A8A;
+  --atlas-accent-bg:     rgba(30, 64, 175, 0.08);
 
   /* Semantic */
   --atlas-green:         #0F7A4F;
@@ -139,8 +139,8 @@
   --atlas-ink-faint:     #4A5D74;
   --atlas-line:          #1E3048;
   --atlas-line-soft:     #172537;
-  --atlas-accent:        #F59E0B;
-  --atlas-accent-light:  #FBBF24;
+  --atlas-accent:        #3B82F6;
+  --atlas-accent-light:  #60A5FA;
   --atlas-green:         #4ADE80;
   --atlas-green-bg:      rgba(34, 197, 94, 0.12);
   --atlas-red:           #F87171;
@@ -163,8 +163,8 @@
   --atlas-ink-faint:     #7A8A9B;
   --atlas-line:          #D6CFC0;
   --atlas-line-soft:     #E4DDCE;
-  --atlas-accent:        #D97706;
-  --atlas-accent-light:  #F59E0B;
+  --atlas-accent:        #1E40AF;
+  --atlas-accent-light:  #2563EB;
   --atlas-green:         #0F7A4F;
   --atlas-green-bg:      rgba(15, 122, 79, 0.08);
   --atlas-red:           #B91C1C;
@@ -366,8 +366,8 @@
   transition: all var(--duration-fast) var(--ease-standard);
 }
 .atlas-submit:hover {
-  background: var(--atlas-accent);
-  color: var(--atlas-navy);
+  background: var(--atlas-accent-light);
+  color: #fff;
 }
 .atlas-submit:disabled {
   opacity: 0.5;
@@ -381,18 +381,17 @@
 }
 [data-theme="dark"] .atlas-submit {
   background: var(--atlas-accent);
-  color: var(--atlas-navy);
+  color: #fff;
 }
 [data-theme="dark"] .atlas-submit:hover {
   background: var(--atlas-accent-light);
 }
 [data-theme="light"] .atlas-submit {
-  background: var(--atlas-navy);
-  color: #F5F1E8;
+  background: var(--atlas-accent);
+  color: #fff;
 }
 [data-theme="light"] .atlas-submit:hover {
-  background: var(--atlas-accent);
-  color: var(--atlas-navy);
+  background: var(--atlas-accent-light);
 }
 
 /* SSO button */
