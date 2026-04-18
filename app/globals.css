@@ -115,8 +115,8 @@
   --shadow-sm:     0 2px 4px rgba(11, 27, 43, 0.06);
   --shadow-md:     0 8px 16px -6px rgba(11, 27, 43, 0.10);
   --shadow-lg:     0 30px 60px -20px rgba(11, 27, 43, 0.25);
-  --shadow-accent: 0 10px 20px -10px rgba(217, 119, 6, 0.5);
-  --shadow-focus:  0 0 0 3px rgba(217, 119, 6, 0.25);
+  --shadow-accent: 0 10px 20px -10px rgba(30, 64, 175, 0.5);
+  --shadow-focus:  0 0 0 3px rgba(30, 64, 175, 0.25);
 
   /* Motion */
   --duration-fast: 140ms;

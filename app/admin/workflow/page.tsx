@@ -75,13 +75,13 @@ export default function WorkflowGuidePage() {
             <a
               key={step}
               href={href}
-              className="flex gap-4 p-4 rounded-xl bg-atlas-surface border border-atlas-line hover:border-amber-500/30 hover:bg-amber-500/5 transition group"
+              className="flex gap-4 p-4 rounded-xl bg-atlas-surface border border-atlas-line hover:border-blue-500/30 hover:bg-blue-500/5 transition group"
             >
-              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold flex items-center justify-center">
+              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center">
                 {step}
               </span>
               <div>
-                <p className="text-sm font-medium text-atlas-ink group-hover:text-amber-400 transition">{label}</p>
+                <p className="text-sm font-medium text-atlas-ink group-hover:text-blue-400 transition">{label}</p>
                 <p className="text-xs text-atlas-ink-faint mt-0.5">{desc}</p>
               </div>
             </a>
@@ -208,7 +208,7 @@ export default function WorkflowGuidePage() {
             { n: "3", t: "Review & Upload", d: "Check the Singles tab output. Unmatched rows are clearly flagged. Download the template or go to Upload page to push the converted data to the cycle." },
           ].map(({ n, t, d }) => (
             <div key={n} className="p-4 rounded-xl bg-atlas-surface border border-atlas-line">
-              <span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold flex items-center justify-center mb-3">{n}</span>
+              <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center mb-3">{n}</span>
               <p className="text-sm font-medium text-atlas-ink mb-1">{t}</p>
               <p className="text-xs text-atlas-ink-faint">{d}</p>
             </div>
@@ -274,7 +274,7 @@ export default function WorkflowGuidePage() {
             { view: "SKU × Cluster", desc: "Pivot: SKU rows × Cluster columns. SUMIFS aggregation." },
           ].map(({ view, desc }) => (
             <div key={view} className="p-3 rounded-lg bg-atlas-surface border border-atlas-line">
-              <p className="text-xs font-semibold text-amber-400 mb-1">{view}</p>
+              <p className="text-xs font-semibold text-blue-400 mb-1">{view}</p>
               <p className="text-xs text-atlas-ink-muted">{desc}</p>
             </div>
           ))}
@@ -284,7 +284,7 @@ export default function WorkflowGuidePage() {
       {/* ── 8. DOWNLOAD OUTPUT ────────────────────────────────────────────── */}
       <Section title="8. Download Forecast — Excel Output">
         <p className="text-sm text-atlas-ink-muted mb-4">
-          The downloaded <code className="text-amber-400 bg-atlas-surface px-1 rounded text-xs">.xlsx</code> file contains two sheets:
+          The downloaded <code className="text-blue-400 bg-atlas-surface px-1 rounded text-xs">.xlsx</code> file contains two sheets:
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-4 rounded-xl bg-atlas-surface border border-atlas-line">
@@ -353,7 +353,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function InfoBox({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-4 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs text-amber-200/70">
+    <div className="mt-4 p-3 rounded-lg bg-blue-500/5 border border-blue-500/20 text-xs text-blue-200/70">
       {children}
     </div>
   );
@@ -376,7 +376,7 @@ function Steps({ steps }: { steps: string[] }) {
 
 function RoleRow({ badge, color, scope, caps }: { badge: string; color: string; scope: string; caps: string }) {
   const colors: Record<string, string> = {
-    amber: "bg-amber-500/20 text-amber-400",
+    amber: "bg-blue-500/20 text-blue-400",
     purple: "bg-purple-500/20 text-purple-400",
     blue: "bg-blue-500/20 text-blue-400",
     green: "bg-green-500/20 text-green-400",
@@ -398,7 +398,7 @@ function StatusDot({ color }: { color: string }) {
     green: "bg-green-500",
     blue: "bg-blue-500",
     purple: "bg-purple-500",
-    amber: "bg-amber-500",
+    amber: "bg-blue-500",
     gray: "bg-atlas-ink-faint",
   };
   return <div className={`w-3 h-3 rounded-full flex-shrink-0 mt-1 ${colors[color] || "bg-atlas-ink-faint"}`} />;
@@ -408,6 +408,6 @@ const statusColors: Record<string, string> = {
   green: "bg-green-500/15 text-green-400",
   blue: "bg-blue-500/15 text-blue-400",
   purple: "bg-purple-500/15 text-purple-400",
-  amber: "bg-amber-500/15 text-amber-400",
+  amber: "bg-blue-500/15 text-blue-400",
   gray: "bg-atlas-surface-soft text-atlas-ink-muted",
 };

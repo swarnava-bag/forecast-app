@@ -52,6 +52,9 @@ export default function ForecastCyclesPage() {
   const [deleteMode, setDeleteMode] = useState<"full" | "drafts">("drafts");
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
+  // Push to Analytics
+  const [pushingAnalytics, setPushingAnalytics] = useState<string | null>(null);
+
   const supabase = createClient();
 
   const loadCycles = useCallback(async () => {
@@ -248,6 +251,31 @@ export default function ForecastCyclesPage() {
     }
   }
 
+  async function pushToAnalytics(cycle: Cycle) {
+    const label = `${formatMonth(cycle.forecast_month)} V${cycle.version}`;
+    if (!window.confirm(`Push ${label} to Analytics?\n\nThis will make the published forecast data available on the Analytics page for trend/fidelity analysis.\n\nExisting analytics data for this month will be replaced.`)) return;
+
+    setPushingAnalytics(cycle.id);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/push-to-analytics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cycle_id: cycle.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to push to analytics");
+      } else {
+        showSuccess(`Pushed ${data.rows_inserted.toLocaleString()} rows to Analytics for ${data.months_covered.join(", ")}`);
+      }
+    } catch (err: any) {
+      setError(err.message || "Network error");
+    } finally {
+      setPushingAnalytics(null);
+    }
+  }
+
   function showSuccess(msg: string) {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(null), 4000);
@@ -285,7 +313,7 @@ export default function ForecastCyclesPage() {
           <p className="text-sm text-atlas-ink-muted mt-1">Manage submission windows, deadlines, and publish versions.</p>
         </div>
         <button onClick={() => setShowCreate(true)}
-          className="px-4 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition">
+          className="px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition">
           + New Cycle
         </button>
       </div>
@@ -314,25 +342,25 @@ export default function ForecastCyclesPage() {
               <div>
                 <label className="block text-sm text-atlas-ink-muted mb-1">Forecast Month *</label>
                 <input type="month" value={newMonth} onChange={(e) => setNewMonth(e.target.value)}
-                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-sm text-atlas-ink-muted mb-1">Submission Deadline</label>
                 <input type="datetime-local" value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)}
-                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <p className="text-xs text-atlas-ink-faint mt-1">Teams won&apos;t be able to submit after this time.</p>
               </div>
               <div>
                 <label className="block text-sm text-atlas-ink-muted mb-1">Notes</label>
                 <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} rows={2}
                   placeholder="Optional notes about this cycle..."
-                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>
             <div className="p-6 border-t border-atlas-line flex justify-end gap-3">
               <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">Cancel</button>
               <button onClick={createCycle} disabled={saving || !newMonth}
-                className="px-6 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
+                className="px-6 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 transition">
                 {saving ? "Creating..." : "Create Cycle"}
               </button>
             </div>
@@ -353,7 +381,7 @@ export default function ForecastCyclesPage() {
             <div className="p-6">
               {cfLoading ? (
                 <div className="flex items-center gap-3 text-atlas-ink-muted py-4">
-                  <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                   <span className="text-sm">Checking available source data...</span>
                 </div>
               ) : cfPreview ? (
@@ -408,7 +436,7 @@ export default function ForecastCyclesPage() {
               </button>
               <button onClick={confirmCarryForward}
                 disabled={actionLoading || cfLoading || !cfPreview || cfPreview.will_copy === 0}
-                className="px-6 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
+                className="px-6 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 transition">
                 {actionLoading ? "Copying..." : `Carry Forward ${cfPreview ? cfPreview.will_copy.toLocaleString() : ""} Records`}
               </button>
             </div>
@@ -433,7 +461,7 @@ export default function ForecastCyclesPage() {
                   type="datetime-local"
                   value={editDeadlineValue}
                   onChange={(e) => setEditDeadlineValue(e.target.value)}
-                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-xs text-atlas-ink-faint mt-1">Leave blank to remove the deadline.</p>
               </div>
@@ -444,7 +472,7 @@ export default function ForecastCyclesPage() {
                 Cancel
               </button>
               <button onClick={saveDeadline} disabled={actionLoading}
-                className="px-6 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
+                className="px-6 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 transition">
                 {actionLoading ? "Saving..." : "Save Deadline"}
               </button>
             </div>
@@ -632,7 +660,13 @@ export default function ForecastCyclesPage() {
                         </>
                       )}
                       {cycle.status === "published" && (
-                        <span className="px-3 py-1.5 text-xs text-atlas-ink-faint">Final</span>
+                        <button
+                          onClick={() => pushToAnalytics(cycle)}
+                          disabled={pushingAnalytics === cycle.id}
+                          className="px-3 py-1.5 text-xs bg-indigo-500/15 text-indigo-400 border border-indigo-500/25 rounded-lg hover:bg-indigo-500/25 transition font-medium disabled:opacity-50"
+                        >
+                          {pushingAnalytics === cycle.id ? "Pushing..." : "Push to Analytics"}
+                        </button>
                       )}
                     </div>
 

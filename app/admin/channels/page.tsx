@@ -166,7 +166,7 @@ export default function AdminChannelsPage() {
           </div>
           <div className="flex gap-3">
             <button onClick={() => openClusterForm()} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">+ Cluster</button>
-            <button onClick={() => openChannelForm()} className="px-4 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition">+ Channel</button>
+            <button onClick={() => openChannelForm()} className="px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition">+ Channel</button>
           </div>
         </div>
 
@@ -202,18 +202,18 @@ export default function AdminChannelsPage() {
 
         {/* CHANNEL FORM */}
         {showChannelForm && (
-          <div className="mb-6 bg-atlas-surface border border-amber-500/30 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-amber-400 mb-4">{editingChannel ? "Edit Channel" : "New Channel"}</h3>
+          <div className="mb-6 bg-atlas-surface border border-blue-500/30 rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-blue-400 mb-4">{editingChannel ? "Edit Channel" : "New Channel"}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xs text-atlas-ink-muted mb-1">Channel Name</label>
                 <input type="text" value={channelName} onChange={(e) => setChannelName(e.target.value)} placeholder="e.g. Amazon"
-                  className="w-full px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-xs text-atlas-ink-muted mb-1">Cluster</label>
                 <select value={channelCluster} onChange={(e) => setChannelCluster(e.target.value)}
-                  className="w-full px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                  className="w-full px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Select cluster...</option>
                   {clusters.map((cl) => (<option key={cl.id} value={cl.id}>{cl.name}</option>))}
                 </select>
@@ -221,7 +221,7 @@ export default function AdminChannelsPage() {
               <div>
                 <label className="block text-xs text-atlas-ink-muted mb-1">Display Order</label>
                 <input type="number" value={channelOrder} onChange={(e) => setChannelOrder(Number(e.target.value))}
-                  className="w-full px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full px-4 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-xs text-atlas-ink-muted mb-1">Status</label>
@@ -235,7 +235,7 @@ export default function AdminChannelsPage() {
             </div>
             <div className="flex gap-3">
               <button onClick={saveChannel} disabled={savingChannel}
-                className="px-5 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
+                className="px-5 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 transition">
                 {savingChannel ? "Saving..." : editingChannel ? "Update Channel" : "Create Channel"}
               </button>
               <button onClick={() => { setShowChannelForm(false); setEditingChannel(null); setError(null); }}
@@ -268,7 +268,7 @@ export default function AdminChannelsPage() {
                     </div>
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <span className="text-xs text-atlas-ink-faint mr-2">Order: {cl.display_order}</span>
-                      <button onClick={() => openChannelForm(undefined, cl.id)} className="text-xs text-amber-400 hover:text-amber-300 transition">+ Channel</button>
+                      <button onClick={() => openChannelForm(undefined, cl.id)} className="text-xs text-blue-400 hover:text-blue-300 transition">+ Channel</button>
                       <button onClick={() => openClusterForm(cl)} className="text-xs text-blue-400 hover:text-blue-300 transition ml-2">Edit</button>
                       <button onClick={() => deleteCluster(cl)} className="text-xs text-red-400 hover:text-red-300 transition ml-2">Delete</button>
                     </div>
@@ -278,7 +278,7 @@ export default function AdminChannelsPage() {
                       {clChannels.length === 0 ? (
                         <div className="px-6 py-4 text-center">
                           <p className="text-atlas-ink-faint text-sm">No channels in this cluster.</p>
-                          <button onClick={() => openChannelForm(undefined, cl.id)} className="mt-2 text-xs text-amber-400 hover:text-amber-300">+ Add Channel</button>
+                          <button onClick={() => openChannelForm(undefined, cl.id)} className="mt-2 text-xs text-blue-400 hover:text-blue-300">+ Add Channel</button>
                         </div>
                       ) : (
                         <table className="w-full text-sm">

@@ -46,10 +46,10 @@ export default function AuditLogPage() {
   const actionColors: Record<string, string> = {
     create: "bg-green-500/20 text-green-400",
     update: "bg-blue-500/20 text-blue-400",
-    discontinue: "bg-orange-500/20 text-orange-400",
+    discontinue: "bg-red-500/20 text-red-400",
     reactivate: "bg-green-500/20 text-green-400",
     bulk_upload: "bg-purple-500/20 text-purple-400",
-    update_user_role: "bg-amber-500/20 text-amber-400",
+    update_user_role: "bg-blue-500/20 text-blue-400",
     cycle_open: "bg-green-500/20 text-green-400",
     cycle_locked: "bg-amber-500/20 text-amber-400",
     cycle_published: "bg-blue-500/20 text-blue-400",

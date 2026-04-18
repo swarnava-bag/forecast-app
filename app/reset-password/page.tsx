@@ -98,7 +98,7 @@ export default function ResetPasswordPage() {
                     required
                     minLength={6}
                     placeholder="Minimum 6 characters"
-                    className="w-full px-4 py-2.5 pr-12 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+                    className="w-full px-4 py-2.5 pr-12 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                   />
                   <button
                     type="button"
@@ -122,7 +122,7 @@ export default function ResetPasswordPage() {
                     required
                     minLength={6}
                     placeholder="Re-enter your password"
-                    className={`w-full px-4 py-2.5 pr-12 bg-atlas-surface-soft border rounded-lg text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition ${
+                    className={`w-full px-4 py-2.5 pr-12 bg-atlas-surface-soft border rounded-lg text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition ${
                       confirmPassword && confirmPassword !== password
                         ? "border-red-500"
                         : "border-atlas-line"
@@ -150,7 +150,7 @@ export default function ResetPasswordPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
                 {loading ? "Updating..." : "Update Password"}
               </button>
