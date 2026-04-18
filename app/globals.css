@@ -15,9 +15,9 @@
    -------------------------------------------------------------------------- */
 :root {
   /* Paper & ink */
-  --atlas-bg:            #F5F1E8;
+  --atlas-bg:            #EDF2F7;
   --atlas-surface:       #FFFFFF;
-  --atlas-surface-soft:  #FBF8F0;
+  --atlas-surface-soft:  #F0F4FA;
   --atlas-navy:          #0B1B2B;
   --atlas-navy-soft:     #1E3048;
 
@@ -28,8 +28,8 @@
   --atlas-ink-faint:     #7A8A9B;
 
   /* Lines */
-  --atlas-line:          #D6CFC0;
-  --atlas-line-soft:     #E4DDCE;
+  --atlas-line:          #CBD5E1;
+  --atlas-line-soft:     #E2E8F0;
 
   /* Accent — deep blue (brand hue) */
   --atlas-accent:        #1E40AF;
@@ -154,15 +154,15 @@
    [data-theme="light"] — Force light tokens (nested override for dark parent)
    -------------------------------------------------------------------------- */
 [data-theme="light"] {
-  --atlas-bg:            #F5F1E8;
+  --atlas-bg:            #EDF2F7;
   --atlas-surface:       #FFFFFF;
-  --atlas-surface-soft:  #FBF8F0;
+  --atlas-surface-soft:  #F0F4FA;
   --atlas-ink:           #0B1B2B;
   --atlas-ink-soft:      #3A4D64;
   --atlas-ink-muted:     #5C6E82;
   --atlas-ink-faint:     #7A8A9B;
-  --atlas-line:          #D6CFC0;
-  --atlas-line-soft:     #E4DDCE;
+  --atlas-line:          #CBD5E1;
+  --atlas-line-soft:     #E2E8F0;
   --atlas-accent:        #1E40AF;
   --atlas-accent-light:  #2563EB;
   --atlas-green:         #0F7A4F;
@@ -223,23 +223,22 @@
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 8% 12%, rgba(217,119,6,0.10), transparent 35%),
+    radial-gradient(circle at 8% 12%, rgba(30,64,175,0.08), transparent 35%),
     radial-gradient(circle at 92% 88%, rgba(11,27,43,0.06), transparent 40%),
-    radial-gradient(circle at 50% 30%, rgba(245,158,11,0.04), transparent 55%),
+    radial-gradient(circle at 50% 30%, rgba(37,99,235,0.04), transparent 55%),
     var(--atlas-bg);
 }
 [data-theme="dark"] .atlas-mesh {
   background:
-    radial-gradient(circle at 8% 12%, rgba(245,158,11,0.12), transparent 40%),
-    radial-gradient(circle at 92% 88%, rgba(245,158,11,0.05), transparent 45%),
+    radial-gradient(circle at 8% 12%, rgba(59,130,246,0.10), transparent 40%),
+    radial-gradient(circle at 92% 88%, rgba(59,130,246,0.05), transparent 45%),
     var(--atlas-bg);
 }
-/* Re-apply light mesh when nested inside [data-theme="light"] */
 [data-theme="light"] .atlas-mesh {
   background:
-    radial-gradient(circle at 8% 12%, rgba(217,119,6,0.10), transparent 35%),
+    radial-gradient(circle at 8% 12%, rgba(30,64,175,0.08), transparent 35%),
     radial-gradient(circle at 92% 88%, rgba(11,27,43,0.06), transparent 40%),
-    radial-gradient(circle at 50% 30%, rgba(245,158,11,0.04), transparent 55%),
+    radial-gradient(circle at 50% 30%, rgba(37,99,235,0.04), transparent 55%),
     var(--atlas-bg);
 }
 .atlas-mesh::after {
@@ -356,7 +355,7 @@
   gap: 8px;
   padding: 14px 24px;
   background: var(--atlas-navy);
-  color: #F5F1E8;
+  color: #fff;
   font-family: var(--font-sans);
   font-weight: 500;
   font-size: var(--text-base);
@@ -442,17 +441,22 @@
 }
 
 /* Toolkit status badges */
-.atlas-status-live {
+.atlas-status-live,
+.atlas-status-soon,
+.atlas-status-planned {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--atlas-accent);
-  border: 1px solid rgba(217,119,6,0.25);
-  background: rgba(217,119,6,0.06);
   padding: 2px 8px;
   border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+.atlas-status-live {
+  color: #16a34a;
+  border: 1px solid rgba(22,163,74,0.25);
+  background: rgba(22,163,74,0.06);
 }
 .atlas-status-live::before {
   content: "";
@@ -460,15 +464,28 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--atlas-accent);
+  background: #16a34a;
   margin-right: 5px;
   vertical-align: middle;
+  animation: atlas-pulse-dot 2s ease-in-out infinite;
+}
+@keyframes atlas-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 .atlas-status-soon {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-size: var(--text-sm);
+  color: var(--atlas-accent);
+  border: 1px solid rgba(37,99,235,0.25);
+  background: rgba(37,99,235,0.06);
+}
+.atlas-status-planned {
   color: var(--atlas-ink-muted);
+  border: 1px solid var(--atlas-line);
+  background: transparent;
+}
+[data-theme="dark"] .atlas-status-soon {
+  border-color: rgba(59,130,246,0.3);
+  background: rgba(59,130,246,0.08);
 }
 
 /* Footer meta strip */

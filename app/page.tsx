@@ -25,12 +25,71 @@ function EyeOffIcon() {
   );
 }
 
-/* ── Live toolkit ─────────────────────────────────────────────────────── */
+/* ── Live toolkit / Roadmap ───────────────────────────────────────────── */
 
 const TOOLKIT = [
-  { num: "01", name: "Forecast collation", desc: "three-month rolling, per channel" },
-  { num: "02", name: "Combo \u2192 Singles", desc: "resolve combo SKUs to components" },
+  { num: "01", name: "Forecast collation", desc: "three-month rolling, per channel", status: "live" as const },
+  { num: "02", name: "Combo → Singles", desc: "resolve combo SKUs to components", status: "live" as const },
+  { num: "03", name: "SKU & FG management", desc: "master data admin, bulk import", status: "live" as const },
+  { num: "04", name: "MRP change tracker", desc: "track FG code changes over time", status: "soon" as const },
+  { num: "05", name: "Demand analytics", desc: "forecast accuracy & trend insights", status: "soon" as const },
 ];
+
+/* ── SVG network illustration ────────────────────────────────────────── */
+
+function NetworkGraph() {
+  return (
+    <svg
+      viewBox="0 0 400 120"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-full"
+      style={{ opacity: 0.5, maxWidth: 420 }}
+    >
+      {/* Edges */}
+      <line x1="40" y1="60" x2="120" y2="30" stroke="var(--atlas-accent)" strokeWidth="1" strokeOpacity="0.3" />
+      <line x1="40" y1="60" x2="120" y2="90" stroke="var(--atlas-accent)" strokeWidth="1" strokeOpacity="0.3" />
+      <line x1="120" y1="30" x2="200" y2="50" stroke="var(--atlas-accent)" strokeWidth="1" strokeOpacity="0.3" />
+      <line x1="120" y1="90" x2="200" y2="50" stroke="var(--atlas-accent)" strokeWidth="1" strokeOpacity="0.3" />
+      <line x1="120" y1="90" x2="200" y2="100" stroke="var(--atlas-accent)" strokeWidth="1" strokeOpacity="0.3" />
+      <line x1="200" y1="50" x2="280" y2="25" stroke="var(--atlas-accent)" strokeWidth="1" strokeOpacity="0.3" />
+      <line x1="200" y1="50" x2="280" y2="70" stroke="var(--atlas-accent)" strokeWidth="1" strokeOpacity="0.3" />
+      <line x1="200" y1="100" x2="280" y2="70" stroke="var(--atlas-accent)" strokeWidth="1" strokeOpacity="0.3" />
+      <line x1="280" y1="25" x2="360" y2="55" stroke="var(--atlas-accent)" strokeWidth="1" strokeOpacity="0.3" />
+      <line x1="280" y1="70" x2="360" y2="55" stroke="var(--atlas-accent)" strokeWidth="1" strokeOpacity="0.3" />
+
+      {/* Animated pulse paths */}
+      <circle r="3" fill="var(--atlas-accent)" opacity="0.7">
+        <animateMotion dur="3s" repeatCount="indefinite" path="M40,60 L120,30 L200,50 L280,25 L360,55" />
+      </circle>
+      <circle r="2.5" fill="var(--atlas-accent)" opacity="0.5">
+        <animateMotion dur="4s" repeatCount="indefinite" path="M40,60 L120,90 L200,100 L280,70 L360,55" begin="1s" />
+      </circle>
+      <circle r="2" fill="var(--atlas-accent)" opacity="0.4">
+        <animateMotion dur="3.5s" repeatCount="indefinite" path="M40,60 L120,90 L200,50 L280,70 L360,55" begin="0.5s" />
+      </circle>
+
+      {/* Nodes */}
+      {[
+        [40, 60], [120, 30], [120, 90], [200, 50], [200, 100],
+        [280, 25], [280, 70], [360, 55],
+      ].map(([cx, cy], i) => (
+        <g key={i}>
+          <circle cx={cx} cy={cy} r="5" fill="var(--atlas-surface)" stroke="var(--atlas-accent)" strokeWidth="1.5" />
+          <circle cx={cx} cy={cy} r="2" fill="var(--atlas-accent)" opacity="0.6">
+            <animate attributeName="r" values="1.5;2.5;1.5" dur={`${2 + i * 0.3}s`} repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.4;0.8;0.4" dur={`${2 + i * 0.3}s`} repeatCount="indefinite" />
+          </circle>
+        </g>
+      ))}
+
+      {/* Labels */}
+      <text x="40" y="80" textAnchor="middle" fill="var(--atlas-ink-muted)" fontSize="8" fontFamily="var(--font-mono)">Upload</text>
+      <text x="200" y="22" textAnchor="middle" fill="var(--atlas-ink-muted)" fontSize="8" fontFamily="var(--font-mono)">Process</text>
+      <text x="360" y="78" textAnchor="middle" fill="var(--atlas-ink-muted)" fontSize="8" fontFamily="var(--font-mono)">Output</text>
+    </svg>
+  );
+}
 
 /* ── Page ──────────────────────────────────────────────────────────────── */
 
@@ -247,7 +306,12 @@ export default function AtlasLanding() {
               are auto-converted to singles. Lower revision, higher fidelity.
             </p>
 
-            {/* ── Live toolkit ──────────────────────────────────────── */}
+            {/* ── Network graph SVG ──────────────────────────────── */}
+            <div className="hidden lg:block" style={{ marginBottom: "24px" }}>
+              <NetworkGraph />
+            </div>
+
+            {/* ── Roadmap / toolkit ──────────────────────────────── */}
             <div
               className="hidden lg:block"
               style={{
@@ -255,17 +319,6 @@ export default function AtlasLanding() {
                 paddingTop: "20px",
               }}
             >
-              <div
-                className="font-mono uppercase mb-3"
-                style={{
-                  fontSize: "10.5px",
-                  letterSpacing: "0.12em",
-                  color: "var(--atlas-ink-muted)",
-                }}
-              >
-                Live now
-              </div>
-
               <ol className="list-none p-0 m-0">
                 {TOOLKIT.map((item) => (
                   <li
@@ -274,7 +327,7 @@ export default function AtlasLanding() {
                     style={{
                       gridTemplateColumns: "22px 1fr auto",
                       gap: "14px",
-                      padding: "11px 0",
+                      padding: "10px 0",
                       borderBottom: "1px dashed var(--atlas-line-soft)",
                     }}
                   >
@@ -292,14 +345,15 @@ export default function AtlasLanding() {
                         className="font-display"
                         style={{
                           fontSize: "var(--text-base)",
-                          color: "var(--atlas-ink)",
+                          color: item.status === "soon" ? "var(--atlas-ink-soft)" : "var(--atlas-ink)",
                         }}
                       >
                         {item.name}
                       </span>
                       <span
+                        className="hidden xl:inline"
                         style={{
-                          fontSize: "12.5px",
+                          fontSize: "12px",
                           color: "var(--atlas-ink-muted)",
                           marginLeft: "6px",
                         }}
@@ -307,7 +361,9 @@ export default function AtlasLanding() {
                         &mdash; {item.desc}
                       </span>
                     </span>
-                    <span className="atlas-status-live">Live</span>
+                    <span className={`atlas-status-${item.status}`}>
+                      {item.status === "live" ? "Live" : "Soon"}
+                    </span>
                   </li>
                 ))}
               </ol>
