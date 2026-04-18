@@ -273,7 +273,7 @@ export default function ForecastCyclesPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><p className="text-gray-400">Loading...</p></div>;
+    return <div className="flex items-center justify-center h-64"><p className="text-atlas-ink-muted">Loading...</p></div>;
   }
 
   return (
@@ -282,7 +282,7 @@ export default function ForecastCyclesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold">Forecast Cycles</h2>
-          <p className="text-sm text-gray-400 mt-1">Manage submission windows, deadlines, and publish versions.</p>
+          <p className="text-sm text-atlas-ink-muted mt-1">Manage submission windows, deadlines, and publish versions.</p>
         </div>
         <button onClick={() => setShowCreate(true)}
           className="px-4 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition">
@@ -306,31 +306,31 @@ export default function ForecastCyclesPage() {
       {/* ── Create Modal ──────────────────────────────────────────────────── */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg">
-            <div className="p-6 border-b border-gray-800">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl w-full max-w-lg">
+            <div className="p-6 border-b border-atlas-line">
               <h3 className="text-lg font-semibold">Create New Forecast Cycle</h3>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Forecast Month *</label>
+                <label className="block text-sm text-atlas-ink-muted mb-1">Forecast Month *</label>
                 <input type="month" value={newMonth} onChange={(e) => setNewMonth(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Submission Deadline</label>
+                <label className="block text-sm text-atlas-ink-muted mb-1">Submission Deadline</label>
                 <input type="datetime-local" value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
-                <p className="text-xs text-gray-500 mt-1">Teams won&apos;t be able to submit after this time.</p>
+                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                <p className="text-xs text-atlas-ink-faint mt-1">Teams won&apos;t be able to submit after this time.</p>
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Notes</label>
+                <label className="block text-sm text-atlas-ink-muted mb-1">Notes</label>
                 <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} rows={2}
                   placeholder="Optional notes about this cycle..."
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
             </div>
-            <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
-              <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">Cancel</button>
+            <div className="p-6 border-t border-atlas-line flex justify-end gap-3">
+              <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">Cancel</button>
               <button onClick={createCycle} disabled={saving || !newMonth}
                 className="px-6 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
                 {saving ? "Creating..." : "Create Cycle"}
@@ -343,44 +343,44 @@ export default function ForecastCyclesPage() {
       {/* ── Carry Forward Modal ───────────────────────────────────────────── */}
       {cfTarget && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg">
-            <div className="p-6 border-b border-gray-800">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl w-full max-w-lg">
+            <div className="p-6 border-b border-atlas-line">
               <h3 className="text-lg font-semibold">Carry Forward Forecast</h3>
-              <p className="text-sm text-gray-400 mt-1">
-                Into: <span className="text-white font-medium">{formatMonth(cfTarget.forecast_month)} V{cfTarget.version}</span>
+              <p className="text-sm text-atlas-ink-muted mt-1">
+                Into: <span className="text-atlas-ink font-medium">{formatMonth(cfTarget.forecast_month)} V{cfTarget.version}</span>
               </p>
             </div>
             <div className="p-6">
               {cfLoading ? (
-                <div className="flex items-center gap-3 text-gray-400 py-4">
+                <div className="flex items-center gap-3 text-atlas-ink-muted py-4">
                   <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
                   <span className="text-sm">Checking available source data...</span>
                 </div>
               ) : cfPreview ? (
                 <div className="space-y-4">
                   {/* Source info */}
-                  <div className="bg-gray-800/60 rounded-lg p-4 space-y-2">
-                    <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Source Cycle</p>
-                    <p className="text-white font-medium">
+                  <div className="bg-atlas-surface-soft/60 rounded-lg p-4 space-y-2">
+                    <p className="text-xs text-atlas-ink-faint uppercase tracking-wider font-semibold">Source Cycle</p>
+                    <p className="text-atlas-ink font-medium">
                       {formatMonth(cfPreview.source_cycle.forecast_month)} V{cfPreview.source_cycle.version}
                       <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 rounded">Published</span>
                     </p>
-                    <p className="text-xs text-gray-400">Published {formatDateTime(cfPreview.source_cycle.published_at)}</p>
+                    <p className="text-xs text-atlas-ink-muted">Published {formatDateTime(cfPreview.source_cycle.published_at)}</p>
                   </div>
 
                   {/* Counts */}
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-gray-800/40 rounded-lg p-3 text-center">
-                      <p className="text-2xl font-bold text-white">{cfPreview.total_in_source.toLocaleString()}</p>
-                      <p className="text-xs text-gray-400 mt-1">Records in source</p>
+                    <div className="bg-atlas-surface-soft/40 rounded-lg p-3 text-center">
+                      <p className="text-2xl font-bold text-atlas-ink">{cfPreview.total_in_source.toLocaleString()}</p>
+                      <p className="text-xs text-atlas-ink-muted mt-1">Records in source</p>
                     </div>
                     <div className="bg-green-900/30 border border-green-500/20 rounded-lg p-3 text-center">
                       <p className="text-2xl font-bold text-green-400">{cfPreview.will_copy.toLocaleString()}</p>
-                      <p className="text-xs text-gray-400 mt-1">Will be added</p>
+                      <p className="text-xs text-atlas-ink-muted mt-1">Will be added</p>
                     </div>
                     <div className="bg-amber-900/20 border border-amber-500/20 rounded-lg p-3 text-center">
                       <p className="text-2xl font-bold text-amber-400">{cfPreview.will_skip.toLocaleString()}</p>
-                      <p className="text-xs text-gray-400 mt-1">Already exist (kept)</p>
+                      <p className="text-xs text-atlas-ink-muted mt-1">Already exist (kept)</p>
                     </div>
                   </div>
 
@@ -394,16 +394,16 @@ export default function ForecastCyclesPage() {
                   )}
 
                   {cfPreview.will_copy === 0 && (
-                    <div className="bg-gray-800 rounded-lg p-3">
-                      <p className="text-sm text-gray-400">All records already exist in this cycle. Nothing new to carry forward.</p>
+                    <div className="bg-atlas-surface-soft rounded-lg p-3">
+                      <p className="text-sm text-atlas-ink-muted">All records already exist in this cycle. Nothing new to carry forward.</p>
                     </div>
                   )}
                 </div>
               ) : null}
             </div>
-            <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
+            <div className="p-6 border-t border-atlas-line flex justify-end gap-3">
               <button onClick={() => { setCfTarget(null); setCfPreview(null); }}
-                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">
+                className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">
                 Cancel
               </button>
               <button onClick={confirmCarryForward}
@@ -419,28 +419,28 @@ export default function ForecastCyclesPage() {
       {/* ── Edit Deadline Modal ───────────────────────────────────────────── */}
       {editDeadlineTarget && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md">
-            <div className="p-6 border-b border-gray-800">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl w-full max-w-md">
+            <div className="p-6 border-b border-atlas-line">
               <h3 className="text-lg font-semibold">Edit Deadline</h3>
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="text-sm text-atlas-ink-muted mt-1">
                 {formatMonth(editDeadlineTarget.forecast_month)} V{editDeadlineTarget.version}
               </p>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Submission Deadline</label>
+                <label className="block text-sm text-atlas-ink-muted mb-1">Submission Deadline</label>
                 <input
                   type="datetime-local"
                   value={editDeadlineValue}
                   onChange={(e) => setEditDeadlineValue(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
-                <p className="text-xs text-gray-500 mt-1">Leave blank to remove the deadline.</p>
+                <p className="text-xs text-atlas-ink-faint mt-1">Leave blank to remove the deadline.</p>
               </div>
             </div>
-            <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
+            <div className="p-6 border-t border-atlas-line flex justify-end gap-3">
               <button onClick={() => setEditDeadlineTarget(null)}
-                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">
+                className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">
                 Cancel
               </button>
               <button onClick={saveDeadline} disabled={actionLoading}
@@ -455,12 +455,12 @@ export default function ForecastCyclesPage() {
       {/* ── Delete / Clear Drafts Modal ───────────────────────────────────── */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg">
-            <div className="p-6 border-b border-gray-800">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl w-full max-w-lg">
+            <div className="p-6 border-b border-atlas-line">
               <h3 className="text-lg font-semibold text-red-400">
                 {deleteMode === "drafts" ? "Clear Draft Data" : "Delete Cycle"}
               </h3>
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="text-sm text-atlas-ink-muted mt-1">
                 {formatMonth(deleteTarget.forecast_month)} V{deleteTarget.version}
                 <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColors[deleteTarget.status]}`}>
                   {deleteTarget.status}
@@ -475,7 +475,7 @@ export default function ForecastCyclesPage() {
                   className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition ${
                     deleteMode === "drafts"
                       ? "bg-amber-500/10 border-amber-500/50 text-amber-400"
-                      : "bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-300"
+                      : "bg-atlas-surface-soft border-atlas-line text-atlas-ink-muted hover:text-atlas-ink"
                   }`}>
                   Clear Drafts Only
                 </button>
@@ -484,7 +484,7 @@ export default function ForecastCyclesPage() {
                   className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition ${
                     deleteMode === "full"
                       ? "bg-red-500/10 border-red-500/50 text-red-400"
-                      : "bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-300"
+                      : "bg-atlas-surface-soft border-atlas-line text-atlas-ink-muted hover:text-atlas-ink"
                   }`}>
                   Delete Entire Cycle
                 </button>
@@ -516,27 +516,27 @@ export default function ForecastCyclesPage() {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-400 mb-1">
-                      Type <span className="text-white font-mono">{formatMonth(deleteTarget.forecast_month)} V{deleteTarget.version}</span> to confirm
+                    <label className="block text-sm text-atlas-ink-muted mb-1">
+                      Type <span className="text-atlas-ink font-mono">{formatMonth(deleteTarget.forecast_month)} V{deleteTarget.version}</span> to confirm
                     </label>
                     <input
                       type="text"
                       value={deleteConfirmText}
                       onChange={(e) => setDeleteConfirmText(e.target.value)}
                       placeholder={`${formatMonth(deleteTarget.forecast_month)} V${deleteTarget.version}`}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                   </div>
                 </div>
               )}
             </div>
-            <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
+            <div className="p-6 border-t border-atlas-line flex justify-end gap-3">
               <button onClick={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}
-                className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">
+                className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">
                 Cancel
               </button>
               <button onClick={confirmDelete} disabled={actionLoading}
-                className="px-6 py-2 text-sm bg-red-600 text-white font-semibold rounded-lg hover:bg-red-500 disabled:opacity-50 transition">
+                className="px-6 py-2 text-sm bg-red-600 text-atlas-ink font-semibold rounded-lg hover:bg-red-500 disabled:opacity-50 transition">
                 {actionLoading ? "Processing..." : deleteMode === "drafts" ? "Clear Drafts" : "Delete Cycle"}
               </button>
             </div>
@@ -547,27 +547,27 @@ export default function ForecastCyclesPage() {
       {/* ── Cycles List ───────────────────────────────────────────────────── */}
       <div className="space-y-4">
         {cycles.length === 0 ? (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-            <p className="text-gray-500">No forecast cycles yet. Create one to start collecting forecasts.</p>
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl p-12 text-center">
+            <p className="text-atlas-ink-faint">No forecast cycles yet. Create one to start collecting forecasts.</p>
           </div>
         ) : (
           cycles.map((cycle) => {
             const c = counts[cycle.id] || { draft: 0, published: 0, total: 0 };
             return (
-              <div key={cycle.id} className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div key={cycle.id} className="bg-atlas-surface border border-atlas-line rounded-xl p-6">
                 <div className="flex items-start justify-between gap-4">
                   {/* Left: cycle info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <h3 className="text-lg font-semibold">{formatMonth(cycle.forecast_month)}</h3>
-                      <span className="text-sm text-gray-400 font-mono">V{cycle.version}</span>
+                      <span className="text-sm text-atlas-ink-muted font-mono">V{cycle.version}</span>
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[cycle.status]}`}>
                         {cycle.status.charAt(0).toUpperCase() + cycle.status.slice(1)}
                       </span>
                       {/* Data count badge */}
                       {c.total > 0 && (
-                        <span className="flex items-center gap-1.5 text-xs text-gray-400">
-                          <span className="w-1.5 h-1.5 rounded-full bg-gray-600 inline-block" />
+                        <span className="flex items-center gap-1.5 text-xs text-atlas-ink-muted">
+                          <span className="w-1.5 h-1.5 rounded-full bg-atlas-ink-faint inline-block" />
                           {c.total.toLocaleString()} records
                           {c.draft > 0 && (
                             <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -582,31 +582,31 @@ export default function ForecastCyclesPage() {
                         </span>
                       )}
                       {c.total === 0 && (
-                        <span className="text-xs text-gray-600 italic">No data yet</span>
+                        <span className="text-xs text-atlas-ink-faint italic">No data yet</span>
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-gray-400">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-atlas-ink-muted">
                       <div>
-                        <p className="text-gray-500">Opened</p>
+                        <p className="text-atlas-ink-muted">Opened</p>
                         <p>{formatDateTime(cycle.opened_at)}</p>
                       </div>
                       <div>
-                        <p className="text-gray-500">Deadline</p>
+                        <p className="text-atlas-ink-muted">Deadline</p>
                         <p className={cycle.deadline && new Date(cycle.deadline) < new Date() ? "text-red-400" : ""}>
                           {formatDateTime(cycle.deadline)}
                         </p>
                       </div>
                       <div>
-                        <p className="text-gray-500">Locked</p>
+                        <p className="text-atlas-ink-muted">Locked</p>
                         <p>{formatDateTime(cycle.locked_at)}</p>
                       </div>
                       <div>
-                        <p className="text-gray-500">Published</p>
+                        <p className="text-atlas-ink-muted">Published</p>
                         <p>{formatDateTime(cycle.published_at)}</p>
                       </div>
                     </div>
-                    {cycle.notes && <p className="text-xs text-gray-500 mt-2 italic">{cycle.notes}</p>}
+                    {cycle.notes && <p className="text-xs text-atlas-ink-faint mt-2 italic">{cycle.notes}</p>}
                   </div>
 
                   {/* Right: action buttons */}
@@ -622,7 +622,7 @@ export default function ForecastCyclesPage() {
                       {cycle.status === "locked" && (
                         <>
                           <button onClick={() => updateStatus(cycle, "open")}
-                            className="px-3 py-1.5 text-xs bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition font-medium">
+                            className="px-3 py-1.5 text-xs bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition font-medium">
                             Re-open
                           </button>
                           <button onClick={() => updateStatus(cycle, "published")}
@@ -632,7 +632,7 @@ export default function ForecastCyclesPage() {
                         </>
                       )}
                       {cycle.status === "published" && (
-                        <span className="px-3 py-1.5 text-xs text-gray-500">Final</span>
+                        <span className="px-3 py-1.5 text-xs text-atlas-ink-faint">Final</span>
                       )}
                     </div>
 
@@ -640,7 +640,7 @@ export default function ForecastCyclesPage() {
                     <div className="flex gap-2 flex-wrap justify-end">
                       {/* Edit Deadline */}
                       <button onClick={() => openEditDeadline(cycle)}
-                        className="px-3 py-1.5 text-xs bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition font-medium">
+                        className="px-3 py-1.5 text-xs bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition font-medium">
                         Edit Deadline
                       </button>
                       {/* Carry Forward — only for non-published cycles */}
@@ -653,7 +653,7 @@ export default function ForecastCyclesPage() {
                       {/* Clear Drafts — only when there are drafts */}
                       {c.draft > 0 && cycle.status !== "published" && (
                         <button onClick={() => { setDeleteMode("drafts"); setDeleteTarget(cycle); setDeleteConfirmText(""); }}
-                          className="px-3 py-1.5 text-xs bg-gray-700 text-gray-400 rounded-lg hover:bg-gray-600 transition font-medium">
+                          className="px-3 py-1.5 text-xs bg-atlas-surface-soft text-atlas-ink-muted rounded-lg hover:bg-atlas-surface-soft transition font-medium">
                           Clear Drafts
                         </button>
                       )}

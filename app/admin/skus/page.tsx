@@ -452,7 +452,7 @@ export default function SKUMasterPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><p className="text-gray-400">Loading SKUs...</p></div>;
+    return <div className="flex items-center justify-center h-64"><p className="text-atlas-ink-muted">Loading SKUs...</p></div>;
   }
 
   return (
@@ -460,12 +460,12 @@ export default function SKUMasterPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold">SKU Master</h2>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-atlas-ink-muted mt-1">
             {skus.length} total · {skus.filter((s) => s.is_active && !s.discontinued_at).length} active · {skus.filter((s) => s.discontinued_at).length} discontinued
           </p>
         </div>
         <div className="flex gap-3">
-          <button onClick={downloadTemplate} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">Download Template</button>
+          <button onClick={downloadTemplate} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">Download Template</button>
           <button
             onClick={downloadAllAsTemplate}
             disabled={filteredSKUs.length === 0}
@@ -479,7 +479,7 @@ export default function SKUMasterPage() {
               Download Missing MRP ({activeMissingMrp.length})
             </button>
           )}
-          <label className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition cursor-pointer">
+          <label className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition cursor-pointer">
             Bulk Upload
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} />
           </label>
@@ -516,29 +516,29 @@ export default function SKUMasterPage() {
       {/* Bulk Upload Preview Modal */}
       {showUpload && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-gray-800">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-atlas-line">
               <h3 className="text-lg font-semibold">Bulk Upload Preview — {uploadPreview.length} SKUs</h3>
-              <p className="text-sm text-gray-400 mt-1">Existing SKUs will be updated. <span className="text-amber-400">All channels will be enabled by default</span> for new SKUs.</p>
+              <p className="text-sm text-atlas-ink-muted mt-1">Existing SKUs will be updated. <span className="text-amber-400">All channels will be enabled by default</span> for new SKUs.</p>
             </div>
             <div className="overflow-auto flex-1 p-6">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-800">
-                    <th className="text-left py-2 px-3 text-gray-400 font-medium">New Master SKU</th>
-                    <th className="text-left py-2 px-3 text-gray-400 font-medium">Product Name</th>
-                    <th className="text-left py-2 px-3 text-gray-400 font-medium">Category</th>
-                    <th className="text-left py-2 px-3 text-gray-400 font-medium">FG Code</th>
-                    <th className="text-right py-2 px-3 text-gray-400 font-medium">MRP</th>
+                  <tr className="border-b border-atlas-line">
+                    <th className="text-left py-2 px-3 text-atlas-ink-muted font-medium">New Master SKU</th>
+                    <th className="text-left py-2 px-3 text-atlas-ink-muted font-medium">Product Name</th>
+                    <th className="text-left py-2 px-3 text-atlas-ink-muted font-medium">Category</th>
+                    <th className="text-left py-2 px-3 text-atlas-ink-muted font-medium">FG Code</th>
+                    <th className="text-right py-2 px-3 text-atlas-ink-muted font-medium">MRP</th>
                   </tr>
                 </thead>
                 <tbody>
                   {uploadPreview.map((row, i) => (
-                    <tr key={i} className="border-b border-gray-800/50">
+                    <tr key={i} className="border-b border-atlas-line/50">
                       <td className="py-2 px-3 font-mono text-xs">{row.new_master_sku}</td>
                       <td className="py-2 px-3">{row.product_name}</td>
-                      <td className="py-2 px-3 text-gray-400">{row.category}</td>
-                      <td className="py-2 px-3 font-mono text-xs text-gray-400">{row.fg_code}</td>
+                      <td className="py-2 px-3 text-atlas-ink-muted">{row.category}</td>
+                      <td className="py-2 px-3 font-mono text-xs text-atlas-ink-muted">{row.fg_code}</td>
                       <td className="py-2 px-3 font-mono text-xs text-right">
                         {row.mrp === null || row.mrp === undefined ? <span className="text-red-400">—</span> : `₹${Number(row.mrp).toFixed(2)}`}
                       </td>
@@ -547,8 +547,8 @@ export default function SKUMasterPage() {
                 </tbody>
               </table>
             </div>
-            <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
-              <button onClick={() => { setShowUpload(false); setUploadPreview([]); }} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">Cancel</button>
+            <div className="p-6 border-t border-atlas-line flex justify-end gap-3">
+              <button onClick={() => { setShowUpload(false); setUploadPreview([]); }} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">Cancel</button>
               <button onClick={handleBulkUpload} disabled={uploading} className="px-6 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
                 {uploading ? "Uploading..." : `Upload ${uploadPreview.length} SKUs`}
               </button>
@@ -560,45 +560,45 @@ export default function SKUMasterPage() {
       {/* Add/Edit Form Modal — Now with Channel Selection */}
       {showForm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-800">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-atlas-line">
               <h3 className="text-lg font-semibold">{editingId ? "Edit SKU" : "Add New SKU"}</h3>
             </div>
             <div className="p-6 space-y-4">
               {/* SKU Details */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">New Master SKU *</label>
-                  <input value={formData.new_master_sku} onChange={(e) => setFormData({ ...formData, new_master_sku: e.target.value })} placeholder="e.g. BB_AFG" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <label className="block text-sm text-atlas-ink-muted mb-1">New Master SKU *</label>
+                  <input value={formData.new_master_sku} onChange={(e) => setFormData({ ...formData, new_master_sku: e.target.value })} placeholder="e.g. BB_AFG" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">New FG Code</label>
-                  <input value={formData.new_fg_code} onChange={(e) => setFormData({ ...formData, new_fg_code: e.target.value })} placeholder="e.g. 14244G" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <label className="block text-sm text-atlas-ink-muted mb-1">New FG Code</label>
+                  <input value={formData.new_fg_code} onChange={(e) => setFormData({ ...formData, new_fg_code: e.target.value })} placeholder="e.g. 14244G" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">Master SKU</label>
-                  <input value={formData.master_sku} onChange={(e) => setFormData({ ...formData, master_sku: e.target.value })} placeholder="e.g. BB_AF" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <label className="block text-sm text-atlas-ink-muted mb-1">Master SKU</label>
+                  <input value={formData.master_sku} onChange={(e) => setFormData({ ...formData, master_sku: e.target.value })} placeholder="e.g. BB_AF" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">FG Code</label>
-                  <input value={formData.fg_code} onChange={(e) => setFormData({ ...formData, fg_code: e.target.value })} placeholder="e.g. 14244" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <label className="block text-sm text-atlas-ink-muted mb-1">FG Code</label>
+                  <input value={formData.fg_code} onChange={(e) => setFormData({ ...formData, fg_code: e.target.value })} placeholder="e.g. 14244" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Product Name *</label>
-                <input value={formData.product_name} onChange={(e) => setFormData({ ...formData, product_name: e.target.value })} placeholder="e.g. YB - 14244 - Breakfast Bar - Apricot Fig 45g (MRP 60)" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                <label className="block text-sm text-atlas-ink-muted mb-1">Product Name *</label>
+                <input value={formData.product_name} onChange={(e) => setFormData({ ...formData, product_name: e.target.value })} placeholder="e.g. YB - 14244 - Breakfast Bar - Apricot Fig 45g (MRP 60)" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">Category</label>
-                  <input value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} placeholder="e.g. Bars" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <label className="block text-sm text-atlas-ink-muted mb-1">Category</label>
+                  <input value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} placeholder="e.g. Bars" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">Product Category</label>
-                  <input value={formData.product_category} onChange={(e) => setFormData({ ...formData, product_category: e.target.value })} placeholder="e.g. Breakfast Bar" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <label className="block text-sm text-atlas-ink-muted mb-1">Product Category</label>
+                  <input value={formData.product_category} onChange={(e) => setFormData({ ...formData, product_category: e.target.value })} placeholder="e.g. Breakfast Bar" className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">MRP (₹) <span className="text-amber-400/70">*</span></label>
+                  <label className="block text-sm text-atlas-ink-muted mb-1">MRP (₹) <span className="text-amber-400/70">*</span></label>
                   <input
                     type="number" step="0.01" min="0"
                     value={formData.mrp ?? ""}
@@ -607,7 +607,7 @@ export default function SKUMasterPage() {
                       setFormData({ ...formData, mrp: v === "" ? null : Number(v) });
                     }}
                     placeholder="e.g. 60"
-                    className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 ${formData.mrp === null || formData.mrp === undefined ? "border-red-500/60" : "border-gray-700"}`}
+                    className={`w-full px-3 py-2 bg-atlas-surface-soft border rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 ${formData.mrp === null || formData.mrp === undefined ? "border-red-500/60" : "border-atlas-line"}`}
                   />
                   {(formData.mrp === null || formData.mrp === undefined) && (
                     <p className="text-[10px] text-red-400/80 mt-1">Required for combo NTO split by MRP ratio.</p>
@@ -616,9 +616,9 @@ export default function SKUMasterPage() {
               </div>
 
               {/* Channel Selection */}
-              <div className="border-t border-gray-800 pt-4">
+              <div className="border-t border-atlas-line pt-4">
                 <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm font-medium text-gray-300">Active Channels</label>
+                  <label className="block text-sm font-medium text-atlas-ink">Active Channels</label>
                   <button
                     onClick={toggleAllFormChannels}
                     className="text-xs text-amber-400 hover:text-amber-300 transition"
@@ -626,7 +626,7 @@ export default function SKUMasterPage() {
                     {formChannelIds.length === channels.length ? "Deselect All" : "Select All"}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mb-3">
+                <p className="text-xs text-atlas-ink-faint mb-3">
                   Select which channels this SKU is available on. ({formChannelIds.length}/{channels.length} selected)
                 </p>
                 <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2">
@@ -645,12 +645,12 @@ export default function SKUMasterPage() {
                           <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] transition ${
                             allInCluster ? "bg-amber-500 border-amber-500 text-black" :
                             someInCluster ? "border-amber-500 bg-amber-500/30" :
-                            "border-gray-600 group-hover:border-gray-400"
+                            "border-atlas-line group-hover:border-atlas-line"
                           }`}>
                             {allInCluster && "✓"}
                             {someInCluster && !allInCluster && "—"}
                           </div>
-                          <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold">{cl.name}</span>
+                          <span className="text-xs text-atlas-ink-muted uppercase tracking-wider font-semibold">{cl.name}</span>
                         </button>
                         <div className="flex flex-wrap gap-1.5 ml-5">
                           {clChannels.map((ch) => (
@@ -661,7 +661,7 @@ export default function SKUMasterPage() {
                               className={`px-2.5 py-1 rounded text-xs transition ${
                                 formChannelIds.includes(ch.id)
                                   ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/50"
-                                  : "bg-gray-800 text-gray-500 hover:bg-gray-700"
+                                  : "bg-atlas-surface-soft text-atlas-ink-faint hover:bg-atlas-surface-soft"
                               }`}
                             >
                               {formChannelIds.includes(ch.id) ? "✓ " : ""}{ch.name}
@@ -680,8 +680,8 @@ export default function SKUMasterPage() {
                 </div>
               )}
             </div>
-            <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
-              <button onClick={() => { setShowForm(false); setError(null); }} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">Cancel</button>
+            <div className="p-6 border-t border-atlas-line flex justify-end gap-3">
+              <button onClick={() => { setShowForm(false); setError(null); }} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="px-6 py-2 text-sm bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 disabled:opacity-50 transition">
                 {saving ? "Saving..." : editingId ? "Update SKU" : "Add SKU"}
               </button>
@@ -692,17 +692,17 @@ export default function SKUMasterPage() {
 
       {/* Filters */}
       <div className="flex gap-4 mb-4">
-        <input type="text" placeholder="Search by name, SKU code, or FG code..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="flex-1 px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500" />
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+        <input type="text" placeholder="Search by name, SKU code, or FG code..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="flex-1 px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-amber-500" />
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
           <option value="">All Categories</option>
           {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
         </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
           <option value="active">Active Only</option>
           <option value="discontinued">Discontinued</option>
           <option value="all">All</option>
         </select>
-        <select value={mrpFilter} onChange={(e) => setMrpFilter(e.target.value as "all" | "missing" | "present")} className="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+        <select value={mrpFilter} onChange={(e) => setMrpFilter(e.target.value as "all" | "missing" | "present")} className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
           <option value="all">All MRP</option>
           <option value="missing">MRP Missing</option>
           <option value="present">MRP Set</option>
@@ -710,40 +710,40 @@ export default function SKUMasterPage() {
       </div>
 
       {/* SKU Table */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 bg-gray-900/80">
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">New Master SKU</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Product Name</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Category</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Product Category</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">FG Code</th>
-                <th className="text-right py-3 px-4 text-gray-400 font-medium">MRP (₹)</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Actions</th>
+              <tr className="border-b border-atlas-line bg-atlas-surface/80">
+                <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">New Master SKU</th>
+                <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Product Name</th>
+                <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Category</th>
+                <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Product Category</th>
+                <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">FG Code</th>
+                <th className="text-right py-3 px-4 text-atlas-ink-muted font-medium">MRP (₹)</th>
+                <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Status</th>
+                <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredSKUs.length === 0 ? (
-                <tr><td colSpan={8} className="py-8 text-center text-gray-500">{searchTerm || categoryFilter ? "No SKUs match your filters." : "No SKUs added yet. Click '+ Add SKU' to get started."}</td></tr>
+                <tr><td colSpan={8} className="py-8 text-center text-atlas-ink-faint">{searchTerm || categoryFilter ? "No SKUs match your filters." : "No SKUs added yet. Click '+ Add SKU' to get started."}</td></tr>
               ) : (
                 filteredSKUs.map((sku) => {
                   const mrpMissing = sku.mrp === null || sku.mrp === undefined;
                   const highlightMissing = mrpMissing && !sku.discontinued_at;
                   return (
-                  <tr key={sku.id} className={`border-b border-gray-800/50 hover:bg-gray-800/30 transition ${sku.discontinued_at ? "opacity-60" : ""} ${highlightMissing ? "bg-red-900/15" : ""}`}>
+                  <tr key={sku.id} className={`border-b border-atlas-line/50 hover:bg-atlas-surface-soft/30 transition ${sku.discontinued_at ? "opacity-60" : ""} ${highlightMissing ? "bg-red-900/15" : ""}`}>
                     <td className="py-3 px-4 font-mono text-xs">{sku.new_master_sku}</td>
                     <td className="py-3 px-4">{sku.product_name}</td>
-                    <td className="py-3 px-4 text-gray-400">{sku.category}</td>
-                    <td className="py-3 px-4 text-gray-400">{sku.product_category}</td>
-                    <td className="py-3 px-4 font-mono text-xs text-gray-400">{sku.fg_code}</td>
+                    <td className="py-3 px-4 text-atlas-ink-muted">{sku.category}</td>
+                    <td className="py-3 px-4 text-atlas-ink-muted">{sku.product_category}</td>
+                    <td className="py-3 px-4 font-mono text-xs text-atlas-ink-muted">{sku.fg_code}</td>
                     <td className="py-3 px-4 text-right font-mono text-xs">
                       {mrpMissing ? (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 ring-1 ring-red-500/40 text-[10px] uppercase font-semibold">Missing</span>
                       ) : (
-                        <span className="text-white">₹{Number(sku.mrp).toFixed(2)}</span>
+                        <span className="text-atlas-ink">₹{Number(sku.mrp).toFixed(2)}</span>
                       )}
                     </td>
                     <td className="py-3 px-4">

@@ -19,7 +19,7 @@ const roleColors: Record<string, string> = {
   head_kam: "bg-purple-500/20 text-purple-400",
   channel_kam: "bg-blue-500/20 text-blue-400",
   supply_chain: "bg-green-500/20 text-green-400",
-  viewer: "bg-gray-700 text-gray-300",
+  viewer: "bg-atlas-surface-soft text-atlas-ink",
 };
 
 const roleLabels: Record<string, string> = {
@@ -159,14 +159,14 @@ export default function ManageUsersPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><p className="text-gray-400">Loading users...</p></div>;
+    return <div className="flex items-center justify-center h-64"><p className="text-atlas-ink-muted">Loading users...</p></div>;
   }
 
   return (
     <div>
       <div className="mb-6">
         <h2 className="text-2xl font-bold">Manage Users</h2>
-        <p className="text-sm text-gray-400 mt-1">{users.length} registered users</p>
+        <p className="text-sm text-atlas-ink-muted mt-1">{users.length} registered users</p>
       </div>
 
       {successMsg && (
@@ -178,16 +178,16 @@ export default function ManageUsersPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* User List */}
         <div className="lg:col-span-1">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-gray-800">
-              <p className="text-sm font-medium text-gray-300">All Users</p>
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-atlas-line">
+              <p className="text-sm font-medium text-atlas-ink">All Users</p>
             </div>
-            <div className="divide-y divide-gray-800/50 max-h-[600px] overflow-y-auto">
+            <div className="divide-y divide-atlas-line/50 max-h-[600px] overflow-y-auto">
               {users.map((user) => (
                 <button key={user.id} onClick={() => selectUser(user)}
-                  className={`w-full text-left px-4 py-3 transition ${selectedUser?.id === user.id ? "bg-amber-500/10 border-l-2 border-amber-500" : "hover:bg-gray-800/50 border-l-2 border-transparent"}`}>
-                  <p className="text-sm font-medium text-white">{user.full_name || "No name"}</p>
-                  <p className="text-xs text-gray-500">{user.email}</p>
+                  className={`w-full text-left px-4 py-3 transition ${selectedUser?.id === user.id ? "bg-amber-500/10 border-l-2 border-amber-500" : "hover:bg-atlas-surface-soft/50 border-l-2 border-transparent"}`}>
+                  <p className="text-sm font-medium text-atlas-ink">{user.full_name || "No name"}</p>
+                  <p className="text-xs text-atlas-ink-muted">{user.email}</p>
                   <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium ${roleColors[user.role] || roleColors.viewer}`}>
                     {roleLabels[user.role] || user.role}
                   </span>
@@ -200,11 +200,11 @@ export default function ManageUsersPage() {
         {/* User Settings */}
         <div className="lg:col-span-2">
           {selectedUser ? (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl">
-              <div className="p-6 border-b border-gray-800 flex items-start justify-between gap-4">
+            <div className="bg-atlas-surface border border-atlas-line rounded-xl">
+              <div className="p-6 border-b border-atlas-line flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-semibold">{selectedUser.full_name || "No name"}</h3>
-                  <p className="text-sm text-gray-400">{selectedUser.email}</p>
+                  <p className="text-sm text-atlas-ink-muted">{selectedUser.email}</p>
                 </div>
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
@@ -218,13 +218,13 @@ export default function ManageUsersPage() {
               <div className="p-6 space-y-6">
                 {/* Role Selection */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">Role</label>
+                  <label className="block text-sm font-medium text-atlas-ink mb-3">Role</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {ROLES.map((role) => (
                       <button key={role.value} onClick={() => setSelectedRole(role.value)}
                         className={`text-left px-4 py-3 rounded-lg text-sm transition border ${selectedRole === role.value
                           ? `${roleColors[role.value]} ring-1 ring-current border-current/30`
-                          : "bg-gray-800 text-gray-400 hover:bg-gray-700 border-transparent"}`}>
+                          : "bg-atlas-surface-soft text-atlas-ink-muted hover:bg-atlas-surface-soft border-transparent"}`}>
                         <p className="font-medium">{role.label}</p>
                         <p className="text-xs mt-0.5 opacity-70">{role.desc}</p>
                       </button>
@@ -235,12 +235,12 @@ export default function ManageUsersPage() {
                 {/* Cluster Assignments (Head KAM) */}
                 {selectedRole === "head_kam" && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-3">Assigned Clusters</label>
-                    <p className="text-xs text-gray-500 mb-3">Head KAM can edit forecasts for all channels within these clusters.</p>
+                    <label className="block text-sm font-medium text-atlas-ink mb-3">Assigned Clusters</label>
+                    <p className="text-xs text-atlas-ink-faint mb-3">Head KAM can edit forecasts for all channels within these clusters.</p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {clusters.map((cl) => (
                         <button key={cl.id} onClick={() => toggleCluster(cl.id)}
-                          className={`px-3 py-2 rounded-lg text-sm text-left transition ${userClusters.includes(cl.id) ? "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
+                          className={`px-3 py-2 rounded-lg text-sm text-left transition ${userClusters.includes(cl.id) ? "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500" : "bg-atlas-surface-soft text-atlas-ink-muted hover:bg-atlas-surface-soft"}`}>
                           {userClusters.includes(cl.id) ? "✓ " : ""}{cl.name}
                         </button>
                       ))}
@@ -251,18 +251,18 @@ export default function ManageUsersPage() {
                 {/* Channel Assignments (Channel KAM) */}
                 {selectedRole === "channel_kam" && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-3">Assigned Channels</label>
-                    <p className="text-xs text-gray-500 mb-3">Channel KAM can upload/edit forecasts for these channels only.</p>
+                    <label className="block text-sm font-medium text-atlas-ink mb-3">Assigned Channels</label>
+                    <p className="text-xs text-atlas-ink-faint mb-3">Channel KAM can upload/edit forecasts for these channels only.</p>
                     {clusters.map((cl) => {
                       const clChannels = channels.filter((ch) => ch.cluster_id === cl.id);
                       if (clChannels.length === 0) return null;
                       return (
                         <div key={cl.id} className="mb-4">
-                          <p className="text-xs text-gray-500 mb-2 uppercase tracking-wider">{cl.name}</p>
+                          <p className="text-xs text-atlas-ink-faint mb-2 uppercase tracking-wider">{cl.name}</p>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {clChannels.map((ch) => (
                               <button key={ch.id} onClick={() => toggleChannel(ch.id)}
-                                className={`px-3 py-2 rounded-lg text-sm text-left transition ${userChannels.includes(ch.id) ? "bg-blue-500/20 text-blue-300 ring-1 ring-blue-500" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
+                                className={`px-3 py-2 rounded-lg text-sm text-left transition ${userChannels.includes(ch.id) ? "bg-blue-500/20 text-blue-300 ring-1 ring-blue-500" : "bg-atlas-surface-soft text-atlas-ink-muted hover:bg-atlas-surface-soft"}`}>
                                 {userChannels.includes(ch.id) ? "✓ " : ""}{ch.name}
                               </button>
                             ))}
@@ -286,8 +286,8 @@ export default function ManageUsersPage() {
               </div>
             </div>
           ) : (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl flex items-center justify-center h-64">
-              <p className="text-gray-500">Select a user from the list to manage their settings.</p>
+            <div className="bg-atlas-surface border border-atlas-line rounded-xl flex items-center justify-center h-64">
+              <p className="text-atlas-ink-faint">Select a user from the list to manage their settings.</p>
             </div>
           )}
         </div>
@@ -296,26 +296,26 @@ export default function ManageUsersPage() {
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-sm mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-white mb-2">Delete User?</h3>
-            <p className="text-sm text-gray-400 mb-1">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl p-6 w-full max-w-sm mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-atlas-ink mb-2">Delete User?</h3>
+            <p className="text-sm text-atlas-ink-muted mb-1">
               You are about to permanently delete:
             </p>
-            <p className="text-sm font-medium text-white mb-1">{selectedUser.full_name || "No name"}</p>
-            <p className="text-xs text-gray-500 mb-5">{selectedUser.email}</p>
+            <p className="text-sm font-medium text-atlas-ink mb-1">{selectedUser.full_name || "No name"}</p>
+            <p className="text-xs text-atlas-ink-faint mb-5">{selectedUser.email}</p>
             <p className="text-xs text-red-400 mb-6">
               This will remove the user from all channels, clusters, and authentication. This action cannot be undone.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 rounded-lg hover:bg-gray-700 transition"
+                className="flex-1 px-4 py-2 text-sm font-medium text-atlas-ink bg-atlas-surface-soft rounded-lg hover:bg-atlas-surface-soft transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
-                className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-500 transition"
+                className="flex-1 px-4 py-2 text-sm font-semibold text-atlas-ink bg-red-600 rounded-lg hover:bg-red-500 transition"
               >
                 Yes, Delete
               </button>

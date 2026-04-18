@@ -66,16 +66,16 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-atlas-bg flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">
+          <h1 className="text-3xl font-bold text-atlas-ink mb-2">
             Demand Planning Module - Yogabars
           </h1>
-          <p className="text-gray-400">Set your new password</p>
+          <p className="text-atlas-ink-muted">Set your new password</p>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-8">
+        <div className="bg-atlas-surface border border-atlas-line rounded-xl p-8">
           {success ? (
             <div className="text-center">
               <div className="p-3 bg-green-900/50 border border-green-500 rounded-lg">
@@ -87,7 +87,7 @@ export default function ResetPasswordPage() {
           ) : (
             <form onSubmit={handleReset} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                <label className="block text-sm font-medium text-atlas-ink mb-1.5">
                   New Password
                 </label>
                 <div className="relative">
@@ -98,12 +98,12 @@ export default function ResetPasswordPage() {
                     required
                     minLength={6}
                     placeholder="Minimum 6 characters"
-                    className="w-full px-4 py-2.5 pr-12 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+                    className="w-full px-4 py-2.5 pr-12 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-atlas-ink-muted hover:text-atlas-ink transition"
                   >
                     {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                <label className="block text-sm font-medium text-atlas-ink mb-1.5">
                   Confirm New Password
                 </label>
                 <div className="relative">
@@ -122,16 +122,16 @@ export default function ResetPasswordPage() {
                     required
                     minLength={6}
                     placeholder="Re-enter your password"
-                    className={`w-full px-4 py-2.5 pr-12 bg-gray-800 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition ${
+                    className={`w-full px-4 py-2.5 pr-12 bg-atlas-surface-soft border rounded-lg text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition ${
                       confirmPassword && confirmPassword !== password
                         ? "border-red-500"
-                        : "border-gray-700"
+                        : "border-atlas-line"
                     }`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-atlas-ink-muted hover:text-atlas-ink transition"
                   >
                     {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
                   </button>

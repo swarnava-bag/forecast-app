@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import * as XLSX from "xlsx";
 import Link from "next/link";
+import AppShell from "@/app/components/AppShell";
 
 type Profile = { id: string; email: string; full_name: string; role: string };
 type Channel = { id: string; name: string; cluster_id: string };
@@ -707,56 +708,29 @@ export default function UploadPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white">
-        <nav className="border-b border-gray-800 bg-gray-900">
-          <div className="max-w-7xl mx-auto px-6 py-4">
-            <Link href="/dashboard" className="text-lg font-bold text-white">Demand Planning Module - Yogabars</Link>
-          </div>
-        </nav>
-        <div className="flex items-center justify-center h-64"><p className="text-gray-400">Loading...</p></div>
-      </div>
+      <AppShell>
+        <div className="flex items-center justify-center h-64"><p style={{ color: "var(--atlas-ink-muted)" }}>Loading...</p></div>
+      </AppShell>
     );
   }
 
   if (!canUpload) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white">
-        <nav className="border-b border-gray-800 bg-gray-900">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-6">
-            <Link href="/dashboard" className="text-lg font-bold text-white">Demand Planning Module - Yogabars</Link>
-            <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition">Dashboard</Link>
-          </div>
-        </nav>
-        <div className="max-w-7xl mx-auto px-6 py-16 text-center">
+      <AppShell>
+        <div className="max-w-7xl mx-auto py-16 text-center">
           <h2 className="text-2xl font-bold mb-4">Access Restricted</h2>
-          <p className="text-gray-400">Your role does not have upload access.</p>
-          <Link href="/dashboard" className="inline-block mt-6 px-6 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700 transition">Back to Dashboard</Link>
+          <p style={{ color: "var(--atlas-ink-muted)" }}>Your role does not have upload access.</p>
+          <Link href="/dashboard" className="inline-block mt-6 px-6 py-2 bg-atlas-surface-soft rounded-lg text-sm hover:bg-atlas-surface-soft transition">Back to Dashboard</Link>
         </div>
-      </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <nav className="border-b border-gray-800 bg-gray-900">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="text-lg font-bold text-white">Demand Planning Module - Yogabars</Link>
-            <div className="hidden md:flex items-center gap-4">
-              <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition">Dashboard</Link>
-              <span className="text-sm text-amber-400 font-medium">Upload</span>
-              <Link href="/channels" className="text-sm text-gray-400 hover:text-white transition">Forecast View</Link>
-              <Link href="/combo-converter" className="text-sm text-gray-400 hover:text-white transition">Combo → Singles</Link>
-              <Link href="/master-data" className="text-sm text-gray-400 hover:text-white transition">Master Data</Link>
-              {profile?.role === "admin" && <Link href="/admin" className="text-sm text-gray-400 hover:text-white transition">Admin</Link>}
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <div className="max-w-6xl mx-auto px-6 py-8">
+    <AppShell>
+      <div className="max-w-6xl mx-auto">
         <h2 className="text-2xl font-bold mb-2">Upload Forecast</h2>
-        <p className="text-sm text-gray-400 mb-8">
+        <p className="text-sm text-atlas-ink-muted mb-8">
           Upload forecast data with 3-month rolling quantities. Data is saved as draft until admin publishes.
         </p>
 
@@ -791,15 +765,15 @@ export default function UploadPage() {
           <div className="space-y-6">
 
             {/* Upload Identifier Toggle */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <label className="block text-sm font-medium text-gray-300 mb-3">Upload By</label>
+            <div className="bg-atlas-surface border border-atlas-line rounded-xl p-6">
+              <label className="block text-sm font-medium text-atlas-ink mb-3">Upload By</label>
               <div className="flex gap-3">
                 <button
                   onClick={() => { setUploadIdentifier("sku"); setError(null); }}
                   className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${
                     uploadIdentifier === "sku"
                       ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500"
-                      : "bg-gray-800 text-gray-400 border-transparent hover:bg-gray-700"
+                      : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"
                   }`}
                 >
                   <p className="font-medium">Master SKU</p>
@@ -810,7 +784,7 @@ export default function UploadPage() {
                   className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${
                     uploadIdentifier === "fg"
                       ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500"
-                      : "bg-gray-800 text-gray-400 border-transparent hover:bg-gray-700"
+                      : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"
                   }`}
                 >
                   <p className="font-medium">FG Code</p>
@@ -821,15 +795,15 @@ export default function UploadPage() {
 
             {/* Upload Mode Toggle (Admin & Head KAM only) */}
             {canUseMultiMode && (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                <label className="block text-sm font-medium text-gray-300 mb-3">Upload Mode</label>
+              <div className="bg-atlas-surface border border-atlas-line rounded-xl p-6">
+                <label className="block text-sm font-medium text-atlas-ink mb-3">Upload Mode</label>
                 <div className="flex gap-3">
                   <button
                     onClick={() => { setUploadMode("single"); setError(null); }}
                     className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${
                       uploadMode === "single"
                         ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500"
-                        : "bg-gray-800 text-gray-400 border-transparent hover:bg-gray-700"
+                        : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"
                     }`}
                   >
                     <p className="font-medium">Single Channel</p>
@@ -840,7 +814,7 @@ export default function UploadPage() {
                     className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${
                       uploadMode === "multi"
                         ? "bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500"
-                        : "bg-gray-800 text-gray-400 border-transparent hover:bg-gray-700"
+                        : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"
                     }`}
                   >
                     <p className="font-medium">Multi-Channel</p>
@@ -854,15 +828,15 @@ export default function UploadPage() {
 
               {/* Channel Selection (Single mode only) */}
               {uploadMode === "single" && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
+                <div className="bg-atlas-surface border border-atlas-line rounded-xl p-6">
+                  <label className="block text-sm font-medium text-atlas-ink mb-3">
                     {canUseMultiMode ? "2" : "1"}. Select Channel
                   </label>
                   {allowedChannels.length === 0 ? (
                     <p className="text-sm text-red-400">No channels assigned to you. Contact admin.</p>
                   ) : (
                     <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                      className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                       <option value="">Choose a channel...</option>
                       {getChannelsByCluster().map((group) => (
                         <optgroup key={group.cluster.id} label={group.cluster.name}>
@@ -878,21 +852,21 @@ export default function UploadPage() {
 
               {/* Multi-channel channel selector */}
               {uploadMode === "multi" && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                <div className="bg-atlas-surface border border-atlas-line rounded-xl p-6">
                   <div className="flex items-center justify-between mb-3">
-                    <label className="text-sm font-medium text-gray-300">
+                    <label className="text-sm font-medium text-atlas-ink">
                       2. Select Channels
-                      <span className="ml-2 text-xs text-gray-500">({selectedChannelIds.length}/{allowedChannels.length} selected)</span>
+                      <span className="ml-2 text-xs text-atlas-ink-muted">({selectedChannelIds.length}/{allowedChannels.length} selected)</span>
                     </label>
                     <div className="flex gap-2">
                       <button
                         onClick={() => setSelectedChannelIds(allowedChannels.map(c => c.id))}
                         className="text-xs text-amber-400 hover:text-amber-300 transition"
                       >Select All</button>
-                      <span className="text-gray-700 text-xs">|</span>
+                      <span className="text-atlas-ink-faint text-xs">|</span>
                       <button
                         onClick={() => setSelectedChannelIds([])}
-                        className="text-xs text-gray-500 hover:text-gray-400 transition"
+                        className="text-xs text-atlas-ink-muted hover:text-atlas-ink-muted transition"
                       >Clear</button>
                     </div>
                   </div>
@@ -902,7 +876,7 @@ export default function UploadPage() {
                       if (clChannels.length === 0) return null;
                       return (
                         <div key={cl.id}>
-                          <p className="text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wide">{cl.name}</p>
+                          <p className="text-xs text-atlas-ink-muted mb-1.5 font-medium uppercase tracking-wide">{cl.name}</p>
                           <div className="flex flex-wrap gap-1.5">
                             {clChannels.map((ch) => {
                               const active = selectedChannelIds.includes(ch.id);
@@ -915,7 +889,7 @@ export default function UploadPage() {
                                   className={`px-2.5 py-1 rounded-lg text-xs transition border ${
                                     active
                                       ? "bg-amber-500/15 text-amber-300 border-amber-500/40"
-                                      : "bg-gray-800 text-gray-500 border-gray-700 hover:border-gray-600"
+                                      : "bg-atlas-surface-soft text-atlas-ink-muted border-atlas-line hover:border-atlas-line"
                                   }`}
                                 >
                                   {ch.name}
@@ -934,8 +908,8 @@ export default function UploadPage() {
               )}
 
               {/* Cycle Selection */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                <label className="block text-sm font-medium text-gray-300 mb-3">
+              <div className="bg-atlas-surface border border-atlas-line rounded-xl p-6">
+                <label className="block text-sm font-medium text-atlas-ink mb-3">
                   {canUseMultiMode ? "3" : "2"}. Select Forecast Cycle
                 </label>
                 {cycles.length === 0 ? (
@@ -944,7 +918,7 @@ export default function UploadPage() {
                   </p>
                 ) : (
                   <select value={selectedCycle} onChange={(e) => setSelectedCycle(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                     <option value="">Choose a cycle...</option>
                     {cycles.map((cycle) => (
                       <option key={cycle.id} value={cycle.id}>
@@ -964,19 +938,19 @@ export default function UploadPage() {
 
             {/* Template Info + Download */}
             {readyToUpload && (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="bg-atlas-surface border border-atlas-line rounded-xl p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-medium text-gray-300 mb-1">
+                    <h3 className="text-sm font-medium text-atlas-ink mb-1">
                       {canUseMultiMode ? "4" : "3"}. Download Template & Upload
                     </h3>
-                    <p className="text-xs text-gray-500">
-                      Columns: <span className="text-white">Channel</span>, <span className="text-white">New Master SKU</span>, <span className="text-amber-400">{m1Label}</span>, <span className="text-blue-400">{m2Label}</span>, <span className="text-purple-400">{m3Label}</span>.
+                    <p className="text-xs text-atlas-ink-muted">
+                      Columns: <span className="text-atlas-ink">Channel</span>, <span className="text-atlas-ink">New Master SKU</span>, <span className="text-amber-400">{m1Label}</span>, <span className="text-blue-400">{m2Label}</span>, <span className="text-purple-400">{m3Label}</span>.
                       Fill only the rows you need — no Cartesian product. Combo SKUs are auto-converted to singles.
-                      See the <span className="text-white">Reference</span> sheet for the channel and SKU lists.
+                      See the <span className="text-atlas-ink">Reference</span> sheet for the channel and SKU lists.
                     </p>
                   </div>
-                  <button onClick={downloadTemplate} className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition whitespace-nowrap">
+                  <button onClick={downloadTemplate} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition whitespace-nowrap">
                     Download Template
                   </button>
                 </div>
@@ -985,8 +959,8 @@ export default function UploadPage() {
 
             {/* Combo Mapper — always visible */}
             {readyToUpload && (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <p className="text-xs text-gray-400 font-medium mb-3">Combo Mapper <span className="text-gray-600 font-normal">(applied automatically on every upload)</span></p>
+              <div className="bg-atlas-surface border border-atlas-line rounded-xl p-5">
+                <p className="text-xs text-atlas-ink-muted font-medium mb-3">Combo Mapper <span className="text-atlas-ink-faint font-normal">(applied automatically on every upload)</span></p>
                 {comboMapperSets.length === 0 ? (
                   <p className="text-xs text-red-400">No mappers available. Ask admin to upload one in Combo → Singles.</p>
                 ) : profile?.role === "admin" ? (
@@ -996,7 +970,7 @@ export default function UploadPage() {
                       <select
                         value={comboMapperId}
                         onChange={(e) => setComboMapperId(e.target.value)}
-                        className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="flex-1 px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                       >
                         <option value="">Choose mapper...</option>
                         {comboMapperSets.map(ms => (
@@ -1025,7 +999,7 @@ export default function UploadPage() {
                       )}
                     </div>
                     <div className="text-xs">
-                      {comboLoadingMapper && <span className="text-gray-500">Loading mapper data...</span>}
+                      {comboLoadingMapper && <span className="text-atlas-ink-muted">Loading mapper data...</span>}
                       {!comboLoadingMapper && comboMapperRows.length > 0 && (
                         <span className="text-green-400">✓ {comboMapperRows.length} SKUs loaded — ready for conversion</span>
                       )}
@@ -1033,7 +1007,7 @@ export default function UploadPage() {
                         <span className="text-red-400">Mapper has no data</span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-atlas-ink-faint">
                       To upload or update a mapper, go to{" "}
                       <a href="/combo-converter" className="text-amber-400 hover:underline">Combo → Singles</a>
                       {" "}→ Manage Mappers.
@@ -1045,11 +1019,11 @@ export default function UploadPage() {
                     {(() => {
                       const active = comboMapperSets.find(ms => ms.id === comboMapperId);
                       return active ? (
-                        <div className="flex items-center gap-3 px-3 py-2 bg-gray-800/60 border border-gray-700 rounded-lg">
-                          <span className="text-sm text-white font-medium">{active.name}</span>
-                          <span className="text-xs text-gray-500">{active.row_count} SKUs · P1–P{active.product_column_count}</span>
+                        <div className="flex items-center gap-3 px-3 py-2 bg-atlas-surface-soft/60 border border-atlas-line rounded-lg">
+                          <span className="text-sm text-atlas-ink font-medium">{active.name}</span>
+                          <span className="text-xs text-atlas-ink-muted">{active.row_count} SKUs · P1–P{active.product_column_count}</span>
                           <span className="ml-auto text-xs">
-                            {comboLoadingMapper && <span className="text-gray-500">Loading...</span>}
+                            {comboLoadingMapper && <span className="text-atlas-ink-muted">Loading...</span>}
                             {!comboLoadingMapper && comboMapperRows.length > 0 && (
                               <span className="text-green-400">✓ Ready</span>
                             )}
@@ -1068,34 +1042,34 @@ export default function UploadPage() {
             {readyToUpload && !isDeadlinePassed && (
               <div onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition ${dragActive ? "border-amber-500 bg-amber-500/5" : "border-gray-700 hover:border-gray-600 hover:bg-gray-900/50"}`}>
+                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition ${dragActive ? "border-amber-500 bg-amber-500/5" : "border-atlas-line hover:border-atlas-line hover:bg-atlas-surface/50"}`}>
                 <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileInput} />
                 <div className="text-4xl mb-3">{"\uD83D\uDCC4"}</div>
-                <p className="text-gray-300 font-medium mb-1">Drag & drop your Excel file here</p>
-                <p className="text-gray-500 text-sm">or click to browse</p>
+                <p className="text-atlas-ink font-medium mb-1">Drag & drop your Excel file here</p>
+                <p className="text-atlas-ink-muted text-sm">or click to browse</p>
               </div>
             )}
 
             {/* FG Code Change Suggestion */}
             {profile && profile.role !== "admin" && (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <p className="text-sm font-medium text-gray-300 mb-1">Suggest FG Code Change</p>
-                <p className="text-xs text-gray-500 mb-3">FG Code changed for a SKU? Let the admin know so the system stays updated.</p>
+              <div className="bg-atlas-surface border border-atlas-line rounded-xl p-5">
+                <p className="text-sm font-medium text-atlas-ink mb-1">Suggest FG Code Change</p>
+                <p className="text-xs text-atlas-ink-muted mb-3">FG Code changed for a SKU? Let the admin know so the system stays updated.</p>
                 <div className="flex gap-3 items-end flex-wrap">
                   <div className="flex-1 min-w-[160px]">
-                    <label className="text-xs text-gray-500 mb-1 block">Master SKU</label>
+                    <label className="text-xs text-atlas-ink-muted mb-1 block">Master SKU</label>
                     <input value={suggestSku} onChange={(e) => setSuggestSku(e.target.value)} placeholder="e.g. ENB_Mini_CPBG"
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                      className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
                   </div>
                   <div className="flex-1 min-w-[130px]">
-                    <label className="text-xs text-gray-500 mb-1 block">New FG Code</label>
+                    <label className="text-xs text-atlas-ink-muted mb-1 block">New FG Code</label>
                     <input value={suggestNewFg} onChange={(e) => setSuggestNewFg(e.target.value)} placeholder="e.g. 18651G"
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                      className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
                   </div>
                   <div className="flex-1 min-w-[160px]">
-                    <label className="text-xs text-gray-500 mb-1 block">Reason (optional)</label>
+                    <label className="text-xs text-atlas-ink-muted mb-1 block">Reason (optional)</label>
                     <input value={suggestNotes} onChange={(e) => setSuggestNotes(e.target.value)} placeholder="e.g. MRP change"
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                      className="w-full px-3 py-2 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
                   </div>
                   <button onClick={submitFgChangeSuggestion} disabled={suggestSubmitting || !suggestSku.trim() || !suggestNewFg.trim()}
                     className="px-4 py-2 bg-amber-500 text-black text-sm font-semibold rounded-lg hover:bg-amber-400 transition disabled:opacity-50 whitespace-nowrap">
@@ -1124,24 +1098,24 @@ export default function UploadPage() {
               <div className="mb-6 bg-amber-900/20 border border-amber-500/30 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-amber-400 font-semibold text-sm">Combo Conversion Applied</span>
-                  <span className="text-xs text-gray-500">— review the converted singles below before saving</span>
+                  <span className="text-xs text-atlas-ink-muted">— review the converted singles below before saving</span>
                 </div>
                 <div className="grid grid-cols-4 gap-4 mb-3">
-                  <div className="bg-gray-900/60 rounded-lg p-3 text-center">
-                    <p className="text-xl font-bold text-white">{conversionSummary.inputRows}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Input rows</p>
+                  <div className="bg-atlas-surface/60 rounded-lg p-3 text-center">
+                    <p className="text-xl font-bold text-atlas-ink">{conversionSummary.inputRows}</p>
+                    <p className="text-xs text-atlas-ink-muted mt-0.5">Input rows</p>
                   </div>
                   <div className="bg-green-900/30 border border-green-500/20 rounded-lg p-3 text-center">
                     <p className="text-xl font-bold text-green-400">{conversionSummary.singlesOutput}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Singles out</p>
+                    <p className="text-xs text-atlas-ink-muted mt-0.5">Singles out</p>
                   </div>
                   <div className="bg-amber-900/30 border border-amber-500/20 rounded-lg p-3 text-center">
                     <p className="text-xl font-bold text-amber-400">{conversionSummary.combosResolved}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Combos resolved</p>
+                    <p className="text-xs text-atlas-ink-muted mt-0.5">Combos resolved</p>
                   </div>
-                  <div className={`rounded-lg p-3 text-center border ${conversionSummary.warnings.length > 0 ? "bg-red-900/30 border-red-500/20" : "bg-gray-900/60 border-transparent"}`}>
-                    <p className={`text-xl font-bold ${conversionSummary.warnings.length > 0 ? "text-red-400" : "text-gray-600"}`}>{conversionSummary.warnings.length}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Warnings</p>
+                  <div className={`rounded-lg p-3 text-center border ${conversionSummary.warnings.length > 0 ? "bg-red-900/30 border-red-500/20" : "bg-atlas-surface/60 border-transparent"}`}>
+                    <p className={`text-xl font-bold ${conversionSummary.warnings.length > 0 ? "text-red-400" : "text-atlas-ink-faint"}`}>{conversionSummary.warnings.length}</p>
+                    <p className="text-xs text-atlas-ink-muted mt-0.5">Warnings</p>
                   </div>
                 </div>
                 {conversionSummary.warnings.length > 0 && (
@@ -1159,51 +1133,51 @@ export default function UploadPage() {
 
             {/* Summary */}
             <div className="grid grid-cols-3 md:grid-cols-7 gap-3 mb-6">
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
+              <div className="bg-atlas-surface border border-atlas-line rounded-xl p-3 text-center">
                 <p className="text-xl font-bold">{uploadData.length}</p>
-                <p className="text-xs text-gray-400">Rows</p>
+                <p className="text-xs text-atlas-ink-muted">Rows</p>
               </div>
-              <div className="bg-gray-900 border border-green-800 rounded-xl p-3 text-center">
+              <div className="bg-atlas-surface border border-green-800 rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-green-400">{validCount}</p>
-                <p className="text-xs text-gray-400">Valid</p>
+                <p className="text-xs text-atlas-ink-muted">Valid</p>
               </div>
-              <div className="bg-gray-900 border border-red-800 rounded-xl p-3 text-center">
+              <div className="bg-atlas-surface border border-red-800 rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-red-400">{errorCount}</p>
-                <p className="text-xs text-gray-400">Errors</p>
+                <p className="text-xs text-atlas-ink-muted">Errors</p>
               </div>
               {warnCount > 0 && (
-                <div className="bg-gray-900 border border-amber-700 rounded-xl p-3 text-center">
+                <div className="bg-atlas-surface border border-amber-700 rounded-xl p-3 text-center">
                   <p className="text-xl font-bold text-amber-400">{warnCount}</p>
-                  <p className="text-xs text-gray-400">Warnings</p>
+                  <p className="text-xs text-atlas-ink-muted">Warnings</p>
                 </div>
               )}
-              <div className="bg-gray-900 border border-amber-800/50 rounded-xl p-3 text-center">
+              <div className="bg-atlas-surface border border-amber-800/50 rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-amber-400">{totalM1.toLocaleString()}</p>
-                <p className="text-xs text-gray-400">{m1Label}</p>
+                <p className="text-xs text-atlas-ink-muted">{m1Label}</p>
               </div>
-              <div className="bg-gray-900 border border-blue-800/50 rounded-xl p-3 text-center">
+              <div className="bg-atlas-surface border border-blue-800/50 rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-blue-400">{totalM2.toLocaleString()}</p>
-                <p className="text-xs text-gray-400">{m2Label}</p>
+                <p className="text-xs text-atlas-ink-muted">{m2Label}</p>
               </div>
-              <div className="bg-gray-900 border border-purple-800/50 rounded-xl p-3 text-center">
+              <div className="bg-atlas-surface border border-purple-800/50 rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-purple-400">{totalM3.toLocaleString()}</p>
-                <p className="text-xs text-gray-400">{m3Label}</p>
+                <p className="text-xs text-atlas-ink-muted">{m3Label}</p>
               </div>
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
+              <div className="bg-atlas-surface border border-atlas-line rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-cyan-400">{uniqueChannels.length}</p>
-                <p className="text-xs text-gray-400">Channels</p>
+                <p className="text-xs text-atlas-ink-muted">Channels</p>
               </div>
             </div>
 
             {/* Info bar */}
-            <div className="flex items-center gap-4 mb-4 text-sm text-gray-400 flex-wrap">
-              <span>Cycle: <span className="text-white font-medium">{m1Label} V{selectedCycleData?.version}</span></span>
+            <div className="flex items-center gap-4 mb-4 text-sm text-atlas-ink-muted flex-wrap">
+              <span>Cycle: <span className="text-atlas-ink font-medium">{m1Label} V{selectedCycleData?.version}</span></span>
               <span>&#8226;</span>
               <span>Rolling: <span className="text-amber-400">{m1Label}</span> + <span className="text-blue-400">{m2Label}</span> + <span className="text-purple-400">{m3Label}</span></span>
               {uniqueChannels.length <= 6 && (
                 <>
                   <span>&#8226;</span>
-                  <span>Channels: <span className="text-white font-medium">{uniqueChannels.join(", ")}</span></span>
+                  <span>Channels: <span className="text-atlas-ink font-medium">{uniqueChannels.join(", ")}</span></span>
                 </>
               )}
             </div>
@@ -1219,28 +1193,28 @@ export default function UploadPage() {
             )}
 
             {/* Table */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
+            <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden mb-6">
               <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-gray-900 z-10">
-                    <tr className="border-b border-gray-800">
-                      <th className="text-left py-3 px-3 text-gray-400 font-medium w-10">Row</th>
-                      <th className="text-left py-3 px-3 text-gray-400 font-medium">SKU</th>
-                      <th className="text-left py-3 px-3 text-gray-400 font-medium">FG Code</th>
-                      <th className="text-left py-3 px-3 text-gray-400 font-medium">Channel</th>
+                  <thead className="sticky top-0 bg-atlas-surface z-10">
+                    <tr className="border-b border-atlas-line">
+                      <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium w-10">Row</th>
+                      <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">SKU</th>
+                      <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">FG Code</th>
+                      <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">Channel</th>
                       <th className="text-right py-3 px-3 text-amber-400 font-medium">{m1Label}</th>
                       <th className="text-right py-3 px-3 text-blue-400 font-medium">{m2Label}</th>
                       <th className="text-right py-3 px-3 text-purple-400 font-medium">{m3Label}</th>
-                      <th className="text-left py-3 px-3 text-gray-400 font-medium">Status</th>
+                      <th className="text-left py-3 px-3 text-atlas-ink-muted font-medium">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {uploadData.map((row, i) => (
-                      <tr key={i} className={`border-b border-gray-800/50 ${!row.isValid ? "bg-red-900/10" : row.warnings.length > 0 ? "bg-amber-900/10" : ""}`}>
-                        <td className="py-2 px-3 text-gray-500 text-xs">{row.originalRow}</td>
+                      <tr key={i} className={`border-b border-atlas-line/50 ${!row.isValid ? "bg-red-900/10" : row.warnings.length > 0 ? "bg-amber-900/10" : ""}`}>
+                        <td className="py-2 px-3 text-atlas-ink-muted text-xs">{row.originalRow}</td>
                         <td className="py-2 px-3 font-mono text-xs">{row.new_master_sku}</td>
-                        <td className="py-2 px-3 font-mono text-xs text-gray-400">{row.fg_code || "-"}</td>
-                        <td className="py-2 px-3 text-xs text-gray-300">{row.channel_name}</td>
+                        <td className="py-2 px-3 font-mono text-xs text-atlas-ink-muted">{row.fg_code || "-"}</td>
+                        <td className="py-2 px-3 text-xs text-atlas-ink">{row.channel_name}</td>
                         <td className="py-2 px-3 text-right font-mono text-xs">{row.isValid ? (row.qty_m1 > 0 ? row.qty_m1.toLocaleString() : "-") : "-"}</td>
                         <td className="py-2 px-3 text-right font-mono text-xs">{row.isValid ? (row.qty_m2 > 0 ? row.qty_m2.toLocaleString() : "-") : "-"}</td>
                         <td className="py-2 px-3 text-right font-mono text-xs">{row.isValid ? (row.qty_m3 > 0 ? row.qty_m3.toLocaleString() : "-") : "-"}</td>
@@ -1290,13 +1264,13 @@ export default function UploadPage() {
             {/* Actions */}
             <div className="flex justify-between items-center">
               <button onClick={() => { setShowPreview(false); setUploadData([]); setError(null); setConversionSummary(null); }}
-                className="px-6 py-2.5 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition">
+                className="px-6 py-2.5 bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">
                 {"\u2190"} Back
               </button>
               <div className="flex items-center gap-4">
                 {errorCount > 0 && (
                   <>
-                    <p className="text-xs text-gray-500">{errorCount} error rows skipped.</p>
+                    <p className="text-xs text-atlas-ink-muted">{errorCount} error rows skipped.</p>
                     <button
                       onClick={() => {
                         const errorRows = uploadData.filter(r => !r.isValid);
@@ -1327,6 +1301,6 @@ export default function UploadPage() {
           </div>
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }

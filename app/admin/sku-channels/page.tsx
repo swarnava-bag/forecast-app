@@ -199,7 +199,7 @@ export default function SKUChannelMappingPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><p className="text-gray-400">Loading mappings...</p></div>;
+    return <div className="flex items-center justify-center h-64"><p className="text-atlas-ink-muted">Loading mappings...</p></div>;
   }
 
   return (
@@ -207,13 +207,13 @@ export default function SKUChannelMappingPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold">SKU-Channel Mapping</h2>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-atlas-ink-muted mt-1">
             Define which SKUs are available for each channel. {mappings.length} active mappings.
           </p>
         </div>
         <div className="flex gap-3">
           <button onClick={enableAllForAllChannels} disabled={saving}
-            className="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition">
+            className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft disabled:opacity-50 transition">
             Enable All SKUs × All Channels
           </button>
           {pendingChanges.size > 0 && (
@@ -231,34 +231,34 @@ export default function SKUChannelMappingPage() {
       {pendingChanges.size > 0 && (
         <div className="mb-4 p-3 bg-amber-900/30 border border-amber-500/50 rounded-lg flex items-center justify-between">
           <p className="text-amber-300 text-sm">{pendingChanges.size} unsaved changes. Click &quot;Save&quot; to apply.</p>
-          <button onClick={() => setPendingChanges(new Map())} className="text-xs text-gray-400 hover:text-white transition">Discard All</button>
+          <button onClick={() => setPendingChanges(new Map())} className="text-xs text-atlas-ink-muted hover:text-atlas-ink transition">Discard All</button>
         </div>
       )}
 
       <div className="flex gap-4 mb-4">
         <input type="text" placeholder="Search SKU name or code..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+          className="flex-1 px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-amber-500" />
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}
-          className="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+          className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
           <option value="">All Categories</option>
           {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
         </select>
         <select value={clusterFilter} onChange={(e) => setClusterFilter(e.target.value)}
-          className="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+          className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
           <option value="">All Clusters</option>
           {clusters.map((cl) => (<option key={cl.id} value={cl.id}>{cl.name}</option>))}
         </select>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="text-xs">
-            <thead className="sticky top-0 bg-gray-900 z-20">
-              <tr className="border-b border-gray-800">
-                <th className="text-left py-2 px-3 text-gray-400 font-medium sticky left-0 bg-gray-900 z-30 min-w-[200px]">SKU</th>
-                <th className="text-center py-2 px-1 text-gray-400 font-medium min-w-[30px]">All</th>
+            <thead className="sticky top-0 bg-atlas-surface z-20">
+              <tr className="border-b border-atlas-line">
+                <th className="text-left py-2 px-3 text-atlas-ink-muted font-medium sticky left-0 bg-atlas-surface z-30 min-w-[200px]">SKU</th>
+                <th className="text-center py-2 px-1 text-atlas-ink-muted font-medium min-w-[30px]">All</th>
                 {filteredChannels.map((ch) => (
-                  <th key={ch.id} className="text-center py-2 px-1 text-gray-400 font-medium min-w-[30px]">
+                  <th key={ch.id} className="text-center py-2 px-1 text-atlas-ink-muted font-medium min-w-[30px]">
                     <button onClick={() => toggleAllSkusForChannel(ch.id)} className="hover:text-amber-400 transition cursor-pointer" title={`Toggle all SKUs for ${ch.name}`}>
                       <div className="text-[10px] whitespace-nowrap" style={{ writingMode: "vertical-lr", transform: "rotate(180deg)", height: "80px" }}>{ch.name}</div>
                     </button>
@@ -270,19 +270,19 @@ export default function SKUChannelMappingPage() {
               {filteredSkus.map((sku) => {
                 const mappedCount = filteredChannels.filter((ch) => isMapped(sku.id, ch.id)).length;
                 return (
-                  <tr key={sku.id} className="border-b border-gray-800/30 hover:bg-gray-800/20">
-                    <td className="py-1.5 px-3 sticky left-0 bg-gray-900 z-10 border-r border-gray-800">
+                  <tr key={sku.id} className="border-b border-atlas-line/30 hover:bg-atlas-surface-soft/20">
+                    <td className="py-1.5 px-3 sticky left-0 bg-atlas-surface z-10 border-r border-atlas-line">
                       <div className="flex items-center gap-2">
                         <div>
-                          <p className="font-mono text-[10px] text-gray-500">{sku.new_master_sku}</p>
-                          <p className="text-xs text-gray-300 truncate max-w-[180px]" title={sku.product_name}>{sku.product_name}</p>
+                          <p className="font-mono text-[10px] text-atlas-ink-faint">{sku.new_master_sku}</p>
+                          <p className="text-xs text-atlas-ink truncate max-w-[180px]" title={sku.product_name}>{sku.product_name}</p>
                         </div>
-                        <span className="text-[10px] text-gray-600 whitespace-nowrap">{mappedCount}/{filteredChannels.length}</span>
+                        <span className="text-[10px] text-atlas-ink-muted whitespace-nowrap">{mappedCount}/{filteredChannels.length}</span>
                       </div>
                     </td>
                     <td className="text-center py-1.5 px-1">
                       <button onClick={() => toggleAllChannelsForSku(sku.id)}
-                        className="w-5 h-5 rounded border border-gray-600 flex items-center justify-center hover:border-amber-500 transition mx-auto text-[10px]"
+                        className="w-5 h-5 rounded border border-atlas-line flex items-center justify-center hover:border-amber-500 transition mx-auto text-[10px]"
                         title="Toggle all channels">
                         {mappedCount === filteredChannels.length ? "\u2713" : mappedCount > 0 ? "\u2014" : ""}
                       </button>
@@ -297,7 +297,7 @@ export default function SKUChannelMappingPage() {
                             className={`w-5 h-5 rounded transition mx-auto flex items-center justify-center text-[10px] ${
                               mapped
                                 ? hasChange ? "bg-green-500 border border-green-400 text-black" : "bg-amber-500/80 border border-amber-500 text-black"
-                                : hasChange ? "bg-red-500/30 border border-red-500" : "border border-gray-700 hover:border-gray-500"
+                                : hasChange ? "bg-red-500/30 border border-red-500" : "border border-atlas-line hover:border-atlas-ink-muted"
                             }`}>
                             {mapped ? "\u2713" : ""}
                           </button>
@@ -312,11 +312,11 @@ export default function SKUChannelMappingPage() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-6 text-xs text-gray-500">
+      <div className="mt-4 flex items-center gap-6 text-xs text-atlas-ink-faint">
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500/80 border border-amber-500 inline-block"></span>Active mapping</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-500 border border-green-400 inline-block"></span>Newly added (unsaved)</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500/30 border border-red-500 inline-block"></span>Being removed (unsaved)</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-gray-700 inline-block"></span>Not mapped</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-atlas-line inline-block"></span>Not mapped</span>
       </div>
     </div>
   );
