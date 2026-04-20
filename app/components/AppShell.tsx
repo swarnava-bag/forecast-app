@@ -13,13 +13,17 @@ type Profile = {
 };
 
 /* ── Nav config ────────────────────────────────────────────────────────── */
-const MAIN_NAV = [
+type NavItem = { href: string; label: string; icon: () => React.JSX.Element; comingSoon?: boolean };
+
+const MAIN_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon },
   { href: "/upload", label: "Upload", icon: UploadIcon },
   { href: "/channels", label: "Forecast View", icon: ChannelsIcon },
   { href: "/combo-converter", label: "Combo \u2192 Singles", icon: ComboIcon },
   { href: "/master-data", label: "Master Data", icon: MasterDataIcon },
   { href: "/analytics", label: "Analytics", icon: AnalyticsIcon },
+  { href: "#", label: "Base Data", icon: BaseDataIcon, comingSoon: true },
+  { href: "#", label: "Forecast Check", icon: ForecastCheckIcon, comingSoon: true },
 ];
 
 const ADMIN_NAV = [
@@ -29,6 +33,7 @@ const ADMIN_NAV = [
   { href: "/admin/channels", label: "Channels & Clusters", icon: AdminChannelsIcon },
   { href: "/admin/cycles", label: "Forecast Cycles", icon: AdminCyclesIcon },
   { href: "/admin/fg-codes", label: "Combo Mapper", icon: AdminComboIcon },
+  { href: "/admin/bulk-upload", label: "Bulk Upload", icon: AdminBulkUploadIcon },
   { href: "/admin/audit", label: "Audit Log", icon: AdminAuditIcon },
   { href: "/admin/workflow", label: "Workflow Guide", icon: AdminWorkflowIcon },
 ];
@@ -162,6 +167,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="atlas-sidebar-nav">
           <div className="atlas-sidebar-section-label">Navigation</div>
           {MAIN_NAV.map((item) => {
+            if (item.comingSoon) {
+              return (
+                <div
+                  key={item.label}
+                  className="atlas-sidebar-link opacity-50 cursor-default"
+                  title="Coming Soon"
+                >
+                  <item.icon />
+                  <span>{item.label}</span>
+                  <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400">Soon</span>
+                </div>
+              );
+            }
             const active =
               pathname === item.href ||
               (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -353,6 +371,12 @@ function MasterDataIcon() {
     </svg>
   );
 }
+function BaseDataIcon() {
+  return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>);
+}
+function ForecastCheckIcon() {
+  return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>);
+}
 function AnalyticsIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -387,6 +411,9 @@ function AdminCyclesIcon() {
 }
 function AdminComboIcon() {
   return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>);
+}
+function AdminBulkUploadIcon() {
+  return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>);
 }
 function AdminAuditIcon() {
   return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>);
