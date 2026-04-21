@@ -149,7 +149,7 @@ export default function AnalyticsPage() {
   const [comparisonMode, setComparisonMode] = useState<"cross_month" | "version">("cross_month");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState<"comparison" | "trend">("comparison");
+  const [activeTab, setActiveTab] = useState<"comparison" | "trend" | "usage">("comparison");
 
   // Cross-month state
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -168,10 +168,20 @@ export default function AnalyticsPage() {
   const [trendSku, setTrendSku] = useState("");
   const [trendEntity, setTrendEntity] = useState("");
 
+  // Usage stats (admin only)
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [usageData, setUsageData] = useState<{ user_email: string; user_name: string; conversion_type: string; sku_count: number; created_at: string }[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
+
   // Auth check
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) router.push("/");
+      else {
+        supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data }) => {
+          if (data?.role === "admin") setIsAdmin(true);
+        });
+      }
     });
   }, []);
 
@@ -188,6 +198,14 @@ export default function AnalyticsPage() {
         setLoading(false);
       });
   }, []);
+
+  // Load usage data when Usage tab is selected
+  useEffect(() => {
+    if (activeTab !== "usage" || !isAdmin) return;
+    setUsageLoading(true);
+    supabase.from("combo_usage_log").select("*").order("created_at", { ascending: false }).limit(500)
+      .then(({ data }) => { setUsageData(data || []); setUsageLoading(false); });
+  }, [activeTab, isAdmin]);
 
   // Load data when month/view/filters/mode change
   useEffect(() => {
@@ -399,10 +417,20 @@ export default function AnalyticsPage() {
           />
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-1" style={{ borderBottom: "1px solid var(--atlas-line)" }}>
+          {(["comparison", "trend", ...(isAdmin ? ["usage"] : [])] as const).map((tab) => (
+            <button key={tab} onClick={() => setActiveTab(tab as typeof activeTab)} className="font-mono uppercase px-4 py-2"
+              style={{ fontSize: "10.5px", letterSpacing: "0.08em", border: "none", borderBottom: activeTab === tab ? "2px solid var(--atlas-accent)" : "2px solid transparent", background: "transparent", color: activeTab === tab ? "var(--atlas-accent)" : "var(--atlas-ink-muted)", cursor: "pointer" }}>
+              {tab}
+            </button>
+          ))}
+        </div>
+
         {/* ══════════════════════════════════════════════════════════════ */}
         {/* CROSS-MONTH FIDELITY MODE                                    */}
         {/* ══════════════════════════════════════════════════════════════ */}
-        {comparisonMode === "cross_month" && data && (
+        {comparisonMode === "cross_month" && data && activeTab !== "usage" && (
           <>
             {/* Summary Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
@@ -420,16 +448,6 @@ export default function AnalyticsPage() {
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--atlas-ink-muted)", marginTop: 2 }}>{card.sub}</div>
                 </div>
-              ))}
-            </div>
-
-            {/* Tabs */}
-            <div className="flex gap-1" style={{ borderBottom: "1px solid var(--atlas-line)" }}>
-              {(["comparison", "trend"] as const).map((tab) => (
-                <button key={tab} onClick={() => setActiveTab(tab)} className="font-mono uppercase px-4 py-2"
-                  style={{ fontSize: "10.5px", letterSpacing: "0.08em", border: "none", borderBottom: activeTab === tab ? "2px solid var(--atlas-accent)" : "2px solid transparent", background: "transparent", color: activeTab === tab ? "var(--atlas-accent)" : "var(--atlas-ink-muted)", cursor: "pointer" }}>
-                  {tab}
-                </button>
               ))}
             </div>
 
@@ -518,7 +536,7 @@ export default function AnalyticsPage() {
         {/* ══════════════════════════════════════════════════════════════ */}
         {/* VERSION COMPARISON MODE                                       */}
         {/* ══════════════════════════════════════════════════════════════ */}
-        {comparisonMode === "version" && (
+        {comparisonMode === "version" && activeTab !== "usage" && (
           <>
             {!hasMultipleVersions && !loading && (
               <div className="p-6 rounded-xl text-center" style={{ background: "var(--atlas-surface)", border: "1px solid var(--atlas-line)" }}>
@@ -631,6 +649,11 @@ export default function AnalyticsPage() {
             )}
           </>
         )}
+
+        {/* Usage Tab — Admin Only */}
+        {activeTab === "usage" && isAdmin && (
+          <UsageStatsPanel data={usageData} loading={usageLoading} />
+        )}
       </div>
     </AppShell>
   );
@@ -724,3 +747,118 @@ const tdStyle: React.CSSProperties = {
   fontFamily: "var(--font-mono)",
   fontSize: "12px",
 };
+
+// ── Usage Stats Panel (Admin Only) ────────────────────────────────────────────
+function UsageStatsPanel({ data, loading }: { data: { user_email: string; user_name: string; conversion_type: string; sku_count: number; created_at: string }[]; loading: boolean }) {
+  const dailyStats = useMemo(() => {
+    const map = new Map<string, number>();
+    data.forEach((r) => {
+      const day = r.created_at.slice(0, 10);
+      map.set(day, (map.get(day) || 0) + 1);
+    });
+    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 30);
+  }, [data]);
+
+  const userStats = useMemo(() => {
+    const map = new Map<string, { name: string; count: number; lastUsed: string }>();
+    data.forEach((r) => {
+      const key = r.user_email;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, { name: r.user_name || r.user_email, count: 1, lastUsed: r.created_at });
+      } else {
+        existing.count++;
+        if (r.created_at > existing.lastUsed) existing.lastUsed = r.created_at;
+      }
+    });
+    return [...map.values()].sort((a, b) => b.count - a.count);
+  }, [data]);
+
+  const userDayStats = useMemo(() => {
+    const map = new Map<string, number>();
+    data.forEach((r) => {
+      const key = `${r.user_name || r.user_email}||${r.created_at.slice(0, 10)}`;
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return [...map.entries()]
+      .map(([k, count]) => { const [name, day] = k.split("||"); return { name, day, count }; })
+      .sort((a, b) => b.day.localeCompare(a.day) || b.count - a.count)
+      .slice(0, 50);
+  }, [data]);
+
+  if (loading) return <div className="py-12 text-center font-mono text-sm" style={{ color: "var(--atlas-ink-muted)" }}>Loading usage data...</div>;
+  if (data.length === 0) return <div className="py-12 text-center font-mono text-sm" style={{ color: "var(--atlas-ink-muted)" }}>No usage data yet. Logs appear after users run conversions.</div>;
+
+  return (
+    <div className="space-y-6">
+      {/* Daily summary */}
+      <div className="p-4 rounded-xl" style={{ background: "var(--atlas-surface)", border: "1px solid var(--atlas-line)" }}>
+        <div className="font-mono uppercase mb-3" style={{ fontSize: "10px", letterSpacing: "0.1em", color: "var(--atlas-ink-muted)" }}>
+          Daily Conversions (Last 30 Days)
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+          {dailyStats.map(([day, count]) => (
+            <div key={day} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: "var(--atlas-surface-soft)" }}>
+              <span className="font-mono" style={{ fontSize: "11px", color: "var(--atlas-ink-soft)" }}>{day.slice(5)}</span>
+              <span className="font-mono font-semibold" style={{ fontSize: "13px", color: "var(--atlas-accent)" }}>{count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* User summary */}
+      <div className="p-4 rounded-xl" style={{ background: "var(--atlas-surface)", border: "1px solid var(--atlas-line)" }}>
+        <div className="font-mono uppercase mb-3" style={{ fontSize: "10px", letterSpacing: "0.1em", color: "var(--atlas-ink-muted)" }}>
+          By User (All Time)
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full" style={{ borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--atlas-line)" }}>
+                <th style={{ ...thStyle, textAlign: "left" }}>User</th>
+                <th style={thStyle}>Conversions</th>
+                <th style={thStyle}>Last Used</th>
+              </tr>
+            </thead>
+            <tbody>
+              {userStats.map((u) => (
+                <tr key={u.name} style={{ borderBottom: "1px solid var(--atlas-line-soft, var(--atlas-line))" }}>
+                  <td style={{ ...tdStyle, textAlign: "left" }}>{u.name}</td>
+                  <td style={{ ...tdStyle, color: "var(--atlas-accent)", fontWeight: 600 }}>{u.count}</td>
+                  <td style={tdStyle}>{new Date(u.lastUsed).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* User x Day */}
+      <div className="p-4 rounded-xl" style={{ background: "var(--atlas-surface)", border: "1px solid var(--atlas-line)" }}>
+        <div className="font-mono uppercase mb-3" style={{ fontSize: "10px", letterSpacing: "0.1em", color: "var(--atlas-ink-muted)" }}>
+          User x Day (Recent 50)
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full" style={{ borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--atlas-line)" }}>
+                <th style={{ ...thStyle, textAlign: "left" }}>Date</th>
+                <th style={{ ...thStyle, textAlign: "left" }}>User</th>
+                <th style={thStyle}>Conversions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {userDayStats.map((r, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid var(--atlas-line-soft, var(--atlas-line))" }}>
+                  <td style={{ ...tdStyle, textAlign: "left" }}>{r.day}</td>
+                  <td style={{ ...tdStyle, textAlign: "left" }}>{r.name}</td>
+                  <td style={{ ...tdStyle, color: "var(--atlas-accent)", fontWeight: 600 }}>{r.count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
