@@ -105,7 +105,20 @@ export default function AtlasLanding() {
   const [resetLoading, setResetLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const router = useRouter();
+
+  // Check if already logged in → redirect to dashboard
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        router.replace("/dashboard");
+      } else {
+        setCheckingAuth(false);
+      }
+    });
+  }, [router]);
 
   // Load remembered email + theme preference on mount
   useEffect(() => {
@@ -165,6 +178,14 @@ export default function AtlasLanding() {
       setResetSent(true);
     }
     setResetLoading(false);
+  }
+
+  if (checkingAuth) {
+    return (
+      <main className="min-h-screen grid place-items-center" style={{ background: "var(--atlas-bg)" }}>
+        <div className="font-mono text-sm" style={{ color: "var(--atlas-ink-muted)" }}>Loading...</div>
+      </main>
+    );
   }
 
   return (
@@ -529,10 +550,11 @@ export default function AtlasLanding() {
                       </span>
                     </p>
 
-                    <form onSubmit={handleLogin}>
+                    <form onSubmit={handleLogin} autoComplete="on">
                       {/* Email */}
                       <div className="mb-5">
                         <label
+                          htmlFor="email"
                           className="font-mono uppercase block mb-2"
                           style={{
                             fontSize: "10.5px",
@@ -543,7 +565,10 @@ export default function AtlasLanding() {
                           Email address
                         </label>
                         <input
+                          id="email"
+                          name="email"
                           type="email"
+                          autoComplete="email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           required
@@ -555,6 +580,7 @@ export default function AtlasLanding() {
                       {/* Password */}
                       <div className="mb-4">
                         <label
+                          htmlFor="password"
                           className="font-mono uppercase block mb-2"
                           style={{
                             fontSize: "10.5px",
@@ -566,7 +592,10 @@ export default function AtlasLanding() {
                         </label>
                         <div className="relative">
                           <input
+                            id="password"
+                            name="password"
                             type={showPassword ? "text" : "password"}
+                            autoComplete="current-password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required

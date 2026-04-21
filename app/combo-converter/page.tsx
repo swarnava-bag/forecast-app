@@ -792,6 +792,21 @@ export default function ComboConverterPage() {
   const mapperFileRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
+  // Log usage for analytics
+  async function logUsage(conversionType: "qty" | "nto" | "multi", skuCount: number) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from("combo_usage_log").insert({
+        user_id: user.id,
+        user_email: user.email || "",
+        user_name: profile?.full_name || profile?.email || user.email || "",
+        conversion_type: conversionType,
+        sku_count: skuCount,
+      });
+    } catch { /* silent — don't block UX for logging */ }
+  }
+
   useEffect(() => { init(); }, []);
 
   async function init() {
@@ -1263,6 +1278,7 @@ export default function ComboConverterPage() {
         setAllMapperRows(mapperRows);
         const convResult = runConversion(comboRows, mapperRows, qtyColumns, productCount);
         setResult(convResult);
+        logUsage("qty", convResult.singles.length);
         setCachedComboRows(comboRows);
         setCachedQtyColumns(qtyColumns);
         // Init edits for unmapped rows
@@ -1308,6 +1324,7 @@ export default function ComboConverterPage() {
         setAllMapperRows(mapperRows);
         const res = runNtoConversion(comboRows, mapperRows, qtyColumns, productCount, skuLookup);
         setNtoResult(res);
+        logUsage("nto", res.singles.length);
       } catch (err: any) { setError(`Processing failed: ${err.message}`); }
       setProcessing(false);
     };
@@ -1365,6 +1382,7 @@ export default function ComboConverterPage() {
         setAllMapperRows(mapperRows);
         const res = runMultiConversion(rows, mapperRows, months, skuLookup);
         setMultiResult(res);
+        logUsage("multi", res.singles.length);
       } catch (err: any) { setError(`${err.message}`); }
       setProcessing(false);
     };

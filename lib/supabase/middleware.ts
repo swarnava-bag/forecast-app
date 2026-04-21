@@ -15,14 +15,20 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({
             request,
           });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              // Ensure cookies persist across browser restarts (7 days)
+              maxAge: options?.maxAge ?? 60 * 60 * 24 * 7,
+              sameSite: options?.sameSite ?? "lax",
+              path: options?.path ?? "/",
+            })
           );
         },
       },
@@ -49,10 +55,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect to dashboard if already logged in and trying to access login/signup
+  // Redirect to dashboard if already logged in and trying to access login/signup/home
   if (
     user &&
-    (request.nextUrl.pathname === "/login" ||
+    (request.nextUrl.pathname === "/" ||
+      request.nextUrl.pathname === "/login" ||
       request.nextUrl.pathname === "/signup")
   ) {
     const url = request.nextUrl.clone();
