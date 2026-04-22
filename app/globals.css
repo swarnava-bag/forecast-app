@@ -877,3 +877,1137 @@
     padding: 28px 32px;
   }
 }
+
+/* ==========================================================================
+   Landing Page — Cinematic Scroll Experience
+   ========================================================================== */
+
+/* ── Scroll Progress Bar ─────────────────────────────────────────────── */
+.scroll-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--atlas-accent);
+  transform-origin: left center;
+  transform: scaleX(0);
+  z-index: 100;
+}
+
+/* ── Grain / Noise Overlay ───────────────────────────────────────────── */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.03;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px;
+}
+[data-theme="dark"] .grain-overlay {
+  opacity: 0.05;
+  mix-blend-mode: soft-light;
+}
+
+/* ── Gradient Orbs ───────────────────────────────────────────────────── */
+.gradient-orb {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform;
+  filter: blur(100px);
+}
+.gradient-orb-1 {
+  width: 600px;
+  height: 600px;
+  top: -15%;
+  left: -8%;
+  background: radial-gradient(circle, rgba(30, 64, 175, 0.07) 0%, transparent 70%);
+}
+[data-theme="dark"] .gradient-orb-1 {
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.10) 0%, transparent 70%);
+}
+.gradient-orb-2 {
+  width: 450px;
+  height: 450px;
+  top: 55%;
+  right: -8%;
+  background: radial-gradient(circle, rgba(30, 64, 175, 0.05) 0%, transparent 70%);
+}
+[data-theme="dark"] .gradient-orb-2 {
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.07) 0%, transparent 70%);
+}
+@media (max-width: 1023px) {
+  .gradient-orb { display: none; }
+}
+
+/* ── Atlas Loader ────────────────────────────────────────────────────── */
+.atlas-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.atlas-loader-bar {
+  width: 120px;
+  height: 2px;
+  background: var(--atlas-line);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.atlas-loader-fill {
+  height: 100%;
+  width: 40%;
+  background: var(--atlas-accent);
+  border-radius: 1px;
+  animation: atlas-loader-slide 1.2s ease-in-out infinite;
+}
+@keyframes atlas-loader-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+/* ── Fixed Header ────────────────────────────────────────────────────── */
+.atlas-landing-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  background: color-mix(in srgb, var(--atlas-bg) 80%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--atlas-line) 25%, transparent);
+}
+@media (min-width: 1024px) {
+  .atlas-landing-header {
+    padding: 18px clamp(32px, 4vw, 72px);
+  }
+}
+
+.atlas-landing-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.atlas-landing-brand-yb {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--atlas-ink-muted);
+}
+.atlas-landing-brand-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--atlas-line);
+}
+.atlas-landing-brand-atlas {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--atlas-ink);
+}
+
+.atlas-landing-theme-toggle {
+  display: flex;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--atlas-line);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.atlas-landing-theme-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  cursor: pointer;
+  border: none;
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  background: transparent;
+  color: var(--atlas-ink-muted);
+}
+.atlas-landing-theme-btn + .atlas-landing-theme-btn {
+  border-left: 1px solid var(--atlas-line);
+}
+.atlas-landing-theme-btn.active {
+  background: var(--atlas-accent);
+  color: #fff;
+}
+
+/* ── Scroll Layout — Two-Column Grid ─────────────────────────────────── */
+.atlas-scroll-layout {
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 3;
+}
+.atlas-scroll-content {
+  order: 1;
+}
+.atlas-login-column {
+  order: -1;
+  padding: 96px 0 32px;
+  display: flex;
+  justify-content: center;
+}
+
+@media (min-width: 1024px) {
+  .atlas-scroll-layout {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: clamp(48px, 5vw, 96px);
+    padding: 0 clamp(32px, 4vw, 72px);
+  }
+  .atlas-scroll-content {
+    order: 0;
+  }
+  .atlas-login-column {
+    order: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  .atlas-login-pin-wrapper {
+    position: sticky;
+    top: 100px;
+    width: 100%;
+    max-width: 420px;
+  }
+}
+
+/* ── Sections Base ───────────────────────────────────────────────────── */
+.atlas-section {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  padding: 120px 0 80px;
+}
+
+.atlas-section-footer {
+  padding: 48px 0 40px;
+}
+
+/* Footer meta */
+.atlas-footer-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--atlas-ink-faint);
+  will-change: transform, opacity;
+}
+.atlas-footer-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--atlas-line);
+}
+
+/* ── Section Numbers (decorative) ────────────────────────────────────── */
+.section-number {
+  position: absolute;
+  top: 100px;
+  right: 0;
+  font-family: var(--font-display);
+  font-size: clamp(80px, 10vw, 160px);
+  line-height: 1;
+  color: var(--atlas-ink);
+  opacity: 0.025;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform, opacity;
+}
+
+/* ==========================================================================
+   LOGIN CARD — Premium Glass Card
+   ========================================================================== */
+
+.atlas-login-card-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+}
+
+.atlas-login-card {
+  position: relative;
+  background: var(--atlas-surface);
+  border: 1px solid var(--atlas-line);
+  border-radius: 16px;
+  padding: 36px 32px 28px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.5) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 8px 32px -8px rgba(11, 27, 43, 0.12),
+    0 32px 64px -16px rgba(11, 27, 43, 0.08);
+}
+
+[data-theme="dark"] .atlas-login-card {
+  background: color-mix(in srgb, var(--atlas-surface) 90%, transparent);
+  border-color: color-mix(in srgb, var(--atlas-line) 80%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    0 8px 32px -8px rgba(0, 0, 0, 0.35),
+    0 32px 64px -16px rgba(0, 0, 0, 0.25);
+}
+
+/* Card stack — rotated accent card behind */
+.atlas-card-behind {
+  position: absolute;
+  inset: -6px;
+  background: var(--atlas-accent);
+  border-radius: 20px;
+  transform: rotate(2.5deg);
+  opacity: 0.12;
+  z-index: -1;
+  transition: opacity 400ms ease, transform 400ms ease;
+}
+.atlas-login-card-wrapper:hover .atlas-card-behind {
+  opacity: 0.18;
+  transform: rotate(3deg);
+}
+[data-theme="dark"] .atlas-card-behind {
+  opacity: 0.15;
+}
+[data-theme="dark"] .atlas-login-card-wrapper:hover .atlas-card-behind {
+  opacity: 0.22;
+}
+
+/* Subtle accent glow behind card */
+.atlas-login-card-wrapper::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 17px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--atlas-accent) 15%, transparent),
+    transparent 50%,
+    color-mix(in srgb, var(--atlas-accent) 8%, transparent)
+  );
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
+.atlas-login-card-wrapper:hover::before {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   HERO SECTION
+   ========================================================================== */
+
+.hero-section {
+  overflow: hidden;
+}
+
+/* Giant background wordmark — sits BEHIND all content */
+.hero-bg-wordmark {
+  position: absolute;
+  top: 50%;
+  left: -4%;
+  transform: translateY(-55%);
+  font-family: var(--font-display);
+  font-size: clamp(100px, 16vw, 260px);
+  line-height: 0.85;
+  letter-spacing: -0.04em;
+  color: var(--atlas-ink);
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  will-change: transform, opacity;
+  z-index: -1;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 3;
+  max-width: 560px;
+}
+
+/* Eyebrow with animated line */
+.hero-eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 32px;
+}
+.hero-eyebrow-line {
+  display: none;
+  width: 48px;
+  height: 1px;
+  background: var(--atlas-accent);
+  will-change: transform;
+}
+@media (min-width: 1024px) {
+  .hero-eyebrow-line { display: block; }
+}
+
+/* Headline */
+.hero-headline {
+  font-family: var(--font-display);
+  font-size: clamp(38px, 4.8vw, 68px);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  color: var(--atlas-ink);
+  margin: 0 0 28px;
+  font-weight: 400;
+}
+.hero-headline-line {
+  display: block;
+}
+.hero-headline-accent {
+  color: var(--atlas-accent);
+}
+
+/* Split text */
+.split-word-wrapper {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  margin-right: 0.2em;
+}
+.split-word {
+  display: inline-block;
+  will-change: transform;
+}
+
+/* Section title split styling */
+.section-title-line {
+  display: inline;
+}
+.section-title-accent .split-word {
+  color: var(--atlas-accent);
+  font-style: italic;
+}
+
+/* Lede */
+.hero-lede {
+  font-size: clamp(14px, 1.1vw, 16.5px);
+  line-height: 1.75;
+  color: var(--atlas-ink-soft);
+  max-width: 440px;
+  margin: 0 0 32px;
+  will-change: transform, opacity;
+}
+
+/* Horizontal divider */
+.hero-divider {
+  width: 100%;
+  max-width: 280px;
+  height: 1px;
+  background: linear-gradient(to right, var(--atlas-accent), transparent);
+  margin-bottom: 28px;
+  will-change: transform;
+}
+
+/* Micro stats row */
+.hero-micro-stats {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.hero-micro-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hero-micro-num {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--atlas-ink);
+  line-height: 1;
+}
+.hero-micro-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--atlas-ink-muted);
+}
+.hero-micro-divider {
+  width: 1px;
+  height: 32px;
+  background: var(--atlas-line);
+}
+
+/* Scroll indicator */
+.scroll-indicator {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 64px;
+  will-change: opacity;
+}
+.scroll-indicator-text {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--atlas-ink-faint);
+}
+.scroll-indicator-track {
+  width: 1px;
+  height: 36px;
+  background: var(--atlas-line);
+  border-radius: 0.5px;
+  position: relative;
+  overflow: hidden;
+}
+.scroll-indicator-thumb {
+  width: 1px;
+  height: 12px;
+  background: var(--atlas-accent);
+  border-radius: 0.5px;
+  will-change: transform;
+}
+@media (min-width: 1024px) {
+  .scroll-indicator { display: flex; }
+}
+
+/* ── Section Eyebrow (shared for network + roadmap) ─────────────────── */
+.section-eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.section-eyebrow-line {
+  display: none;
+  width: 40px;
+  height: 1px;
+  background: var(--atlas-accent);
+  will-change: transform;
+}
+@media (min-width: 1024px) {
+  .section-eyebrow-line { display: block; }
+}
+
+/* ==========================================================================
+   NETWORK SECTION
+   ========================================================================== */
+
+.network-section {
+  overflow: hidden;
+}
+.network-content {
+  position: relative;
+  z-index: 2;
+  max-width: 560px;
+}
+
+.network-title {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3.8vw, 52px);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  color: var(--atlas-ink);
+  font-weight: 400;
+  margin: 0 0 44px;
+  will-change: transform, opacity;
+  overflow: hidden;
+}
+
+/* Graph container */
+.network-graph-container {
+  margin-bottom: 44px;
+  position: relative;
+}
+.network-svg {
+  width: 100%;
+  max-width: 480px;
+}
+
+.network-edge {
+  stroke: var(--atlas-accent);
+  stroke-width: 1.5;
+  stroke-opacity: 0.45;
+  fill: none;
+}
+.network-edge-glow {
+  stroke: var(--atlas-accent);
+  stroke-width: 3;
+  stroke-opacity: 0.12;
+  fill: none;
+}
+.network-node {
+  will-change: transform;
+}
+
+/* Feature cards */
+.feature-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .feature-cards {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+}
+
+.feature-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--atlas-surface) 65%, transparent);
+  border: 1px solid color-mix(in srgb, var(--atlas-line) 40%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+  cursor: default;
+}
+.feature-card:hover {
+  border-color: color-mix(in srgb, var(--atlas-accent) 25%, transparent);
+  background: color-mix(in srgb, var(--atlas-surface) 85%, transparent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px -4px rgba(30, 64, 175, 0.08);
+}
+[data-theme="dark"] .feature-card:hover {
+  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.2);
+}
+
+.feature-icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--atlas-accent) 8%, transparent);
+  display: grid;
+  place-items: center;
+  color: var(--atlas-accent);
+}
+.feature-title {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--atlas-ink);
+  margin-bottom: 2px;
+}
+.feature-desc {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--atlas-ink-muted);
+}
+
+/* ==========================================================================
+   ROADMAP SECTION
+   ========================================================================== */
+
+.roadmap-section {
+  overflow: hidden;
+}
+.roadmap-content {
+  position: relative;
+  z-index: 2;
+  max-width: 560px;
+}
+
+.roadmap-title {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3.8vw, 52px);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  color: var(--atlas-ink);
+  font-weight: 400;
+  margin: 0 0 40px;
+  will-change: transform, opacity;
+  overflow: hidden;
+}
+
+/* Roadmap list */
+.roadmap-list {
+  display: flex;
+  flex-direction: column;
+}
+.roadmap-item {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--atlas-line) 40%, transparent);
+  will-change: transform, opacity, clip-path;
+  position: relative;
+}
+.roadmap-item:first-child {
+  border-top: 1px solid color-mix(in srgb, var(--atlas-line) 40%, transparent);
+}
+.roadmap-item-soon {
+  opacity: 0.5;
+}
+
+.roadmap-item-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--atlas-accent);
+  padding-top: 3px;
+}
+.roadmap-item-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 3px;
+  flex-wrap: wrap;
+}
+.roadmap-item-name {
+  font-family: var(--font-display);
+  font-size: clamp(16px, 1.4vw, 21px);
+  color: var(--atlas-ink);
+  font-weight: 400;
+  margin: 0;
+  line-height: 1.25;
+}
+.roadmap-item-desc {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--atlas-ink-muted);
+  margin: 0;
+  max-width: 420px;
+}
+
+.roadmap-status {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.roadmap-status-live {
+  background: rgba(22, 163, 74, 0.1);
+  color: #16a34a;
+}
+[data-theme="dark"] .roadmap-status-live {
+  background: rgba(74, 222, 128, 0.1);
+  color: #4ade80;
+}
+.roadmap-status-soon {
+  background: color-mix(in srgb, var(--atlas-accent) 8%, transparent);
+  color: var(--atlas-accent);
+}
+
+/* Progress bar */
+.roadmap-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: color-mix(in srgb, var(--atlas-line) 25%, transparent);
+  overflow: hidden;
+}
+.roadmap-progress-fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--atlas-accent), color-mix(in srgb, var(--atlas-accent) 30%, transparent));
+  will-change: transform;
+}
+
+/* ==========================================================================
+   MOBILE OVERRIDES
+   ========================================================================== */
+
+@media (max-width: 1023px) {
+  .atlas-section {
+    min-height: auto;
+    padding: 64px 0 40px;
+  }
+  .hero-bg-wordmark { display: none; }
+  .section-number { display: none; }
+  .hero-content,
+  .network-content,
+  .roadmap-content {
+    max-width: none;
+  }
+  .hero-micro-stats { gap: 16px; }
+  .hero-micro-num { font-size: 20px; }
+  .hero-micro-divider { height: 24px; }
+  .hero-divider { max-width: 180px; }
+  .atlas-login-card {
+    padding: 28px 24px 24px;
+  }
+}
+
+/* ==========================================================================
+   REDUCED MOTION
+   ========================================================================== */
+
+/* ==========================================================================
+   PARTICLE DUST FIELD — floating dots that drift with scroll
+   ========================================================================== */
+
+.particle-field {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--atlas-accent);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: particle-float linear infinite;
+}
+
+/* Vary sizes */
+.particle-0 { width: 2px; height: 2px; opacity: 0.15; }
+.particle-1 { width: 3px; height: 3px; opacity: 0.08; }
+.particle-2 { width: 1.5px; height: 1.5px; opacity: 0.2; }
+.particle-3 { width: 2.5px; height: 2.5px; opacity: 0.1; }
+.particle-4 { width: 1px; height: 1px; opacity: 0.25; }
+.particle-5 { width: 3.5px; height: 3.5px; opacity: 0.06; }
+
+@keyframes particle-float {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: var(--particle-opacity, 0.12);
+  }
+  50% {
+    opacity: var(--particle-opacity, 0.12);
+  }
+  90% {
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(-120vh) translateX(40px);
+    opacity: 0;
+  }
+}
+
+[data-theme="dark"] .particle {
+  background: var(--atlas-accent-light);
+}
+
+@media (max-width: 1023px) {
+  .particle-field { display: none; }
+}
+
+/* ==========================================================================
+   HORIZONTAL SCANNER LINE — glowing accent line moves with scroll
+   ========================================================================== */
+
+.scanner-line {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  z-index: 4;
+  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    color-mix(in srgb, var(--atlas-accent) 30%, transparent) 20%,
+    var(--atlas-accent) 50%,
+    color-mix(in srgb, var(--atlas-accent) 30%, transparent) 80%,
+    transparent 100%
+  );
+  opacity: 0.35;
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--atlas-accent) 25%, transparent),
+    0 0 40px color-mix(in srgb, var(--atlas-accent) 10%, transparent);
+  will-change: top;
+}
+
+[data-theme="dark"] .scanner-line {
+  opacity: 0.5;
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--atlas-accent) 35%, transparent),
+    0 0 60px color-mix(in srgb, var(--atlas-accent) 15%, transparent);
+}
+
+@media (max-width: 1023px) {
+  .scanner-line { display: none; }
+}
+
+/* ==========================================================================
+   NODE PULSE RIPPLE — circles pulse outward after appearing
+   ========================================================================== */
+
+.network-node circle.node-pulse {
+  animation: node-ripple 2s ease-out forwards;
+}
+
+@keyframes node-ripple {
+  0% {
+    filter: drop-shadow(0 0 0px var(--atlas-accent));
+  }
+  30% {
+    filter: drop-shadow(0 0 8px var(--atlas-accent));
+  }
+  100% {
+    filter: drop-shadow(0 0 0px var(--atlas-accent));
+  }
+}
+
+/* ==========================================================================
+   AURORA MESH — rotating conic gradients below login card
+   ========================================================================== */
+
+.aurora-mesh {
+  display: none;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  margin-top: 40px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--atlas-bg);
+  border: 1px solid color-mix(in srgb, var(--atlas-line) 25%, transparent);
+}
+@media (min-width: 1024px) {
+  .aurora-mesh { display: block; }
+}
+
+/* Rotating gradient discs — high-opacity conic gradients, GSAP spins them */
+.aurora-disc {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+.aurora-disc-1 {
+  width: 320px;
+  height: 320px;
+  top: -55%;
+  left: -30%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(59, 130, 246, 0.7),
+    rgba(99, 102, 241, 0.4),
+    transparent 40%,
+    rgba(14, 165, 233, 0.3),
+    rgba(59, 130, 246, 0.7)
+  );
+  filter: blur(28px);
+}
+.aurora-disc-2 {
+  width: 250px;
+  height: 250px;
+  bottom: -45%;
+  right: -25%;
+  background: conic-gradient(
+    from 120deg,
+    rgba(139, 92, 246, 0.6),
+    transparent 35%,
+    rgba(59, 130, 246, 0.5),
+    transparent 70%,
+    rgba(139, 92, 246, 0.6)
+  );
+  filter: blur(22px);
+}
+.aurora-disc-3 {
+  width: 200px;
+  height: 200px;
+  top: 10%;
+  left: 25%;
+  background: conic-gradient(
+    from 240deg,
+    rgba(14, 165, 233, 0.5),
+    transparent 30%,
+    rgba(99, 102, 241, 0.35),
+    transparent 65%,
+    rgba(14, 165, 233, 0.5)
+  );
+  filter: blur(18px);
+}
+
+/* Dark theme — more vivid */
+[data-theme="dark"] .aurora-disc-1 {
+  background: conic-gradient(
+    from 0deg,
+    rgba(59, 130, 246, 0.9),
+    rgba(99, 102, 241, 0.55),
+    transparent 40%,
+    rgba(14, 165, 233, 0.45),
+    rgba(59, 130, 246, 0.9)
+  );
+}
+[data-theme="dark"] .aurora-disc-2 {
+  background: conic-gradient(
+    from 120deg,
+    rgba(139, 92, 246, 0.75),
+    transparent 35%,
+    rgba(59, 130, 246, 0.65),
+    transparent 70%,
+    rgba(139, 92, 246, 0.75)
+  );
+}
+[data-theme="dark"] .aurora-disc-3 {
+  background: conic-gradient(
+    from 240deg,
+    rgba(14, 165, 233, 0.6),
+    transparent 30%,
+    rgba(99, 102, 241, 0.45),
+    transparent 65%,
+    rgba(14, 165, 233, 0.6)
+  );
+}
+
+/* Morphing accent ring — organic shape that rotates + morphs */
+.aurora-ring {
+  position: absolute;
+  width: 140px;
+  height: 140px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 42% 58% 55% 45% / 48% 42% 58% 52%;
+  border: 1px solid color-mix(in srgb, var(--atlas-accent) 25%, transparent);
+  will-change: transform;
+  animation: aurora-morph 18s ease-in-out infinite;
+}
+[data-theme="dark"] .aurora-ring {
+  border-color: color-mix(in srgb, var(--atlas-accent) 35%, transparent);
+}
+@keyframes aurora-morph {
+  0%, 100% { border-radius: 42% 58% 55% 45% / 48% 42% 58% 52%; }
+  25% { border-radius: 55% 45% 48% 52% / 42% 58% 45% 55%; }
+  50% { border-radius: 48% 52% 42% 58% / 55% 45% 52% 48%; }
+  75% { border-radius: 45% 55% 52% 48% / 58% 42% 48% 52%; }
+}
+
+/* No frost overlay — let the gradients breathe */
+
+/* Scroll progress bar at bottom */
+.aurora-progress {
+  position: absolute;
+  bottom: 16px;
+  left: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+}
+.aurora-progress-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--atlas-ink-faint);
+  flex-shrink: 0;
+}
+.aurora-progress-label.aurora-label-active {
+  color: var(--atlas-accent);
+}
+.aurora-progress-track {
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--atlas-line) 30%, transparent);
+  border-radius: 0.5px;
+  overflow: hidden;
+}
+.aurora-progress-fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--atlas-accent), color-mix(in srgb, var(--atlas-accent) 40%, transparent));
+  transform-origin: left center;
+  transform: scaleX(0);
+  will-change: transform;
+}
+
+/* ==========================================================================
+   SECTION CONTENT — blur transition support
+   ========================================================================== */
+
+#hero .hero-content,
+#network .network-content,
+#roadmap .roadmap-content {
+  will-change: transform, opacity, filter;
+}
+
+/* ==========================================================================
+   REDUCED MOTION
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-progress-bar,
+  .gradient-orb,
+  .grain-overlay,
+  .hero-bg-wordmark,
+  .particle-field,
+  .scanner-line { display: none !important; }
+  .aurora-mesh { opacity: 1 !important; }
+  .aurora-disc { animation: none !important; }
+  .aurora-ring { animation: none !important; }
+  .aurora-progress-fill { transform: scaleX(1) !important; }
+
+  .split-word,
+  .hero-lede,
+  .hero-divider,
+  .hero-eyebrow-line,
+  .section-eyebrow-line,
+  .network-edge,
+  .network-edge-glow,
+  .network-node,
+  .feature-card,
+  .roadmap-item,
+  .login-card-anim,
+  .scroll-indicator {
+    will-change: auto !important;
+    transform: none !important;
+    opacity: 1 !important;
+    clip-path: none !important;
+    filter: none !important;
+  }
+  #hero .hero-content,
+  #network .network-content,
+  #roadmap .roadmap-content {
+    will-change: auto !important;
+    transform: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+  }
+  .feature-card:hover { transform: none !important; }
+  .atlas-loader-fill { animation: none; width: 100%; }
+  .scroll-indicator-thumb { animation: none; }
+  .network-node circle.node-pulse { animation: none; }
+}
+
+/* GPU acceleration hints */
+.hero-eyebrow,
+.hero-bg-wordmark,
+.hero-lede,
+.hero-divider,
+.network-eyebrow,
+.network-title,
+.roadmap-eyebrow,
+.roadmap-title,
+.login-card-anim,
+.section-number {
+  will-change: transform, opacity;
+}
