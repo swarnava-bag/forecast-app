@@ -54,7 +54,10 @@ function parseCombo(ws: XLSX.WorkSheet): { comboRows: ComboInputRow[]; qtyColumn
   const json = XLSX.utils.sheet_to_json<any>(ws);
   if (json.length === 0) return { comboRows: [], qtyColumns: [] };
   const headers = Object.keys(json[0]);
-  const skuCol = headers.find((h) => h.toLowerCase().includes("master") || h.toLowerCase().includes("sku")) || headers[0];
+  // Detect SKU column: Master SKU, SKU, FG Code, New FG Code — fallback to first column
+  const skuCol = headers.find((h) => h.toLowerCase().includes("master") || h.toLowerCase().includes("sku")) ||
+    headers.find((h) => { const l = h.toLowerCase(); return l.includes("fg") && (l.includes("code") || l === "fg"); }) ||
+    headers[0];
   const qtyColumns = headers.filter((h) => h !== skuCol && h.trim() !== "");
   const comboRows: ComboInputRow[] = [];
   for (const row of json) {
@@ -275,7 +278,8 @@ function parseSingleValueSheet(ws: XLSX.WorkSheet): { rows: SingleSheetRow[]; mo
   const json = XLSX.utils.sheet_to_json<any>(ws);
   if (json.length === 0) return { rows: [], months: [] };
   const headers = Object.keys(json[0]);
-  const skuCol = headers.find((h) => /master.*sku/i.test(h) || /^sku$/i.test(h)) || headers[0];
+  const skuCol = headers.find((h) => /master.*sku/i.test(h) || /^sku$/i.test(h)) ||
+    headers.find((h) => /fg\s*code/i.test(h) || /^fg$/i.test(h)) || headers[0];
   const channelCol = headers.find((h) => /channel/i.test(h)) || headers[1];
   const months = headers.filter((h) => h !== skuCol && h !== channelCol).map((h) => String(h).trim());
   const monthSrcMap = new Map<string, string>(); // trimmed -> original
@@ -761,6 +765,11 @@ export default function ComboConverterPage() {
   const [mapperMsg, setMapperMsg] = useState<string | null>(null);
   // Mode / View: qty-only (existing) | nto-only (MRP-ratio split) | nto + qty multi-platform
   const [mode, setMode] = useState<"qty" | "nto" | "multi">("qty");
+  // Input identifier: Master SKU or FG Code
+  const [inputIdentifier, setInputIdentifier] = useState<"sku" | "fg">("sku");
+  // Unresolved FG codes (FG mode only): fg_code -> { quantities, action user wants to take }
+  type UnresolvedFg = { fg_code: string; quantities: Record<string, number>; action: "none" | "add_single" | "add_combo" | "update_existing"; targetMasterSku: string; comboComponents: string; submitting: boolean; submitted: boolean };
+  const [unresolvedFgCodes, setUnresolvedFgCodes] = useState<UnresolvedFg[]>([]);
   // Conversion
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [ntoResult, setNtoResult] = useState<NtoResult | null>(null);
@@ -1276,10 +1285,22 @@ export default function ComboConverterPage() {
         }
 
         setAllMapperRows(mapperRows);
-        const convResult = runConversion(comboRows, mapperRows, qtyColumns, productCount);
+        // FG Code mode: resolve FG codes to Master SKUs before conversion
+        let finalComboRows = comboRows;
+        let fgResolutionWarnings: string[] = [];
+        if (inputIdentifier === "fg") {
+          const { resolved, fgWarnings, unresolved } = resolveFgCodes(comboRows);
+          finalComboRows = resolved;
+          fgResolutionWarnings = fgWarnings;
+          setUnresolvedFgCodes(unresolved);
+        } else {
+          setUnresolvedFgCodes([]);
+        }
+        const convResult = runConversion(finalComboRows, mapperRows, qtyColumns, productCount);
+        if (fgResolutionWarnings.length > 0) convResult.warnings.push(...fgResolutionWarnings);
         setResult(convResult);
         logUsage("qty", convResult.singles.length);
-        setCachedComboRows(comboRows);
+        setCachedComboRows(finalComboRows);
         setCachedQtyColumns(qtyColumns);
         // Init edits for unmapped rows
         const edits = new Map<string, { combo: string; products: string }>();
@@ -1322,7 +1343,17 @@ export default function ComboConverterPage() {
         const productCount = dbProductCount;
 
         setAllMapperRows(mapperRows);
-        const res = runNtoConversion(comboRows, mapperRows, qtyColumns, productCount, skuLookup);
+        // FG Code mode: resolve FG codes to Master SKUs
+        let finalComboRows = comboRows;
+        let fgResolutionWarnings: string[] = [];
+        if (inputIdentifier === "fg") {
+          const { resolved, fgWarnings, unresolved } = resolveFgCodes(comboRows);
+          finalComboRows = resolved;
+          fgResolutionWarnings = fgWarnings;
+          setUnresolvedFgCodes(unresolved);
+        } else { setUnresolvedFgCodes([]); }
+        const res = runNtoConversion(finalComboRows, mapperRows, qtyColumns, productCount, skuLookup);
+        if (fgResolutionWarnings.length > 0) res.warnings.push(...fgResolutionWarnings);
         setNtoResult(res);
         logUsage("nto", res.singles.length);
       } catch (err: any) { setError(`Processing failed: ${err.message}`); }
@@ -1380,7 +1411,17 @@ export default function ComboConverterPage() {
         const mapperRows = dbMapperRows;
 
         setAllMapperRows(mapperRows);
-        const res = runMultiConversion(rows, mapperRows, months, skuLookup);
+        // FG Code mode: resolve FG codes to Master SKUs
+        let finalRows = rows;
+        let fgResolutionWarnings: string[] = [];
+        if (inputIdentifier === "fg") {
+          const { resolved, fgWarnings, unresolved } = resolveFgCodesMulti(rows);
+          finalRows = resolved;
+          fgResolutionWarnings = fgWarnings;
+          setUnresolvedFgCodes(unresolved);
+        } else { setUnresolvedFgCodes([]); }
+        const res = runMultiConversion(finalRows, mapperRows, months, skuLookup);
+        if (fgResolutionWarnings.length > 0) res.warnings.push(...fgResolutionWarnings);
         setMultiResult(res);
         logUsage("multi", res.singles.length);
       } catch (err: any) { setError(`${err.message}`); }
@@ -1636,6 +1677,63 @@ export default function ComboConverterPage() {
     return map;
   }, [skuMaster]);
 
+  // FG Code -> Master SKU resolution (used when inputIdentifier === "fg")
+  function buildFgMaps() {
+    const fgCodeMap = new Map<string, SingleSku>();
+    for (const s of skuMaster) {
+      if (s.new_fg_code) {
+        fgCodeMap.set(s.new_fg_code.toLowerCase(), s);
+        if (s.new_fg_code.toLowerCase().endsWith("g")) {
+          fgCodeMap.set(s.new_fg_code.slice(0, -1).toLowerCase(), s);
+        }
+      }
+    }
+    const comboFgMap = new Map<string, MapperRow>();
+    for (const m of (dbMapperRows.length > 0 ? dbMapperRows : allMapperRows)) {
+      const isCombo = ["yes", "y", "1", "true"].includes(m.combo.toLowerCase()) || m.products.some((p) => p.length > 0);
+      if (isCombo && m.fg_code) comboFgMap.set(m.fg_code.toLowerCase(), m);
+    }
+    return { fgCodeMap, comboFgMap };
+  }
+
+  function resolveFgCodes(comboRows: ComboInputRow[]): { resolved: ComboInputRow[]; fgWarnings: string[]; unresolved: UnresolvedFg[] } {
+    const fgWarnings: string[] = [];
+    const unresolved: UnresolvedFg[] = [];
+    const { fgCodeMap, comboFgMap } = buildFgMaps();
+
+    const resolved: ComboInputRow[] = [];
+    for (const row of comboRows) {
+      const lower = row.master_sku.toLowerCase().trim();
+      const single = fgCodeMap.get(lower);
+      if (single) { resolved.push({ ...row, master_sku: single.new_master_sku }); continue; }
+      const combo = comboFgMap.get(lower);
+      if (combo) { resolved.push({ ...row, master_sku: combo.master_sku }); continue; }
+      // Unresolved — exclude from conversion, track separately
+      fgWarnings.push(`FG Code "${row.master_sku}" not found in SKU Master or Combo Mapper`);
+      unresolved.push({ fg_code: row.master_sku, quantities: row.quantities, action: "none", targetMasterSku: "", comboComponents: "", submitting: false, submitted: false });
+    }
+    return { resolved, fgWarnings, unresolved };
+  }
+
+  // Resolve FG codes for multi-platform input rows
+  function resolveFgCodesMulti(rows: MultiInputRow[]): { resolved: MultiInputRow[]; fgWarnings: string[]; unresolved: UnresolvedFg[] } {
+    const fgWarnings: string[] = [];
+    const unresolved: UnresolvedFg[] = [];
+    const { fgCodeMap, comboFgMap } = buildFgMaps();
+
+    const resolved: MultiInputRow[] = [];
+    for (const row of rows) {
+      const lower = row.master_sku.toLowerCase().trim();
+      const single = fgCodeMap.get(lower);
+      if (single) { resolved.push({ ...row, master_sku: single.new_master_sku }); continue; }
+      const combo = comboFgMap.get(lower);
+      if (combo) { resolved.push({ ...row, master_sku: combo.master_sku }); continue; }
+      fgWarnings.push(`FG Code "${row.master_sku}" not found in SKU Master or Combo Mapper`);
+      unresolved.push({ fg_code: row.master_sku, quantities: { ...row.qty, ...row.nto }, action: "none", targetMasterSku: "", comboComponents: "", submitting: false, submitted: false });
+    }
+    return { resolved, fgWarnings, unresolved };
+  }
+
   const hasUnmappedEdits = useMemo(() => {
     for (const [, edit] of unmappedEdits) {
       if (edit.products.trim().length > 0) return true;
@@ -1699,6 +1797,64 @@ export default function ComboConverterPage() {
     await loadSuggestions();
   }
 
+  // Submit unresolved FG code suggestion to mapper_suggestions
+  async function submitFgSuggestion(index: number) {
+    const item = unresolvedFgCodes[index];
+    if (!item || item.action === "none") return;
+    setUnresolvedFgCodes((prev) => prev.map((r, i) => i === index ? { ...r, submitting: true } : r));
+
+    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      if (item.action === "add_single") {
+        // Suggest adding a new single with this FG code
+        await supabase.from("mapper_suggestions").insert({
+          master_sku: item.fg_code, // Use FG code as placeholder — admin will assign real Master SKU
+          is_combo: false,
+          products: [],
+          fg_code: item.fg_code,
+          submitted_by: user?.id,
+          submitted_by_email: profile?.email,
+          status: "pending",
+          notes: `New single suggested from FG Code input. FG Code: ${item.fg_code}`,
+        });
+      } else if (item.action === "add_combo") {
+        // Suggest adding a new combo with this FG code and components
+        const components = item.comboComponents.split(",").map((p) => p.trim()).filter((p) => p);
+        await supabase.from("mapper_suggestions").insert({
+          master_sku: item.fg_code,
+          is_combo: true,
+          products: components,
+          fg_code: item.fg_code,
+          submitted_by: user?.id,
+          submitted_by_email: profile?.email,
+          status: "pending",
+          notes: `New combo suggested from FG Code input. FG Code: ${item.fg_code}, Components: ${components.join(", ")}`,
+        });
+      } else if (item.action === "update_existing") {
+        // Suggest updating an existing Master SKU's FG code
+        if (!item.targetMasterSku.trim()) return;
+        await supabase.from("mapper_suggestions").insert({
+          master_sku: item.targetMasterSku.trim(),
+          is_combo: false,
+          products: [],
+          fg_code: item.fg_code,
+          submitted_by: user?.id,
+          submitted_by_email: profile?.email,
+          status: "pending",
+          notes: `Update FG Code for existing Master SKU "${item.targetMasterSku.trim()}" to "${item.fg_code}"`,
+        });
+      }
+      setUnresolvedFgCodes((prev) => prev.map((r, i) => i === index ? { ...r, submitting: false, submitted: true } : r));
+    } catch (err: any) {
+      setUnresolvedFgCodes((prev) => prev.map((r, i) => i === index ? { ...r, submitting: false } : r));
+      setError(`Failed to submit suggestion for ${item.fg_code}: ${err.message}`);
+    }
+  }
+
+  function updateUnresolvedFg(index: number, field: string, value: any) {
+    setUnresolvedFgCodes((prev) => prev.map((r, i) => i === index ? { ...r, [field]: value } : r));
+  }
+
   // ==================== RENDER ====================
 
   if (loading) {
@@ -1718,16 +1874,32 @@ export default function ComboConverterPage() {
         <div className="flex items-start justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold">Combo → Singles Converter</h2>
-            <p className="text-sm text-atlas-ink-muted mt-1">Convert combo SKU forecasts into individual single SKU quantities</p>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-sm text-atlas-ink-muted">Convert combo SKU forecasts into individual single SKU quantities</p>
+              {!result && !ntoResult && !multiResult && (
+                <div className="flex items-center gap-2 ml-4 shrink-0">
+                  <span className={`text-xs font-medium transition ${inputIdentifier === "sku" ? "text-atlas-ink" : "text-atlas-ink-muted"}`}>Master SKU</span>
+                  <button
+                    onClick={() => { setInputIdentifier(inputIdentifier === "sku" ? "fg" : "sku"); setError(null); }}
+                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${inputIdentifier === "fg" ? "bg-atlas-accent" : "bg-atlas-line"}`}
+                    title={inputIdentifier === "fg" ? "FG Code mode: Input uses 6-digit+G FG Codes" : "Master SKU mode: Input uses Master SKU codes"}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${inputIdentifier === "fg" ? "translate-x-5" : "translate-x-0"}`} />
+                  </button>
+                  <span className={`text-xs font-medium transition ${inputIdentifier === "fg" ? "text-atlas-accent" : "text-atlas-ink-muted"}`}>FG Code</span>
+                  {inputIdentifier === "fg" && <span className="text-[10px] text-atlas-accent bg-atlas-accent-bg px-1.5 py-0.5 rounded font-mono">e.g. 14244G</span>}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex gap-3">
             {result && (
               <>
-                <button onClick={downloadResult} className="px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition">Download Excel</button>
+                <button onClick={downloadResult} className="px-4 py-2 text-sm bg-atlas-navy text-white font-semibold rounded-lg hover:bg-atlas-navy-soft transition">Download Excel</button>
                 {isAdmin && mapperSource === "db" && selectedMapperSetId && (
-                  <button onClick={() => openRowEditor(selectedMapperSetId)} className="px-4 py-2 text-sm bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40 rounded-lg hover:bg-purple-500/30 transition">Edit Mapper</button>
+                  <button onClick={() => openRowEditor(selectedMapperSetId)} className="px-4 py-2 text-sm bg-atlas-accent-bg text-atlas-accent ring-1 ring-atlas-accent/40 rounded-lg hover:bg-atlas-accent-bg transition">Edit Mapper</button>
                 )}
-                <button onClick={() => { setResult(null); setError(null); }} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">New Conversion</button>
+                <button onClick={() => { setResult(null); setError(null); setUnresolvedFgCodes([]); }} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">New Conversion</button>
               </>
             )}
             {!result && mode !== "multi" && (
@@ -1740,14 +1912,14 @@ export default function ComboConverterPage() {
             {isAdmin && !result && (
               <>
                 <button onClick={() => setShowMapperManager(!showMapperManager)}
-                  className={`px-4 py-2 text-sm rounded-lg transition ${showMapperManager ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500" : "bg-atlas-surface-soft text-atlas-ink hover:bg-atlas-surface-soft"}`}>
+                  className={`px-4 py-2 text-sm rounded-lg transition ${showMapperManager ? "bg-atlas-blue-bg text-atlas-blue ring-1 ring-atlas-blue" : "bg-atlas-surface-soft text-atlas-ink hover:bg-atlas-surface-soft"}`}>
                   {showMapperManager ? "Hide Mapper Manager" : "Manage Mappers"}
                 </button>
                 {pendingSuggestions.length > 0 && (
                   <button onClick={() => { setShowApprovals(!showApprovals); setShowMapperManager(false); }}
-                    className={`px-4 py-2 text-sm rounded-lg transition relative ${showApprovals ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500" : "bg-atlas-surface-soft text-atlas-ink hover:bg-atlas-surface-soft"}`}>
+                    className={`px-4 py-2 text-sm rounded-lg transition relative ${showApprovals ? "bg-atlas-blue-bg text-atlas-blue ring-1 ring-atlas-blue" : "bg-atlas-surface-soft text-atlas-ink hover:bg-atlas-surface-soft"}`}>
                     Approvals
-                    <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 bg-red-500 text-white text-xs rounded-full">{pendingSuggestions.length}</span>
+                    <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 bg-atlas-red text-white text-xs rounded-full">{pendingSuggestions.length}</span>
                   </button>
                 )}
               </>
@@ -1755,12 +1927,12 @@ export default function ComboConverterPage() {
           </div>
         </div>
 
-        {error && <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-xl"><p className="text-red-300 text-sm">{error}</p></div>}
+        {error && <div className="mb-6 p-4 bg-atlas-red-bg border border-atlas-red rounded-xl"><p className="text-atlas-red text-sm">{error}</p></div>}
 
         {/* ====== MAPPER MANAGER (Admin) ====== */}
         {showMapperManager && isAdmin && !result && (
-          <div className="mb-6 bg-atlas-surface border border-blue-500/30 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-blue-400 mb-4">Mapper Manager</h3>
+          <div className="mb-6 bg-atlas-surface border border-atlas-blue/30 rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-atlas-blue mb-4">Mapper Manager</h3>
 
             {/* Existing mappers */}
             {mapperSets.length > 0 && (
@@ -1772,7 +1944,7 @@ export default function ComboConverterPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-sm">{ms.name}</span>
-                          {ms.is_default && <span className="px-1.5 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">Default</span>}
+                          {ms.is_default && <span className="px-1.5 py-0.5 text-xs bg-atlas-green-bg text-atlas-green rounded">Default</span>}
                         </div>
                         <p className="text-xs text-atlas-ink-muted mt-0.5">
                           {ms.row_count} SKUs · P1-P{ms.product_column_count} · {new Date(ms.created_at).toLocaleDateString()}
@@ -1781,17 +1953,17 @@ export default function ComboConverterPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         {!ms.is_default && (
-                          <button onClick={() => setDefaultMapper(ms.id)} className="text-xs text-atlas-ink-muted hover:text-green-400 transition">Set Default</button>
+                          <button onClick={() => setDefaultMapper(ms.id)} className="text-xs text-atlas-ink-muted hover:text-atlas-green transition">Set Default</button>
                         )}
-                        <button onClick={() => downloadMapperSet(ms.id, ms.name)} disabled={uploadingMapper} className="text-xs text-blue-400 hover:text-blue-300 transition">Download</button>
-                        <button onClick={() => openRowEditor(ms.id)} disabled={uploadingMapper} className="text-xs text-purple-400 hover:text-purple-300 transition">Edit Rows</button>
-                        <button onClick={() => resolveNestedForSet(ms.id)} disabled={uploadingMapper} className="text-xs text-green-400 hover:text-green-300 transition">Resolve Nested</button>
-                        <label className="text-xs text-blue-400 hover:text-blue-300 cursor-pointer transition">
+                        <button onClick={() => downloadMapperSet(ms.id, ms.name)} disabled={uploadingMapper} className="text-xs text-atlas-blue hover:text-atlas-blue transition">Download</button>
+                        <button onClick={() => openRowEditor(ms.id)} disabled={uploadingMapper} className="text-xs text-atlas-accent hover:text-atlas-accent transition">Edit Rows</button>
+                        <button onClick={() => resolveNestedForSet(ms.id)} disabled={uploadingMapper} className="text-xs text-atlas-green hover:text-atlas-green transition">Resolve Nested</button>
+                        <label className="text-xs text-atlas-blue hover:text-atlas-blue cursor-pointer transition">
                           Update
                           <input type="file" accept=".xlsx,.xls" className="hidden"
                             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpdateMapper(ms.id, f); e.target.value = ""; }} />
                         </label>
-                        <button onClick={() => deleteMapperSet(ms.id)} className="text-xs text-red-400 hover:text-red-300 transition">Delete</button>
+                        <button onClick={() => deleteMapperSet(ms.id)} className="text-xs text-atlas-red hover:text-atlas-red transition">Delete</button>
                       </div>
                     </div>
                   ))}
@@ -1804,12 +1976,12 @@ export default function ComboConverterPage() {
               <p className="text-sm text-atlas-ink mb-3">Upload New Mapper</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                 <input type="text" placeholder="Mapper name (e.g. 'Singles except VP & Enrobed Minis')" value={newMapperName} onChange={(e) => setNewMapperName(e.target.value)}
-                  className="px-3 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-sm text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="px-3 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-sm text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-atlas-blue" />
                 <input type="text" placeholder="Description (optional)" value={newMapperDesc} onChange={(e) => setNewMapperDesc(e.target.value)}
-                  className="px-3 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-sm text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="px-3 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-sm text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-2 focus:ring-atlas-blue" />
               </div>
               <div className="flex items-center gap-3">
-                <label className={`px-4 py-2 text-sm rounded-lg cursor-pointer transition ${uploadingMapper ? "bg-atlas-surface-soft text-atlas-ink-muted" : "bg-blue-500 text-white hover:bg-blue-400"}`}>
+                <label className={`px-4 py-2 text-sm rounded-lg cursor-pointer transition ${uploadingMapper ? "bg-atlas-surface-soft text-atlas-ink-muted" : "bg-atlas-blue text-white hover:bg-atlas-blue/80"}`}>
                   {uploadingMapper ? "Uploading..." : "Choose Mapper File"}
                   <input ref={mapperFileRef} type="file" accept=".xlsx,.xls" className="hidden" disabled={uploadingMapper}
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMapperUpload(f); if (mapperFileRef.current) mapperFileRef.current.value = ""; }} />
@@ -1819,7 +1991,7 @@ export default function ComboConverterPage() {
             </div>
 
             {mapperMsg && (
-              <div className={`mt-3 p-3 rounded-lg text-sm ${mapperMsg.startsWith("Error") || mapperMsg.startsWith("Failed") || mapperMsg.startsWith("No ") ? "bg-red-900/50 text-red-300" : "bg-green-900/50 text-green-300"}`}>
+              <div className={`mt-3 p-3 rounded-lg text-sm ${mapperMsg.startsWith("Error") || mapperMsg.startsWith("Failed") || mapperMsg.startsWith("No ") ? "bg-atlas-red-bg text-atlas-red" : "bg-atlas-green-bg text-atlas-green"}`}>
                 {mapperMsg}
               </div>
             )}
@@ -1828,8 +2000,8 @@ export default function ComboConverterPage() {
 
         {/* ====== APPROVALS PANEL (Admin) ====== */}
         {showApprovals && isAdmin && !result && pendingSuggestions.length > 0 && (
-          <div className="mb-6 bg-atlas-surface border border-blue-500/30 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-blue-400 mb-4">Pending Mapper Suggestions ({pendingSuggestions.length})</h3>
+          <div className="mb-6 bg-atlas-surface border border-atlas-blue/30 rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-atlas-blue mb-4">Pending Mapper Suggestions ({pendingSuggestions.length})</h3>
             <div className="space-y-3">
               {pendingSuggestions.map((s) => (
                 <SuggestionCard key={s.id} suggestion={s} mapperSets={mapperSets}
@@ -1858,6 +2030,7 @@ export default function ComboConverterPage() {
                   if (t.k !== "qty") setResult(null);
                   if (t.k !== "nto") setNtoResult(null);
                   if (t.k !== "multi") setMultiResult(null);
+                  setUnresolvedFgCodes([]);
                   // NTO and Multi modes always use DB mapper — auto-load if needed
                   if ((t.k === "nto" || t.k === "multi") && dbMapperRows.length === 0) {
                     const setId = selectedMapperSetId || (mapperSets.find((s) => s.is_default) || mapperSets[0])?.id || "";
@@ -1867,7 +2040,7 @@ export default function ComboConverterPage() {
                     }
                   }
                 }}
-                className={`px-4 py-2 rounded-lg text-sm transition ${active ? "bg-purple-500/15 text-purple-300 ring-1 ring-purple-500/40" : "text-atlas-ink-muted hover:bg-atlas-surface-soft"}`}
+                className={`px-4 py-2 rounded-lg text-sm transition ${active ? "bg-atlas-accent-bg text-atlas-accent ring-1 ring-atlas-accent/40" : "text-atlas-ink-muted hover:bg-atlas-surface-soft"}`}
                 title={t.desc}
               >
                 {t.label}
@@ -1875,6 +2048,8 @@ export default function ComboConverterPage() {
             );
           })}
         </div>
+
+        {/* ====== INPUT IDENTIFIER TOGGLE ====== */}
 
         {/* ====== NTO-ONLY VIEW ====== */}
         {mode === "nto" && (
@@ -1884,9 +2059,9 @@ export default function ComboConverterPage() {
                 <div className="bg-atlas-surface border border-atlas-line rounded-xl p-6">
                   <label className="block text-sm font-medium text-atlas-ink mb-3">Upload NTO Sheet</label>
                   <p className="text-xs text-atlas-ink-muted mb-3">
-                    Sheet name: <span className="font-mono text-atlas-ink">NTO</span> or first sheet. Columns: <span className="font-mono text-atlas-ink">Master SKU</span> + one column per month containing NTO values.
+                    Sheet name: <span className="font-mono text-atlas-ink">NTO</span> or first sheet. Columns: <span className="font-mono text-atlas-ink">{inputIdentifier === "fg" ? "FG Code" : "Master SKU"}</span> + one column per month containing NTO values.{inputIdentifier === "fg" && <span className="text-atlas-accent font-medium"> (6-digit+G FG Codes)</span>}
                     Combos are split across components using MRP ratio (<span className="font-mono">NTO × MRP × qty / Σ(MRP × qty)</span>).
-                    Missing MRP on any component <span className="text-red-300 font-semibold">blocks that combo</span> and is flagged CRITICAL.
+                    Missing MRP on any component <span className="text-atlas-red font-semibold">blocks that combo</span> and is flagged CRITICAL.
                   </p>
                   <div className="border-2 border-dashed border-atlas-line rounded-xl p-10 text-center hover:border-atlas-line transition cursor-pointer"
                     onClick={() => document.getElementById("nto-file-input")?.click()}
@@ -1894,35 +2069,35 @@ export default function ComboConverterPage() {
                     onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleNtoFile(f); }}>
                     <input id="nto-file-input" type="file" accept=".xlsx,.xls,.csv" className="hidden"
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) handleNtoFile(f); (e.target as HTMLInputElement).value = ""; }} />
-                    {processing ? <p className="text-purple-400 font-medium">Processing...</p> : (
+                    {processing ? <p className="text-atlas-accent font-medium">Processing...</p> : (
                       <>
                         <div className="text-3xl mb-2">₹</div>
                         <p className="text-atlas-ink font-medium mb-1">Drop NTO Excel here</p>
-                        <p className="text-atlas-ink-muted text-sm">First sheet (or &quot;NTO&quot;): SKU + month NTO columns</p>
+                        <p className="text-atlas-ink-muted text-sm">First sheet (or &quot;NTO&quot;): {inputIdentifier === "fg" ? "FG Code" : "SKU"} + month NTO columns</p>
                       </>
                     )}
                   </div>
                 </div>
-                {error && <div className="p-3 bg-red-900/50 border border-red-500 rounded-lg"><p className="text-red-300 text-sm">{error}</p></div>}
+                {error && <div className="p-3 bg-atlas-red-bg border border-atlas-red rounded-lg"><p className="text-atlas-red text-sm">{error}</p></div>}
               </>
             ) : (
               <div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                   <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4"><p className="text-xs text-atlas-ink-muted">Input Rows</p><p className="text-2xl font-bold">{ntoResult.consolidated.length}</p></div>
-                  <div className="bg-atlas-surface border border-green-800/30 rounded-xl p-4"><p className="text-xs text-green-400">Singles Output</p><p className="text-2xl font-bold text-green-400">{ntoResult.singles.length}</p></div>
+                  <div className="bg-atlas-green-bg border border-atlas-green/20 rounded-xl p-4"><p className="text-xs text-atlas-green font-medium">Singles Output</p><p className="text-2xl font-bold text-atlas-green">{ntoResult.singles.length}</p></div>
                   <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4"><p className="text-xs text-atlas-ink-muted">NTO Columns</p><p className="text-2xl font-bold">{ntoResult.ntoColumns.length}</p><p className="text-xs text-atlas-ink-muted mt-0.5">{ntoResult.ntoColumns.join(", ")}</p></div>
-                  <div className="bg-atlas-surface border border-red-800/30 rounded-xl p-4"><p className="text-xs text-red-400">CRITICAL</p><p className={`text-2xl font-bold ${ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length > 0 ? "text-red-400" : "text-atlas-ink-faint"}`}>{ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length}</p></div>
-                  <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4"><p className="text-xs text-atlas-ink-muted">Warnings</p><p className={`text-2xl font-bold ${ntoResult.warnings.length > 0 ? "text-amber-400" : "text-atlas-ink-faint"}`}>{ntoResult.warnings.length}</p></div>
+                  <div className="bg-atlas-red-bg border border-atlas-red/20 rounded-xl p-4"><p className="text-xs text-atlas-red font-medium">CRITICAL</p><p className={`text-2xl font-bold ${ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length > 0 ? "text-atlas-red" : "text-atlas-ink-faint"}`}>{ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length}</p></div>
+                  <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4"><p className="text-xs text-atlas-ink-muted">Warnings</p><p className={`text-2xl font-bold ${ntoResult.warnings.length > 0 ? "text-atlas-amber-warn" : "text-atlas-ink-faint"}`}>{ntoResult.warnings.length}</p></div>
                 </div>
 
                 {ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length > 0 && (
-                  <div className="mb-6 p-4 bg-red-950/50 border border-red-500/50 rounded-xl">
+                  <div className="mb-6 p-4 bg-atlas-red-bg border border-atlas-red/30 rounded-xl">
                     <div className="flex items-start gap-3">
-                      <span className="text-red-300 text-xl leading-none">⚠</span>
+                      <span className="text-atlas-red text-xl leading-none">⚠</span>
                       <div className="flex-1">
-                        <div className="text-red-200 font-bold uppercase tracking-wider text-sm">CRITICAL — {ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length} combo(s) blocked: missing component MRP</div>
-                        <div className="text-red-300/80 text-xs mt-1">These combos' NTO could NOT be split because one or more components are missing MRP in SKU Master. Set the MRPs and re-run, or accept that these combos are excluded from the Singles output. Full list in the Diagnostics sheet.</div>
-                        <ul className="mt-2 text-xs text-red-300/90 space-y-0.5 max-h-40 overflow-auto">
+                        <div className="text-atlas-red font-bold uppercase tracking-wider text-sm">CRITICAL — {ntoResult.criticals.filter(c => c.type === "MISSING_MRP").length} combo(s) blocked: missing component MRP</div>
+                        <div className="text-atlas-ink-soft text-xs mt-1">These combos' NTO could NOT be split because one or more components are missing MRP in SKU Master. Set the MRPs and re-run, or accept that these combos are excluded from the Singles output. Full list in the Diagnostics sheet.</div>
+                        <ul className="mt-2 text-xs text-atlas-ink-soft space-y-0.5 max-h-40 overflow-auto">
                           {ntoResult.criticals.filter(c => c.type === "MISSING_MRP").slice(0, 20).map((c, i) => (
                             <li key={i}><span className="font-mono">{c.combo_sku}</span> — {c.detail}</li>
                           ))}
@@ -1933,9 +2108,56 @@ export default function ComboConverterPage() {
                   </div>
                 )}
 
+                {/* Unresolved FG Codes (NTO) */}
+                {unresolvedFgCodes.length > 0 && (
+                  <div className="mb-4 p-5 bg-atlas-accent-bg/30 border border-atlas-accent/30 rounded-xl">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-atlas-accent text-lg leading-none">!</span>
+                      <p className="text-sm font-semibold text-atlas-accent">{unresolvedFgCodes.length} FG Code(s) not found</p>
+                    </div>
+                    <p className="text-xs text-atlas-ink-muted mb-4">These FG Codes could not be mapped. Suggest adding them so an admin can review.</p>
+                    <div className="space-y-3">
+                      {unresolvedFgCodes.map((item, idx) => (
+                        <div key={idx} className={`p-4 rounded-lg border ${item.submitted ? "bg-atlas-green-bg/30 border-atlas-green/30" : "bg-atlas-surface border-atlas-line"}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-mono text-sm font-semibold text-atlas-ink">{item.fg_code}</span>
+                            {item.submitted && <span className="text-xs text-atlas-green font-medium px-2 py-0.5 bg-atlas-green-bg rounded">Submitted</span>}
+                          </div>
+                          {!item.submitted && (
+                            <div className="space-y-2">
+                              <div className="flex gap-2 flex-wrap">
+                                {(["add_single", "add_combo", "update_existing"] as const).map((act) => (
+                                  <button key={act} onClick={() => updateUnresolvedFg(idx, "action", act)}
+                                    className={`px-3 py-1.5 text-xs rounded-lg border transition ${item.action === act ? "bg-atlas-accent-bg text-atlas-accent border-atlas-accent/40 ring-1 ring-atlas-accent/30" : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"}`}>
+                                    {act === "add_single" ? "Add as New Single" : act === "add_combo" ? "Add as New Combo" : "Update Existing SKU"}
+                                  </button>
+                                ))}
+                              </div>
+                              {item.action === "add_combo" && (
+                                <input type="text" value={item.comboComponents} onChange={(e) => updateUnresolvedFg(idx, "comboComponents", e.target.value)}
+                                  placeholder="Component SKUs (comma-separated)" className="w-full px-3 py-2 text-xs bg-atlas-surface-soft border border-atlas-line rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-atlas-accent" />
+                              )}
+                              {item.action === "update_existing" && (
+                                <input type="text" value={item.targetMasterSku} onChange={(e) => updateUnresolvedFg(idx, "targetMasterSku", e.target.value)}
+                                  placeholder="Existing Master SKU to update" className="w-full px-3 py-2 text-xs bg-atlas-surface-soft border border-atlas-line rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-atlas-accent" />
+                              )}
+                              {item.action !== "none" && (
+                                <button onClick={() => submitFgSuggestion(idx)} disabled={item.submitting || (item.action === "update_existing" && !item.targetMasterSku.trim()) || (item.action === "add_combo" && !item.comboComponents.trim())}
+                                  className="px-4 py-1.5 text-xs bg-atlas-accent text-white font-semibold rounded-lg hover:bg-atlas-accent-deep transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                  {item.submitting ? "Submitting..." : "Submit Suggestion"}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3 mb-4">
-                  <button onClick={downloadNtoResult} className="px-5 py-2 bg-purple-500 text-black font-semibold rounded-lg hover:bg-purple-400 transition text-sm">Download Output (Excel)</button>
-                  <button onClick={() => setNtoResult(null)} className="px-5 py-2 bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition text-sm">Upload Another</button>
+                  <button onClick={downloadNtoResult} className="px-5 py-2 bg-atlas-accent text-white font-semibold rounded-lg hover:bg-atlas-accent-deep transition text-sm">Download Output (Excel)</button>
+                  <button onClick={() => { setNtoResult(null); setUnresolvedFgCodes([]); }} className="px-5 py-2 bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition text-sm">Upload Another</button>
                 </div>
 
                 <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
@@ -1960,7 +2182,7 @@ export default function ComboConverterPage() {
                               <td className="py-2 px-4 text-right font-mono text-xs">{single?.mrp ?? "—"}</td>
                               {ntoResult.ntoColumns.map((c) => <td key={c} className="py-2 px-4 text-right font-mono text-xs">{(r.quantities[c] || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>)}
                               <td className="py-2 px-4 text-xs">
-                                {r.status === "NOT IN MAPPER" ? <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] uppercase">Not in Mapper</span> : <span className="px-2 py-0.5 rounded bg-green-500/20 text-green-300 text-[10px] uppercase">Converted</span>}
+                                {r.status === "NOT IN MAPPER" ? <span className="px-2 py-0.5 rounded bg-atlas-amber-bg text-atlas-amber-warn text-[10px] uppercase">Not in Mapper</span> : <span className="px-2 py-0.5 rounded bg-atlas-green-bg text-atlas-green text-[10px] uppercase">Converted</span>}
                               </td>
                             </tr>
                           );
@@ -1985,8 +2207,8 @@ export default function ComboConverterPage() {
                       <label className="block text-sm font-medium text-atlas-ink">Upload Multi-Platform Workbook</label>
                       <p className="text-xs text-atlas-ink-muted mt-1">
                         One Excel file with <span className="text-atlas-ink font-medium">two sheets</span>: <span className="font-mono text-atlas-ink">Quantity</span> and <span className="font-mono text-atlas-ink">NTO</span>.
-                        Each sheet: <span className="font-mono text-atlas-ink">Master SKU</span>, <span className="font-mono text-atlas-ink">Channel</span>, then one column per month.
-                        Both sheets must have the <span className="text-amber-300">same months, same row count, and same (SKU × Channel) pairs</span> — a pre-conversion check enforces this.
+                        Each sheet: <span className="font-mono text-atlas-ink">{inputIdentifier === "fg" ? "FG Code" : "Master SKU"}</span>, <span className="font-mono text-atlas-ink">Channel</span>, then one column per month.{inputIdentifier === "fg" && <span className="text-atlas-accent font-medium"> (6-digit+G FG Codes)</span>}
+                        Both sheets must have the <span className="text-atlas-amber-warn">same months, same row count, and same (SKU × Channel) pairs</span> — a pre-conversion check enforces this.
                         Combos: Qty expands; NTO splits by MRP ratio.
                       </p>
                     </div>
@@ -2003,42 +2225,89 @@ export default function ComboConverterPage() {
                     onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleMultiFile(f); }}>
                     <input id="multi-file-input" type="file" accept=".xlsx,.xls,.csv" className="hidden"
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMultiFile(f); (e.target as HTMLInputElement).value = ""; }} />
-                    {processing ? <p className="text-purple-400 font-medium">Processing...</p> : (
+                    {processing ? <p className="text-atlas-accent font-medium">Processing...</p> : (
                       <>
                         <div className="text-3xl mb-2">⊞</div>
                         <p className="text-atlas-ink font-medium mb-1">Drop Multi-Platform Excel here</p>
-                        <p className="text-atlas-ink-muted text-sm">Workbook with "Quantity" and "NTO" sheets</p>
+                        <p className="text-atlas-ink-muted text-sm">Workbook with &quot;Quantity&quot; and &quot;NTO&quot; sheets{inputIdentifier === "fg" ? " (FG Code input)" : ""}</p>
                       </>
                     )}
                   </div>
                 </div>
-                {error && <div className="p-3 bg-red-900/50 border border-red-500 rounded-lg"><p className="text-red-300 text-sm">{error}</p></div>}
+                {error && <div className="p-3 bg-atlas-red-bg border border-atlas-red rounded-lg"><p className="text-atlas-red text-sm">{error}</p></div>}
               </>
             ) : (
               <div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                   <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4"><p className="text-xs text-atlas-ink-muted">Input Rows</p><p className="text-2xl font-bold">{multiResult.input.length}</p></div>
-                  <div className="bg-atlas-surface border border-green-800/30 rounded-xl p-4"><p className="text-xs text-green-400">Singles × Channels</p><p className="text-2xl font-bold text-green-400">{multiResult.singles.length}</p></div>
+                  <div className="bg-atlas-green-bg border border-atlas-green/20 rounded-xl p-4"><p className="text-xs text-atlas-green font-medium">Singles × Channels</p><p className="text-2xl font-bold text-atlas-green">{multiResult.singles.length}</p></div>
                   <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4"><p className="text-xs text-atlas-ink-muted">Months</p><p className="text-2xl font-bold">{multiResult.months.length}</p><p className="text-xs text-atlas-ink-muted mt-0.5">{multiResult.months.join(", ")}</p></div>
-                  <div className="bg-atlas-surface border border-red-800/30 rounded-xl p-4"><p className="text-xs text-red-400">CRITICAL</p><p className={`text-2xl font-bold ${multiResult.criticals.filter(c => c.type === "MISSING_MRP").length > 0 ? "text-red-400" : "text-atlas-ink-faint"}`}>{multiResult.criticals.filter(c => c.type === "MISSING_MRP").length}</p></div>
-                  <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4"><p className="text-xs text-atlas-ink-muted">Warnings</p><p className={`text-2xl font-bold ${multiResult.warnings.length > 0 ? "text-amber-400" : "text-atlas-ink-faint"}`}>{multiResult.warnings.length}</p></div>
+                  <div className="bg-atlas-red-bg border border-atlas-red/20 rounded-xl p-4"><p className="text-xs text-atlas-red font-medium">CRITICAL</p><p className={`text-2xl font-bold ${multiResult.criticals.filter(c => c.type === "MISSING_MRP").length > 0 ? "text-atlas-red" : "text-atlas-ink-faint"}`}>{multiResult.criticals.filter(c => c.type === "MISSING_MRP").length}</p></div>
+                  <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4"><p className="text-xs text-atlas-ink-muted">Warnings</p><p className={`text-2xl font-bold ${multiResult.warnings.length > 0 ? "text-atlas-amber-warn" : "text-atlas-ink-faint"}`}>{multiResult.warnings.length}</p></div>
                 </div>
 
                 {multiResult.criticals.filter(c => c.type === "MISSING_MRP").length > 0 && (
-                  <div className="mb-6 p-4 bg-red-950/50 border border-red-500/50 rounded-xl">
+                  <div className="mb-6 p-4 bg-atlas-red-bg border border-atlas-red/30 rounded-xl">
                     <div className="flex items-start gap-3">
-                      <span className="text-red-300 text-xl leading-none">⚠</span>
+                      <span className="text-atlas-red text-xl leading-none">⚠</span>
                       <div className="flex-1">
-                        <div className="text-red-200 font-bold uppercase tracking-wider text-sm">CRITICAL — {multiResult.criticals.filter(c => c.type === "MISSING_MRP").length} combo-channel row(s): NTO not split (missing MRP)</div>
-                        <div className="text-red-300/80 text-xs mt-1">Qty still expanded for these, but NTO is zeroed. Set MRPs in SKU Master and re-run.</div>
+                        <div className="text-atlas-red font-bold uppercase tracking-wider text-sm">CRITICAL — {multiResult.criticals.filter(c => c.type === "MISSING_MRP").length} combo-channel row(s): NTO not split (missing MRP)</div>
+                        <div className="text-atlas-ink-soft text-xs mt-1">Qty still expanded for these, but NTO is zeroed. Set MRPs in SKU Master and re-run.</div>
                       </div>
                     </div>
                   </div>
                 )}
 
+                {/* Unresolved FG Codes (Multi) */}
+                {unresolvedFgCodes.length > 0 && (
+                  <div className="mb-4 p-5 bg-atlas-accent-bg/30 border border-atlas-accent/30 rounded-xl">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-atlas-accent text-lg leading-none">!</span>
+                      <p className="text-sm font-semibold text-atlas-accent">{unresolvedFgCodes.length} FG Code(s) not found</p>
+                    </div>
+                    <p className="text-xs text-atlas-ink-muted mb-4">These FG Codes could not be mapped. Suggest adding them so an admin can review.</p>
+                    <div className="space-y-3">
+                      {unresolvedFgCodes.map((item, idx) => (
+                        <div key={idx} className={`p-4 rounded-lg border ${item.submitted ? "bg-atlas-green-bg/30 border-atlas-green/30" : "bg-atlas-surface border-atlas-line"}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-mono text-sm font-semibold text-atlas-ink">{item.fg_code}</span>
+                            {item.submitted && <span className="text-xs text-atlas-green font-medium px-2 py-0.5 bg-atlas-green-bg rounded">Submitted</span>}
+                          </div>
+                          {!item.submitted && (
+                            <div className="space-y-2">
+                              <div className="flex gap-2 flex-wrap">
+                                {(["add_single", "add_combo", "update_existing"] as const).map((act) => (
+                                  <button key={act} onClick={() => updateUnresolvedFg(idx, "action", act)}
+                                    className={`px-3 py-1.5 text-xs rounded-lg border transition ${item.action === act ? "bg-atlas-accent-bg text-atlas-accent border-atlas-accent/40 ring-1 ring-atlas-accent/30" : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"}`}>
+                                    {act === "add_single" ? "Add as New Single" : act === "add_combo" ? "Add as New Combo" : "Update Existing SKU"}
+                                  </button>
+                                ))}
+                              </div>
+                              {item.action === "add_combo" && (
+                                <input type="text" value={item.comboComponents} onChange={(e) => updateUnresolvedFg(idx, "comboComponents", e.target.value)}
+                                  placeholder="Component SKUs (comma-separated)" className="w-full px-3 py-2 text-xs bg-atlas-surface-soft border border-atlas-line rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-atlas-accent" />
+                              )}
+                              {item.action === "update_existing" && (
+                                <input type="text" value={item.targetMasterSku} onChange={(e) => updateUnresolvedFg(idx, "targetMasterSku", e.target.value)}
+                                  placeholder="Existing Master SKU to update" className="w-full px-3 py-2 text-xs bg-atlas-surface-soft border border-atlas-line rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-atlas-accent" />
+                              )}
+                              {item.action !== "none" && (
+                                <button onClick={() => submitFgSuggestion(idx)} disabled={item.submitting || (item.action === "update_existing" && !item.targetMasterSku.trim()) || (item.action === "add_combo" && !item.comboComponents.trim())}
+                                  className="px-4 py-1.5 text-xs bg-atlas-accent text-white font-semibold rounded-lg hover:bg-atlas-accent-deep transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                  {item.submitting ? "Submitting..." : "Submit Suggestion"}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3 mb-4">
-                  <button onClick={downloadMultiResult} className="px-5 py-2 bg-purple-500 text-black font-semibold rounded-lg hover:bg-purple-400 transition text-sm">Download Output (Excel)</button>
-                  <button onClick={() => setMultiResult(null)} className="px-5 py-2 bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition text-sm">Upload Another</button>
+                  <button onClick={downloadMultiResult} className="px-5 py-2 bg-atlas-accent text-white font-semibold rounded-lg hover:bg-atlas-accent-deep transition text-sm">Download Output (Excel)</button>
+                  <button onClick={() => { setMultiResult(null); setUnresolvedFgCodes([]); }} className="px-5 py-2 bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition text-sm">Upload Another</button>
                 </div>
 
                 <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
@@ -2074,7 +2343,7 @@ export default function ComboConverterPage() {
                               </Fragment>
                             ))}
                             <td className="py-2 px-4 text-xs">
-                              {r.status === "NOT IN MAPPER" ? <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] uppercase">Not in Mapper</span> : <span className="px-2 py-0.5 rounded bg-green-500/20 text-green-300 text-[10px] uppercase">Converted</span>}
+                              {r.status === "NOT IN MAPPER" ? <span className="px-2 py-0.5 rounded bg-atlas-amber-bg text-atlas-amber-warn text-[10px] uppercase">Not in Mapper</span> : <span className="px-2 py-0.5 rounded bg-atlas-green-bg text-atlas-green text-[10px] uppercase">Converted</span>}
                             </td>
                           </tr>
                         ))}
@@ -2096,12 +2365,12 @@ export default function ComboConverterPage() {
               {isAdmin ? (
                 <div className="flex gap-3">
                   <button onClick={() => setMapperSource("file")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${mapperSource === "file" ? "bg-blue-500/10 text-blue-400 border-blue-500/30 ring-1 ring-blue-500" : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"}`}>
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${mapperSource === "file" ? "bg-atlas-blue-bg text-atlas-blue border-atlas-blue/30 ring-1 ring-atlas-blue" : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"}`}>
                     <p className="font-medium">From File (Admin)</p>
                     <p className="text-xs mt-0.5 opacity-70">Excel with both "Combo" and "Mapper" sheets</p>
                   </button>
                   <button onClick={() => setMapperSource("db")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${mapperSource === "db" ? "bg-blue-500/10 text-blue-400 border-blue-500/30 ring-1 ring-blue-500" : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"}`}>
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm text-left transition border ${mapperSource === "db" ? "bg-atlas-blue-bg text-atlas-blue border-atlas-blue/30 ring-1 ring-atlas-blue" : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"}`}>
                     <p className="font-medium">Database Mapper</p>
                     <p className="text-xs mt-0.5 opacity-70">{mapperSets.length > 0 ? `${mapperSets.length} mappers available` : "None uploaded yet"}</p>
                   </button>
@@ -2116,12 +2385,12 @@ export default function ComboConverterPage() {
               {mapperSource === "db" && (
                 <div className="mt-4">
                   {mapperSets.length === 0 ? (
-                    <p className="text-xs text-red-400">{isAdmin ? 'No mappers yet. Click "Manage Mappers" above to upload one.' : "No mappers available. Ask admin to upload."}</p>
+                    <p className="text-xs text-atlas-red">{isAdmin ? 'No mappers yet. Click "Manage Mappers" above to upload one.' : "No mappers available. Ask admin to upload."}</p>
                   ) : (
                     <div>
                       <label className="block text-xs text-atlas-ink-muted mb-1.5">Select mapper:</label>
                       <select value={selectedMapperSetId} onChange={(e) => setSelectedMapperSetId(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        className="w-full px-4 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-atlas-blue">
                         <option value="">Choose a mapper...</option>
                         {mapperSets.map((ms) => (
                           <option key={ms.id} value={ms.id}>
@@ -2131,7 +2400,7 @@ export default function ComboConverterPage() {
                       </select>
                       {loadingMapper && <p className="text-xs text-atlas-ink-muted mt-2">Loading mapper data...</p>}
                       {!loadingMapper && dbMapperRows.length > 0 && (
-                        <p className="text-xs text-green-400 mt-2">Loaded: {dbMapperRows.length} SKUs, P1-P{dbProductCount}</p>
+                        <p className="text-xs text-atlas-green mt-2">Loaded: {dbMapperRows.length} SKUs, P1-P{dbProductCount}</p>
                       )}
                     </div>
                   )}
@@ -2149,16 +2418,19 @@ export default function ComboConverterPage() {
                 onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => { e.preventDefault(); setDragActive(false); const f = e.dataTransfer.files?.[0]; if (f) handleComboFile(f); }}
-                className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition ${dragActive ? "border-blue-500 bg-blue-500/5" : "border-atlas-line hover:border-atlas-line"}`}>
+                className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition ${dragActive ? "border-atlas-blue bg-atlas-blue-bg" : "border-atlas-line hover:border-atlas-line"}`}>
                 <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleComboFile(f); if (fileInputRef.current) fileInputRef.current.value = ""; }} />
                 {processing ? (
-                  <p className="text-blue-400 font-medium">Processing...</p>
+                  <p className="text-atlas-blue font-medium">Processing...</p>
                 ) : (
                   <>
                     <div className="text-3xl mb-2">{"\uD83D\uDD04"}</div>
                     <p className="text-atlas-ink font-medium mb-1">Drop your Excel file here</p>
-                    <p className="text-atlas-ink-muted text-sm">{mapperSource === "file" ? 'Needs "Combo" + "Mapper" sheets' : 'Needs "Combo" sheet (or first sheet)'}</p>
+                    <p className="text-atlas-ink-muted text-sm">
+                      {mapperSource === "file" ? 'Needs "Combo" + "Mapper" sheets' : 'Needs "Combo" sheet (or first sheet)'}
+                      {inputIdentifier === "fg" && <span className="text-atlas-accent ml-1">(FG Code input)</span>}
+                    </p>
                   </>
                 )}
               </div>
@@ -2169,15 +2441,15 @@ export default function ComboConverterPage() {
               <h3 className="text-sm font-medium text-atlas-ink mb-3">Expected Format</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                 <div>
-                  <p className="text-blue-400 font-medium mb-1">Combo Sheet</p>
+                  <p className="text-atlas-blue font-medium mb-1">Combo Sheet</p>
                   <div className="bg-atlas-surface-soft rounded p-3 font-mono">
-                    <p className="text-atlas-ink-muted">Master SKU | Amazon | Flipkart | ...</p>
-                    <p className="text-atlas-ink">SKU_ABC    | 500    | 300      | ...</p>
+                    <p className="text-atlas-ink-muted">{inputIdentifier === "fg" ? "FG Code" : "Master SKU"} | Amazon | Flipkart | ...</p>
+                    <p className="text-atlas-ink">{inputIdentifier === "fg" ? "14244G     | 500    | 300      | ..." : "SKU_ABC    | 500    | 300      | ..."}</p>
                   </div>
-                  <p className="text-atlas-ink-muted mt-1">Col 1 = SKU, rest = qty columns (any names/count)</p>
+                  <p className="text-atlas-ink-muted mt-1">Col 1 = {inputIdentifier === "fg" ? "FG Code (6-digit+G)" : "SKU"}, rest = qty columns (any names/count)</p>
                 </div>
                 <div>
-                  <p className="text-blue-400 font-medium mb-1">Mapper Sheet</p>
+                  <p className="text-atlas-blue font-medium mb-1">Mapper Sheet</p>
                   <div className="bg-atlas-surface-soft rounded p-3 font-mono">
                     <p className="text-atlas-ink-muted">_ | Master SKU | ... | Combo | ... | P1..P96</p>
                     <p className="text-atlas-ink">  | COMBO_XY   | ... | Yes   | ... | A | B ..</p>
@@ -2198,13 +2470,13 @@ export default function ComboConverterPage() {
                 <p className="text-xs text-atlas-ink-muted">Input Rows</p>
                 <p className="text-2xl font-bold">{result.consolidated.length}</p>
               </div>
-              <div className="bg-atlas-surface border border-green-800/30 rounded-xl p-4">
-                <p className="text-xs text-green-400">Singles Output</p>
-                <p className="text-2xl font-bold text-green-400">{result.singles.length}</p>
+              <div className="bg-atlas-green-bg border border-atlas-green/20 rounded-xl p-4">
+                <p className="text-xs text-atlas-green font-medium">Singles Output</p>
+                <p className="text-2xl font-bold text-atlas-green">{result.singles.length}</p>
               </div>
-              <div className="bg-atlas-surface border border-blue-800/30 rounded-xl p-4">
-                <p className="text-xs text-blue-400">Combos Resolved</p>
-                <p className="text-2xl font-bold text-blue-400">{result.consolidated.filter((r) => ["yes", "y"].includes(r.combo.toLowerCase())).length}</p>
+              <div className="bg-atlas-blue-bg border border-atlas-blue/20 rounded-xl p-4">
+                <p className="text-xs text-atlas-blue font-medium">Combos Resolved</p>
+                <p className="text-2xl font-bold text-atlas-blue">{result.consolidated.filter((r) => ["yes", "y"].includes(r.combo.toLowerCase())).length}</p>
               </div>
               <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
                 <p className="text-xs text-atlas-ink-muted">Qty Columns</p>
@@ -2213,16 +2485,63 @@ export default function ComboConverterPage() {
               </div>
               <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
                 <p className="text-xs text-atlas-ink-muted">Warnings</p>
-                <p className={`text-2xl font-bold ${result.warnings.length > 0 ? "text-red-400" : "text-atlas-ink-faint"}`}>{result.warnings.length}</p>
+                <p className={`text-2xl font-bold ${result.warnings.length > 0 ? "text-atlas-red" : "text-atlas-ink-faint"}`}>{result.warnings.length}</p>
               </div>
             </div>
 
             {/* Warnings */}
             {result.warnings.length > 0 && (
-              <div className="mb-6 p-4 bg-amber-900/30 border border-amber-500/30 rounded-xl">
-                <p className="text-amber-400 text-sm font-medium mb-2">Warnings ({result.warnings.length})</p>
+              <div className="mb-6 p-4 bg-atlas-amber-bg border border-atlas-amber-warn/30 rounded-xl">
+                <p className="text-atlas-amber-warn text-sm font-medium mb-2">Warnings ({result.warnings.length})</p>
                 <div className="max-h-[120px] overflow-y-auto space-y-1">
-                  {result.warnings.map((w, i) => (<p key={i} className="text-xs text-amber-300/70">{w}</p>))}
+                  {result.warnings.map((w, i) => (<p key={i} className="text-xs text-atlas-ink-soft">{w}</p>))}
+                </div>
+              </div>
+            )}
+
+            {/* Unresolved FG Codes */}
+            {unresolvedFgCodes.length > 0 && (
+              <div className="mb-6 p-5 bg-atlas-accent-bg/30 border border-atlas-accent/30 rounded-xl">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-atlas-accent text-lg leading-none">!</span>
+                  <p className="text-sm font-semibold text-atlas-accent">{unresolvedFgCodes.length} FG Code(s) not found</p>
+                </div>
+                <p className="text-xs text-atlas-ink-muted mb-4">These FG Codes could not be mapped. Suggest adding them so an admin can review.</p>
+                <div className="space-y-3">
+                  {unresolvedFgCodes.map((item, idx) => (
+                    <div key={idx} className={`p-4 rounded-lg border ${item.submitted ? "bg-atlas-green-bg/30 border-atlas-green/30" : "bg-atlas-surface border-atlas-line"}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-mono text-sm font-semibold text-atlas-ink">{item.fg_code}</span>
+                        {item.submitted && <span className="text-xs text-atlas-green font-medium px-2 py-0.5 bg-atlas-green-bg rounded">Submitted</span>}
+                      </div>
+                      {!item.submitted && (
+                        <div className="space-y-2">
+                          <div className="flex gap-2 flex-wrap">
+                            {(["add_single", "add_combo", "update_existing"] as const).map((act) => (
+                              <button key={act} onClick={() => updateUnresolvedFg(idx, "action", act)}
+                                className={`px-3 py-1.5 text-xs rounded-lg border transition ${item.action === act ? "bg-atlas-accent-bg text-atlas-accent border-atlas-accent/40 ring-1 ring-atlas-accent/30" : "bg-atlas-surface-soft text-atlas-ink-muted border-transparent hover:bg-atlas-surface-soft"}`}>
+                                {act === "add_single" ? "Add as New Single" : act === "add_combo" ? "Add as New Combo" : "Update Existing SKU"}
+                              </button>
+                            ))}
+                          </div>
+                          {item.action === "add_combo" && (
+                            <input type="text" value={item.comboComponents} onChange={(e) => updateUnresolvedFg(idx, "comboComponents", e.target.value)}
+                              placeholder="Component SKUs (comma-separated)" className="w-full px-3 py-2 text-xs bg-atlas-surface-soft border border-atlas-line rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-atlas-accent" />
+                          )}
+                          {item.action === "update_existing" && (
+                            <input type="text" value={item.targetMasterSku} onChange={(e) => updateUnresolvedFg(idx, "targetMasterSku", e.target.value)}
+                              placeholder="Existing Master SKU to update" className="w-full px-3 py-2 text-xs bg-atlas-surface-soft border border-atlas-line rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-atlas-accent" />
+                          )}
+                          {item.action !== "none" && (
+                            <button onClick={() => submitFgSuggestion(idx)} disabled={item.submitting || (item.action === "update_existing" && !item.targetMasterSku.trim()) || (item.action === "add_combo" && !item.comboComponents.trim())}
+                              className="px-4 py-1.5 text-xs bg-atlas-accent text-white font-semibold rounded-lg hover:bg-atlas-accent-deep transition disabled:opacity-50 disabled:cursor-not-allowed">
+                              {item.submitting ? "Submitting..." : "Submit Suggestion"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -2230,11 +2549,11 @@ export default function ComboConverterPage() {
             {/* Tabs */}
             <div className="flex gap-2 mb-4">
               <button onClick={() => setActiveTab("singles")}
-                className={`px-4 py-2 text-sm rounded-lg transition ${activeTab === "singles" ? "bg-green-500/20 text-green-400 ring-1 ring-green-500" : "bg-atlas-surface-soft text-atlas-ink-muted hover:bg-atlas-surface-soft"}`}>
+                className={`px-4 py-2 text-sm rounded-lg transition ${activeTab === "singles" ? "bg-atlas-green-bg text-atlas-green ring-1 ring-atlas-green" : "bg-atlas-surface-soft text-atlas-ink-muted hover:bg-atlas-surface-soft"}`}>
                 Singles ({result.singles.length})
               </button>
               <button onClick={() => setActiveTab("consolidated")}
-                className={`px-4 py-2 text-sm rounded-lg transition ${activeTab === "consolidated" ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500" : "bg-atlas-surface-soft text-atlas-ink-muted hover:bg-atlas-surface-soft"}`}>
+                className={`px-4 py-2 text-sm rounded-lg transition ${activeTab === "consolidated" ? "bg-atlas-blue-bg text-atlas-blue ring-1 ring-atlas-blue" : "bg-atlas-surface-soft text-atlas-ink-muted hover:bg-atlas-surface-soft"}`}>
                 Consolidated ({result.consolidated.length})
               </button>
             </div>
@@ -2259,11 +2578,11 @@ export default function ComboConverterPage() {
                         const rt = result.qtyColumns.reduce((s, c) => s + (row.quantities[c] || 0), 0);
                         const sku = skuLookup.get(row.master_sku.toLowerCase());
                         return (
-                          <tr key={i} className={`border-b border-atlas-line/50 hover:bg-atlas-surface-soft/20 ${row.status === "NOT IN MAPPER" ? "bg-red-900/10" : ""}`}>
+                          <tr key={i} className={`border-b border-atlas-line/50 hover:bg-atlas-surface-soft/20 ${row.status === "NOT IN MAPPER" ? "bg-atlas-red-bg" : ""}`}>
                             <td className="py-2.5 px-4 font-mono text-xs">{row.master_sku}</td>
                             <td className="py-2.5 px-4 font-mono text-xs">{sku?.new_fg_code || <span className="text-atlas-ink-faint">—</span>}</td>
                             <td className="py-2.5 px-4 text-xs text-atlas-ink truncate max-w-[200px]" title={sku?.product_name || ""}>{sku?.product_name || <span className="text-atlas-ink-faint">—</span>}</td>
-                            <td className="py-2.5 px-4"><span className={`px-2 py-0.5 rounded text-xs ${row.status === "Converted" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>{row.status}</span></td>
+                            <td className="py-2.5 px-4"><span className={`px-2 py-0.5 rounded text-xs ${row.status === "Converted" ? "bg-atlas-green-bg text-atlas-green" : "bg-atlas-red-bg text-atlas-red"}`}>{row.status}</span></td>
                             {result.qtyColumns.map((col) => (
                               <td key={col} className="py-2.5 px-4 text-right font-mono text-xs">
                                 {(row.quantities[col] || 0) > 0 ? Math.round((row.quantities[col] || 0) * 100) / 100 : <span className="text-atlas-ink-faint">-</span>}
@@ -2278,7 +2597,7 @@ export default function ComboConverterPage() {
                       <tr className="bg-atlas-surface-soft/50">
                         <td className="py-3 px-4 font-semibold" colSpan={4}>Total</td>
                         {result.qtyColumns.map((col) => (
-                          <td key={col} className="py-3 px-4 text-right font-mono font-bold text-blue-400">
+                          <td key={col} className="py-3 px-4 text-right font-mono font-bold text-atlas-blue">
                             {Math.round(result.singles.reduce((s, r) => s + (r.quantities[col] || 0), 0) * 100) / 100}
                           </td>
                         ))}
@@ -2297,15 +2616,15 @@ export default function ComboConverterPage() {
               <div>
                 {/* Re-convert banner for unmapped edits */}
                 {unmappedEdits.size > 0 && (
-                  <div className="mb-4 p-4 bg-blue-900/30 border border-blue-500/30 rounded-xl">
+                  <div className="mb-4 p-4 bg-atlas-blue-bg border border-atlas-blue/30 rounded-xl">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-blue-300 font-medium">{unmappedEdits.size} unmapped SKU(s) — edit Combo & Components below</p>
-                        <p className="text-xs text-blue-400/60 mt-0.5">Set Combo = Yes/No. Enter component SKUs comma-separated. Then Re-Convert for instant results, or Submit to add permanently.</p>
+                        <p className="text-sm text-atlas-blue font-medium">{unmappedEdits.size} unmapped SKU(s) — edit Combo & Components below</p>
+                        <p className="text-xs text-atlas-blue/60 mt-0.5">Set Combo = Yes/No. Enter component SKUs comma-separated. Then Re-Convert for instant results, or Submit to add permanently.</p>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={handleReConvert}
-                          className="px-4 py-2 text-sm bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-400 transition whitespace-nowrap">
+                          className="px-4 py-2 text-sm bg-atlas-blue text-white font-semibold rounded-lg hover:bg-atlas-blue/80 transition whitespace-nowrap">
                           Re-Convert
                         </button>
                       </div>
@@ -2315,19 +2634,19 @@ export default function ComboConverterPage() {
 
                 {/* Submit banner — visible whenever there are NOT_IN_MAPPER rows */}
                 {result.consolidated.some((r) => r.mapper_status === "NOT IN MAPPER") && (
-                  <div className="mb-4 p-4 bg-orange-900/20 border border-blue-500/30 rounded-xl">
+                  <div className="mb-4 p-4 bg-orange-900/20 border border-atlas-blue/30 rounded-xl">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-blue-300 font-medium">Submit unmapped SKUs for admin approval</p>
-                        <p className="text-xs text-blue-400/60 mt-0.5">Fill in Combo & Components for unmapped SKUs above, then submit to add them permanently to a mapper.</p>
+                        <p className="text-sm text-atlas-blue font-medium">Submit unmapped SKUs for admin approval</p>
+                        <p className="text-xs text-atlas-blue/60 mt-0.5">Fill in Combo & Components for unmapped SKUs above, then submit to add them permanently to a mapper.</p>
                       </div>
                       <button onClick={submitSuggestions}
-                        className="px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition whitespace-nowrap">
+                        className="px-4 py-2 text-sm bg-atlas-navy text-white font-semibold rounded-lg hover:bg-atlas-navy-soft transition whitespace-nowrap">
                         Submit to Mapper
                       </button>
                     </div>
                     {submitMsg && (
-                      <p className={`mt-2 text-xs ${submitMsg.includes("Failed") ? "text-red-400" : "text-green-400"}`}>{submitMsg}</p>
+                      <p className={`mt-2 text-xs ${submitMsg.includes("Failed") ? "text-atlas-red" : "text-atlas-green"}`}>{submitMsg}</p>
                     )}
                   </div>
                 )}
@@ -2355,20 +2674,20 @@ export default function ComboConverterPage() {
                           const edit = unmappedEdits.get(row.master_sku);
                           const mapperRow = allMapperRows.find((m) => m.master_sku === row.master_sku);
                           return (
-                            <tr key={i} className={`border-b border-atlas-line/50 hover:bg-atlas-surface-soft/20 ${isUnmapped ? "bg-red-900/10" : ""}`}>
+                            <tr key={i} className={`border-b border-atlas-line/50 hover:bg-atlas-surface-soft/20 ${isUnmapped ? "bg-atlas-red-bg" : ""}`}>
                               <td className="py-2.5 px-4 font-mono text-xs">{row.master_sku}</td>
                               <td className="py-2.5 px-4 font-mono text-xs text-atlas-ink-muted">{mapperRow?.fg_code || <span className="text-atlas-ink-faint">-</span>}</td>
                               {result.qtyColumns.map((col) => (
                                 <td key={col} className="py-2.5 px-4 text-right font-mono text-xs">{(row.quantities[col] || 0) > 0 ? Math.round((row.quantities[col] || 0) * 100) / 100 : <span className="text-atlas-ink-faint">-</span>}</td>
                               ))}
                               <td className="py-2.5 px-4">
-                                <span className={`px-2 py-0.5 rounded text-xs ${row.mapper_status === "Found" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>{row.mapper_status}</span>
+                                <span className={`px-2 py-0.5 rounded text-xs ${row.mapper_status === "Found" ? "bg-atlas-green-bg text-atlas-green" : "bg-atlas-red-bg text-atlas-red"}`}>{row.mapper_status}</span>
                               </td>
                               <td className="py-2.5 px-4 text-xs">
                                 {isUnmapped && edit ? (
                                   <select value={edit.combo}
                                     onChange={(e) => { const next = new Map(unmappedEdits); next.set(row.master_sku, { ...edit, combo: e.target.value }); setUnmappedEdits(next); }}
-                                    className="w-20 px-2 py-1 bg-atlas-surface-soft border border-blue-500/50 rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    className="w-20 px-2 py-1 bg-atlas-surface-soft border border-atlas-blue/50 rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-atlas-blue">
                                     <option value="No">No</option>
                                     <option value="Yes">Yes</option>
                                   </select>
@@ -2380,7 +2699,7 @@ export default function ComboConverterPage() {
                                 {isUnmapped && edit ? (
                                   <input type="text" value={edit.products} placeholder="SKU_A, SKU_B, ..."
                                     onChange={(e) => { const next = new Map(unmappedEdits); next.set(row.master_sku, { ...edit, products: e.target.value }); setUnmappedEdits(next); }}
-                                    className="w-full min-w-[200px] px-2 py-1 bg-atlas-surface-soft border border-blue-500/50 rounded text-xs text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                    className="w-full min-w-[200px] px-2 py-1 bg-atlas-surface-soft border border-atlas-blue/50 rounded text-xs text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-1 focus:ring-atlas-blue" />
                                 ) : (
                                   <span className="text-atlas-ink-muted max-w-[300px] truncate block">{row.products.filter((p) => p).join(", ") || <span className="text-atlas-ink-faint">-</span>}</span>
                                 )}
@@ -2401,10 +2720,10 @@ export default function ComboConverterPage() {
       {/* ====== ROW EDITOR MODAL (Admin) ====== */}
       {rowEditorSetId && isAdmin && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) closeRowEditor(); }}>
-          <div className="bg-atlas-surface border border-purple-500/30 rounded-xl w-full max-w-[1400px] max-h-[90vh] flex flex-col shadow-2xl">
+          <div className="bg-atlas-surface border border-atlas-accent/30 rounded-xl w-full max-w-[1400px] max-h-[90vh] flex flex-col shadow-2xl">
             <div className="flex items-center justify-between p-5 border-b border-atlas-line">
               <div>
-                <h3 className="text-lg font-semibold text-purple-400">Mapper Row Editor</h3>
+                <h3 className="text-lg font-semibold text-atlas-accent">Mapper Row Editor</h3>
                 <p className="text-xs text-atlas-ink-muted mt-0.5">
                   {mapperSets.find((s) => s.id === rowEditorSetId)?.name} · {editorRows.length} row(s)
                   {(() => {
@@ -2412,8 +2731,8 @@ export default function ComboConverterPage() {
                     const issues = editorRows.filter((r) => hasInconsistency(r) && !isCriticalRow(r)).length;
                     return (
                       <>
-                        {critical > 0 && <span className="ml-2 text-red-400 font-semibold">· {critical} CRITICAL</span>}
-                        {issues > 0 && <span className="ml-2 text-blue-400">· {issues} with issues</span>}
+                        {critical > 0 && <span className="ml-2 text-atlas-red font-semibold">· {critical} CRITICAL</span>}
+                        {issues > 0 && <span className="ml-2 text-atlas-blue">· {issues} with issues</span>}
                       </>
                     );
                   })()}
@@ -2421,7 +2740,7 @@ export default function ComboConverterPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={addEditorRow} className="px-3 py-1.5 text-xs bg-green-500/20 text-green-400 ring-1 ring-green-500/40 rounded-lg hover:bg-green-500/30 transition">+ Add Row</button>
+                <button onClick={addEditorRow} className="px-3 py-1.5 text-xs bg-atlas-green-bg text-atlas-green ring-1 ring-atlas-green/40 rounded-lg hover:bg-atlas-green-bg transition">+ Add Row</button>
                 <button onClick={closeRowEditor} className="px-3 py-1.5 text-xs bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">Close</button>
               </div>
             </div>
@@ -2432,7 +2751,7 @@ export default function ComboConverterPage() {
                 placeholder="Search Master SKU or component..."
                 value={editorSearch}
                 onChange={(e) => setEditorSearch(e.target.value)}
-                className="flex-1 px-3 py-1.5 bg-atlas-surface-soft border border-atlas-line rounded text-sm text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-1 focus:ring-purple-500"
+                className="flex-1 px-3 py-1.5 bg-atlas-surface-soft border border-atlas-line rounded text-sm text-atlas-ink placeholder-atlas-ink-faint focus:outline-none focus:ring-1 focus:ring-atlas-accent"
               />
               <label className="flex items-center gap-2 text-xs text-atlas-ink-muted cursor-pointer">
                 <input type="checkbox" checked={editorIssuesOnly} onChange={(e) => setEditorIssuesOnly(e.target.checked)} className="accent-purple-500" />
@@ -2444,16 +2763,16 @@ export default function ComboConverterPage() {
               const criticalRows = editorRows.filter((r) => isCriticalRow(r));
               if (criticalRows.length === 0) return null;
               return (
-                <div className="px-5 py-3 text-xs bg-red-950/60 text-red-200 border-b border-red-500/40">
-                  <div className="font-bold text-red-300 uppercase tracking-wider mb-1">⚠ {criticalRows.length} Critical row{criticalRows.length > 1 ? "s" : ""} — Admin action required</div>
-                  <div className="text-red-300/80">
+                <div className="px-5 py-3 text-xs bg-atlas-red-bg text-atlas-red border-b border-atlas-red/40">
+                  <div className="font-bold text-atlas-red uppercase tracking-wider mb-1">⚠ {criticalRows.length} Critical row{criticalRows.length > 1 ? "s" : ""} — Admin action required</div>
+                  <div className="text-atlas-red/80">
                     These rows have <span className="font-mono">Combo=Yes</span> but no components. Combos cannot expand into singles and will silently drop from conversions. Either add the component SKUs, or uncheck the Combo flag if the SKU is actually a single.
                   </div>
                 </div>
               );
             })()}
             {editorMsg && (
-              <div className="px-5 py-2 text-xs bg-red-900/40 text-red-300 border-b border-red-500/20">{editorMsg}</div>
+              <div className="px-5 py-2 text-xs bg-atlas-red-bg text-atlas-red border-b border-atlas-red/20">{editorMsg}</div>
             )}
 
             <div className="flex-1 overflow-hidden flex">
@@ -2487,16 +2806,16 @@ export default function ComboConverterPage() {
                         .map(({ r, origIdx }) => {
                           const critical = isCriticalRow(r);
                           const issue = hasInconsistency(r);
-                          const rowBg = critical ? "bg-red-900/25 hover:bg-red-900/35" : issue ? "bg-amber-900/10" : r.isNew ? "bg-green-900/10" : "";
+                          const rowBg = critical ? "bg-atlas-red-bg hover:bg-atlas-red-bg" : issue ? "bg-atlas-amber-bg" : r.isNew ? "bg-atlas-green-bg" : "";
                           return (
-                            <tr key={origIdx} className={`border-b border-atlas-line/50 ${rowBg} ${r.dirty ? "ring-1 ring-blue-500/20" : ""}`}>
+                            <tr key={origIdx} className={`border-b border-atlas-line/50 ${rowBg} ${r.dirty ? "ring-1 ring-atlas-blue/20" : ""}`}>
                               <td className="py-1.5 px-3">
                                 {critical ? (
-                                  <span title="CRITICAL: Combo=Yes but no components — cannot expand" className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/30 text-red-200 font-bold text-[10px] uppercase ring-1 ring-red-500/60">⚠ Crit</span>
+                                  <span title="CRITICAL: Combo=Yes but no components — cannot expand" className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-atlas-red-bg text-atlas-red font-bold text-[10px] uppercase ring-1 ring-atlas-red/60">⚠ Crit</span>
                                 ) : issue ? (
-                                  <span title="Inconsistent: Combo flag doesn't match components (will auto-correct on save)" className="text-amber-400">⚠</span>
+                                  <span title="Inconsistent: Combo flag doesn't match components (will auto-correct on save)" className="text-atlas-amber-warn">⚠</span>
                                 ) : r.dirty ? (
-                                  <span className="text-blue-400" title="Unsaved">●</span>
+                                  <span className="text-atlas-blue" title="Unsaved">●</span>
                                 ) : ""}
                               </td>
                               <td className="py-1.5 px-3">
@@ -2521,11 +2840,11 @@ export default function ComboConverterPage() {
                               <td className="py-1.5 px-3 text-right">
                                 <div className="flex gap-1 justify-end">
                                   <button onClick={() => saveEditorRow(origIdx)} disabled={r.saving || !r.dirty}
-                                    className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-300 rounded hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                                    className="px-2 py-0.5 text-xs bg-atlas-accent-bg text-atlas-accent rounded hover:bg-atlas-accent-bg disabled:opacity-30 disabled:cursor-not-allowed transition">
                                     {r.saving ? "..." : "Save"}
                                   </button>
                                   <button onClick={() => deleteEditorRow(origIdx)} disabled={r.saving}
-                                    className="px-2 py-0.5 text-xs bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition">
+                                    className="px-2 py-0.5 text-xs bg-atlas-red-bg text-atlas-red rounded hover:bg-atlas-red-bg transition">
                                     Del
                                   </button>
                                 </div>
@@ -2549,7 +2868,7 @@ export default function ComboConverterPage() {
                       {editorHistory.map((h, i) => (
                         <div key={i} className="p-3 text-xs">
                           <div className="flex items-center justify-between">
-                            <span className={`font-mono ${h.action === "Auto-correct" ? "text-amber-400" : h.action === "Deleted" ? "text-red-400" : "text-green-400"}`}>{h.action}</span>
+                            <span className={`font-mono ${h.action === "Auto-correct" ? "text-atlas-amber-warn" : h.action === "Deleted" ? "text-atlas-red" : "text-atlas-green"}`}>{h.action}</span>
                             <span className="text-atlas-ink-faint">{h.ts}</span>
                           </div>
                           <div className="font-mono text-atlas-ink mt-0.5 truncate" title={h.master_sku}>{h.master_sku}</div>
@@ -2613,7 +2932,7 @@ function SuggestionCard({ suggestion, mapperSets, onApprove, onReject }: {
         <div>
           <label className="block text-xs text-atlas-ink-muted mb-1">Combo</label>
           <select value={editCombo} onChange={(e) => setEditCombo(e.target.value)}
-            className="w-full px-2 py-1.5 bg-atlas-surface border border-atlas-line rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-blue-500">
+            className="w-full px-2 py-1.5 bg-atlas-surface border border-atlas-line rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-atlas-blue">
             <option value="No">No</option>
             <option value="Yes">Yes</option>
           </select>
@@ -2621,7 +2940,7 @@ function SuggestionCard({ suggestion, mapperSets, onApprove, onReject }: {
         <div>
           <label className="block text-xs text-atlas-ink-muted mb-1">Components (comma-separated)</label>
           <input type="text" value={editProducts} onChange={(e) => setEditProducts(e.target.value)}
-            className="w-full px-2 py-1.5 bg-atlas-surface border border-atlas-line rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            className="w-full px-2 py-1.5 bg-atlas-surface border border-atlas-line rounded text-xs text-atlas-ink focus:outline-none focus:ring-1 focus:ring-atlas-blue" />
         </div>
       </div>
 
@@ -2631,7 +2950,7 @@ function SuggestionCard({ suggestion, mapperSets, onApprove, onReject }: {
         <div className="flex flex-wrap gap-2">
           {mapperSets.map((ms) => (
             <button key={ms.id} onClick={() => toggleMapper(ms.id)}
-              className={`px-3 py-1 text-xs rounded-lg transition border ${selectedMappers.has(ms.id) ? "bg-green-500/20 text-green-400 border-green-500/50" : "bg-atlas-surface text-atlas-ink-muted border-atlas-line hover:border-atlas-line"}`}>
+              className={`px-3 py-1 text-xs rounded-lg transition border ${selectedMappers.has(ms.id) ? "bg-atlas-green-bg text-atlas-green border-atlas-green/50" : "bg-atlas-surface text-atlas-ink-muted border-atlas-line hover:border-atlas-line"}`}>
               {ms.name}
             </button>
           ))}
@@ -2641,7 +2960,7 @@ function SuggestionCard({ suggestion, mapperSets, onApprove, onReject }: {
       {/* Actions */}
       <div className="flex items-center gap-2">
         <button onClick={handleApprove} disabled={selectedMappers.size === 0}
-          className="px-4 py-1.5 text-xs bg-green-500 text-white font-semibold rounded-lg hover:bg-green-400 disabled:opacity-40 disabled:cursor-not-allowed transition">
+          className="px-4 py-1.5 text-xs bg-atlas-green text-white font-semibold rounded-lg hover:bg-atlas-green/80 disabled:opacity-40 disabled:cursor-not-allowed transition">
           Approve & Add to {selectedMappers.size} mapper(s)
         </button>
         {!showReject ? (
@@ -2653,7 +2972,7 @@ function SuggestionCard({ suggestion, mapperSets, onApprove, onReject }: {
             <input type="text" placeholder="Reason (optional)" value={rejectNote} onChange={(e) => setRejectNote(e.target.value)}
               className="px-2 py-1.5 bg-atlas-surface border border-atlas-line rounded text-xs text-atlas-ink placeholder-atlas-ink-faint focus:outline-none w-48" />
             <button onClick={() => { onReject(rejectNote); setShowReject(false); }}
-              className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-400 transition">Confirm</button>
+              className="px-3 py-1.5 text-xs bg-atlas-red text-white rounded-lg hover:bg-atlas-red/80 transition">Confirm</button>
             <button onClick={() => setShowReject(false)} className="text-xs text-atlas-ink-muted">Cancel</button>
           </div>
         )}

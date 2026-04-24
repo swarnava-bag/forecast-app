@@ -70,6 +70,7 @@ export default function AdminChannelsPage() {
     setShowClusterForm(true);
     setShowChannelForm(false);
     setError(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function saveCluster() {
@@ -107,6 +108,7 @@ export default function AdminChannelsPage() {
     setShowChannelForm(true);
     setShowClusterForm(false);
     setError(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function saveChannel() {
