@@ -101,24 +101,21 @@ function runConversion(comboRows: ComboInputRow[], mapperRows: MapperRow[], qtyC
   const allSkus = new Set<string>();
   for (const row of consolidated) { allSkus.add(row.master_sku); row.products.forEach((p) => { if (p) allSkus.add(p); }); }
 
-  // Build singles
+  // Build singles.
+  // A SKU missing from the mapper is still a real single: it keeps its direct input qty AND any qty
+  // contributed by combos that expand into it. Missing from the mapper is a labelling problem, never
+  // a reason to drop units — flag it as NOT IN MAPPER but always count it.
   const singles: SinglesRow[] = [];
   for (const sku of [...allSkus].sort()) {
-    if (notInMapper.has(sku)) {
-      const quantities: Record<string, number> = {};
-      for (const col of qtyColumns) quantities[col] = consolidated.filter((r) => r.master_sku === sku).reduce((s, r) => s + (r.quantities[col] || 0), 0);
-      if (Object.values(quantities).some((v) => v > 0)) singles.push({ master_sku: sku, quantities, status: "NOT IN MAPPER" });
-      continue;
-    }
-    if (comboSkus.has(sku)) continue;
+    if (comboSkus.has(sku)) continue; // combos expand into their components — never emitted as a single
     const quantities: Record<string, number> = {};
     for (const col of qtyColumns) {
-      let total = 0;
-      if (!comboSkus.has(sku)) total += consolidated.filter((r) => r.master_sku === sku).reduce((s, r) => s + (r.quantities[col] || 0), 0);
+      let total = consolidated.filter((r) => r.master_sku === sku).reduce((s, r) => s + (r.quantities[col] || 0), 0);
       for (const row of consolidated) { for (const p of row.products) { if (p === sku) total += row.quantities[col] || 0; } }
       quantities[col] = total;
     }
-    if (Object.values(quantities).some((v) => v > 0)) singles.push({ master_sku: sku, quantities, status: "Converted" });
+    if (Object.values(quantities).some((v) => v > 0))
+      singles.push({ master_sku: sku, quantities, status: notInMapper.has(sku) ? "NOT IN MAPPER" : "Converted" });
   }
   return { consolidated, singles, qtyColumns, productCount, warnings };
 }
