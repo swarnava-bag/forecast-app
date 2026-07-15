@@ -8,7 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { SkuMasterRow, MapperDbRow } from "../lib/mapper/model";
 import {
-  planAddBatch, planFix, planCellEdit, planPurgeGhost, planRetire, planHardDelete,
+  planAddBatch, planFix, planCellEdit, planPurgeComponent, planRetire, planHardDelete,
   expandComponents, parseMrp, type LiveState, type DraftSku, type RefCounts,
 } from "../lib/mapper/ops";
 
@@ -222,7 +222,7 @@ test("clearing components demotes a combo back to a single", () => {
   assert.equal(w.patch.is_combo, false, "a combo flag with no components is CRITICAL — never leave that state behind");
 });
 
-// ── planPurgeGhost ───────────────────────────────────────────────────────────
+// ── planPurgeComponent ───────────────────────────────────────────────────────────
 
 test("purging a ghost deletes its parent combos (the real production shape)", () => {
   // Mirrors Oats_NS_400G: a ghost with no row anywhere, used by parents that each
@@ -235,7 +235,7 @@ test("purging a ghost deletes its parent combos (the real production shape)", ()
       mr({ master_sku: "P2", is_combo: true, products: ["GHOST"] }),
     ],
   };
-  const plan = planPurgeGhost(live, "GHOST");
+  const plan = planPurgeComponent(live, "GHOST");
   assert.deepEqual(plan.writes.map((w) => w.op), ["delete_mapper", "delete_mapper"]);
   assert.match(plan.changes.map((c) => c.details).join(), /survive independently/);
   const survivor = plan.impact.find((d) => d.masterSku === "Oats_Rolled_400G");
@@ -247,7 +247,7 @@ test("purging deletes a parent's sku_master row too — never leaves an orphan",
     skuMaster: [sm({ new_master_sku: "P1", new_fg_code: "1G" })],
     mapperRows: [mr({ master_sku: "P1", is_combo: true, products: ["GHOST"] })],
   };
-  const plan = planPurgeGhost(live, "GHOST");
+  const plan = planPurgeComponent(live, "GHOST");
   assert.deepEqual(plan.writes.map((w) => w.op).sort(), ["delete_mapper", "delete_sku_master"],
     "deleting only the mapper row would leave P1 in sku_master as a fresh orphan");
   assert.equal(plan.newBlocking.length, 0);
@@ -262,7 +262,7 @@ test("purging REFUSES a parent with history — the FK cascades", () => {
     mapperRows: [mr({ master_sku: "P1", is_combo: true, products: ["GHOST", "KEEP"] }), mr({ master_sku: "KEEP" })],
   };
   const refs = new Map([["p1", { ...NO_REFS, forecast_data: 240 }]]);
-  const plan = planPurgeGhost(live, "GHOST", refs);
+  const plan = planPurgeComponent(live, "GHOST", refs);
   assert.equal(plan.writes.length, 0, "not even the mapper row — deleting half would leave an orphan");
   assert.match(plan.skipped.join(), /forecast_data \(240\)/);
   assert.match(plan.skipped.join(), /cascade and destroy that history/);
@@ -273,14 +273,14 @@ test("purging proceeds for a parent with no history", () => {
     skuMaster: [sm({ new_master_sku: "P1", new_fg_code: "1G" })],
     mapperRows: [mr({ master_sku: "P1", is_combo: true, products: ["GHOST"] })],
   };
-  const plan = planPurgeGhost(live, "GHOST", new Map([["p1", NO_REFS]]));
+  const plan = planPurgeComponent(live, "GHOST", new Map([["p1", NO_REFS]]));
   assert.deepEqual(plan.writes.map((w) => w.op).sort(), ["delete_mapper", "delete_sku_master"]);
 });
 
 test("purging a non-existent ghost is a safe no-op", () => {
-  const plan = planPurgeGhost({ skuMaster: [], mapperRows: [] }, "NOPE");
+  const plan = planPurgeComponent({ skuMaster: [], mapperRows: [] }, "NOPE");
   assert.equal(plan.writes.length, 0);
-  assert.match(plan.skipped.join(), /nothing references it/);
+  assert.match(plan.skipped.join(), /no combo uses it/);
 });
 
 // ── planRetire ───────────────────────────────────────────────────────────────

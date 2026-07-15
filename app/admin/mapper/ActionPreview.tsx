@@ -19,16 +19,28 @@ type Props = {
   confirmLabel: string;
   danger?: boolean;
   row?: Row;
+  /**
+   * For irreversible deletions: the admin must type this exactly before Confirm
+   * enables.
+   *
+   * The delete button sits next to Retire, and a combo is almost never a component
+   * of another combo — so usedIn is 0 for nearly every combo, which is what the
+   * button's visibility keys off. The guard was right and the reach was wrong:
+   * a permanent delete was one click from a harmless one. Typing the SKU costs a
+   * deliberate person three seconds and stops a slip entirely.
+   */
+  requireTyping?: string;
   onClose: () => void;
   onDone: (msg: string) => void;
 };
 
-export default function ActionPreview({ intent, title, blurb, confirmLabel, danger, row, onClose, onDone }: Props) {
+export default function ActionPreview({ intent, title, blurb, confirmLabel, danger, row, requireTyping, onClose, onDone }: Props) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [refs, setRefs] = useState<RefCounts | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [typed, setTyped] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +78,9 @@ export default function ActionPreview({ intent, title, blurb, confirmLabel, dang
     }
   }
 
-  const canApply = !!plan && plan.writes.length > 0;
+  const hasWrites = !!plan && plan.writes.length > 0;
+  const typingSatisfied = !requireTyping || typed.trim().toLowerCase() === requireTyping.trim().toLowerCase();
+  const canApply = hasWrites && typingSatisfied;
 
   return (
     <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
@@ -144,20 +158,34 @@ export default function ActionPreview({ intent, title, blurb, confirmLabel, dang
           )}
         </div>
 
+        {/* Type-to-confirm, for deletions that cannot be undone from the UI. */}
+        {hasWrites && requireTyping && (
+          <div className="px-5 py-3 border-t border-atlas-line bg-atlas-red-bg/40">
+            <label className="block text-xs text-atlas-ink-soft mb-1.5">
+              This cannot be undone. Type <span className="font-mono font-bold text-atlas-ink">{requireTyping}</span> to confirm.
+            </label>
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus
+              placeholder={requireTyping} spellCheck={false} autoComplete="off"
+              className={`w-full max-w-sm px-3 py-2 bg-atlas-surface border rounded-lg text-atlas-ink text-sm font-mono focus:outline-none focus:ring-2 ${
+                typingSatisfied ? "border-atlas-green focus:ring-atlas-green" : "border-atlas-line focus:ring-atlas-red"}`} />
+          </div>
+        )}
+
         {err && <p className="px-5 pb-2 text-xs text-atlas-red whitespace-pre-wrap">{err}</p>}
 
         <div className="p-5 border-t border-atlas-line flex items-center justify-between gap-3">
           <p className="text-[11px] text-atlas-ink-faint">
-            {canApply ? "Recorded in the audit log with a full pre-change snapshot." : ""}
+            {hasWrites ? "Recorded in the audit log with a full pre-change snapshot." : ""}
           </p>
           <div className="flex gap-2">
             <button onClick={onClose}
               className="px-4 py-2 bg-atlas-surface-soft text-atlas-ink text-sm rounded-lg hover:bg-atlas-surface transition">
-              {canApply ? "Cancel" : "Close"}
+              {hasWrites ? "Cancel" : "Close"}
             </button>
-            {canApply && (
-              <button onClick={confirm} disabled={busy}
-                className={`px-4 py-2 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 ${
+            {hasWrites && (
+              <button onClick={confirm} disabled={busy || !canApply}
+                title={!typingSatisfied ? `Type ${requireTyping} to enable` : undefined}
+                className={`px-4 py-2 text-white text-sm font-semibold rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed ${
                   danger ? "bg-atlas-red hover:opacity-90" : "bg-atlas-accent hover:bg-atlas-accent-light"}`}>
                 {busy ? "Applying…" : confirmLabel}
               </button>

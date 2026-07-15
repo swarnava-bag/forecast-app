@@ -11,7 +11,7 @@ export type ApplyIntent =
   | { intent: "add_batch"; mapperSetId: string; draft: DraftSku[] }
   | { intent: "fix"; mapperSetId: string; sku: string }
   | { intent: "cell_edit"; mapperSetId: string; sku: string; field: CellField; value: string }
-  | { intent: "purge_ghost"; sku: string }
+  | { intent: "purge_component"; sku: string }
   | { intent: "retire"; sku: string; retire?: boolean }
   | { intent: "hard_delete"; sku: string };
 

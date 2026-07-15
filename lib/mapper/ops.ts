@@ -362,16 +362,24 @@ export function planFix(live: LiveState, sku: string, mapperSetId: string): Plan
   return buildPlan(live, after, writes, changes, skipped, [sku], [mapperSetId]);
 }
 
-// ── planPurgeGhost — delete the combos that depend on a ghost ─────────────────
+// ── planPurgeComponent — delete the combos built on a dead component ──────────
 
 /**
- * A ghost has no row in either table; it exists only inside other combos'
- * products[]. There is nothing to DELETE — so the operation is on its parents.
+ * Delete every combo that consumes `component`. The component's OWN rows are never
+ * touched.
  *
- * Per the admin's decision: the ghost is a discontinued SKU, so the combos built
- * around it are dead too and get deleted outright.
+ * Two callers, one shape:
+ *   - a ghost (no row in either table) — there is nothing to delete but its parents
+ *   - a retired single — the combos around it are dead, but the single must stay
+ *
+ * Why the single stays: deleting a sku_master row is ON DELETE CASCADE into
+ * forecast_data and channel_sku_mapping, and historical_forecast_data joins by text
+ * so it would dangle. PC_BC_150G alone has 8 forecast rows, 22 channel mappings and
+ * 131 history rows. Retirement keeps the mapper row, so those 131 rows still
+ * decompose correctly when an old forecast is re-run. Deleting is not the clean
+ * end state — retiring is.
  */
-export function planPurgeGhost(live: LiveState, ghostSku: string, refsByParent?: Map<string, RefCounts>): Plan {
+export function planPurgeComponent(live: LiveState, ghostSku: string, refsByParent?: Map<string, RefCounts>): Plan {
   const changes: Change[] = [];
   const skipped: string[] = [];
   const writes: Write[] = [];
@@ -379,11 +387,13 @@ export function planPurgeGhost(live: LiveState, ghostSku: string, refsByParent?:
   const setIds = new Set<string>();
 
   const parents = live.mapperRows.filter((m) => (m.products || []).some((p) => norm(p) === norm(ghostSku)));
-  if (parents.length === 0) skipped.push(`${ghostSku}: nothing references it`);
+  if (parents.length === 0) skipped.push(`${ghostSku}: no combo uses it — nothing to remove`);
 
   const deletedKeys = new Set<string>();
   for (const p of parents) {
     touched.push(p.master_sku);
+    // A combo cannot be deleted as a parent of itself.
+    if (norm(p.master_sku) === norm(ghostSku)) continue;
     const key = `${norm(p.master_sku)}|${p.mapper_set_id}`;
     if (deletedKeys.has(key)) continue; // duplicate rows: one delete covers them
 
