@@ -28,12 +28,20 @@
 -- Single-row edits deliberately do NOT use this. They are idempotent and the Fix
 -- button is their compensation. Only the batch needs the guarantee.
 
+-- NOTE ON QUOTING: the body is wrapped in a NAMED dollar quote ($func$), not $$.
+-- The Supabase SQL editor's statement splitter mis-handles bare $$ and reports
+-- "unterminated dollar-quoted string". A named tag is unambiguous.
+--
+-- NOTE ON `?`: jsonb key-existence is written as jsonb_exists(x, 'k') rather than
+-- the `x ? 'k'` operator, because many Postgres clients read `?` as a bind
+-- parameter placeholder and mangle the statement.
+
 create or replace function apply_mapper_batch(payload jsonb)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $func$
 declare
   w             jsonb;
   set_id        uuid;
@@ -76,19 +84,19 @@ begin
 
       when 'update_sku_master' then
         update sku_master set
-          new_fg_code  = case when w -> 'patch' ? 'new_fg_code'  then nullif(w -> 'patch' ->> 'new_fg_code', '')  else new_fg_code  end,
-          product_name = case when w -> 'patch' ? 'product_name' then nullif(w -> 'patch' ->> 'product_name', '') else product_name end,
-          mrp          = case when w -> 'patch' ? 'mrp'          then (w -> 'patch' ->> 'mrp')::numeric           else mrp          end
+          new_fg_code  = case when jsonb_exists(w -> 'patch', 'new_fg_code')  then nullif(w -> 'patch' ->> 'new_fg_code', '')  else new_fg_code  end,
+          product_name = case when jsonb_exists(w -> 'patch', 'product_name') then nullif(w -> 'patch' ->> 'product_name', '') else product_name end,
+          mrp          = case when jsonb_exists(w -> 'patch', 'mrp')          then (w -> 'patch' ->> 'mrp')::numeric           else mrp          end
         where id = (w ->> 'id')::uuid;
 
       when 'update_mapper' then
         -- Scoped by mapper_set_id: unscoped, one edit rewrites every set that
         -- happens to share the SKU while the UI showed only one.
         update combo_mapper_rows set
-          fg_code      = case when w -> 'patch' ? 'fg_code'      then nullif(w -> 'patch' ->> 'fg_code', '')      else fg_code      end,
-          product_name = case when w -> 'patch' ? 'product_name' then nullif(w -> 'patch' ->> 'product_name', '') else product_name end,
-          is_combo     = case when w -> 'patch' ? 'is_combo'     then (w -> 'patch' ->> 'is_combo')::boolean      else is_combo     end,
-          products     = case when w -> 'patch' ? 'products'
+          fg_code      = case when jsonb_exists(w -> 'patch', 'fg_code')      then nullif(w -> 'patch' ->> 'fg_code', '')      else fg_code      end,
+          product_name = case when jsonb_exists(w -> 'patch', 'product_name') then nullif(w -> 'patch' ->> 'product_name', '') else product_name end,
+          is_combo     = case when jsonb_exists(w -> 'patch', 'is_combo')     then (w -> 'patch' ->> 'is_combo')::boolean      else is_combo     end,
+          products     = case when jsonb_exists(w -> 'patch', 'products')
                               then coalesce((select array_agg(value::text) from jsonb_array_elements_text(w -> 'patch' -> 'products')), '{}'::text[])
                               else products end
         where master_sku = w ->> 'masterSku'
@@ -130,7 +138,7 @@ begin
 
   return jsonb_build_object('applied', applied, 'sets_recounted', array_length(touched_sets, 1));
 end;
-$$;
+$func$;
 
 -- Only the service role calls this (from the API route, after an admin check).
 revoke all on function apply_mapper_batch(jsonb) from public;

@@ -85,16 +85,39 @@ async function countRefs(client: SupabaseClient, sku: string, skuId: string | nu
   };
 }
 
-function makePlan(body: Body, live: LiveState, refs: RefCounts | null): Plan {
+function makePlan(body: Body, live: LiveState, refs: RefCounts | null, parentRefs: Map<string, RefCounts> | null): Plan {
   const setId = body.mapperSetId || "";
   switch (body.intent) {
     case "add_batch":   return planAddBatch(live, body.draft || [], setId);
     case "fix":         return planFix(live, body.sku || "", setId);
     case "cell_edit":   return planCellEdit(live, body.sku || "", body.field || "fgCode", body.value ?? "", setId);
-    case "purge_ghost": return planPurgeGhost(live, body.sku || "");
+    case "purge_ghost": return planPurgeGhost(live, body.sku || "", parentRefs ?? undefined);
     case "retire":      return planRetire(live, body.sku || "", body.retire !== false);
     case "hard_delete": return planHardDelete(live, body.sku || "", refs!);
   }
+}
+
+/**
+ * Reference counts for every combo that consumes a ghost.
+ *
+ * A purge deletes those parents, and forecast_data.sku_id / channel_sku_mapping.sku_id
+ * are ON DELETE CASCADE against sku_master(id) — so deleting a parent that has
+ * history would destroy it silently. Counted server-side, per parent, before the
+ * planner decides.
+ */
+async function countParentRefs(client: SupabaseClient, live: LiveState, ghostSku: string): Promise<Map<string, RefCounts>> {
+  const g = (ghostSku || "").trim().toLowerCase();
+  const parents = [...new Set(
+    live.mapperRows
+      .filter((m) => (m.products || []).some((p) => (p || "").trim().toLowerCase() === g))
+      .map((m) => m.master_sku)
+  )];
+  const out = new Map<string, RefCounts>();
+  for (const p of parents) {
+    const sm = live.skuMaster.find((s) => (s.new_master_sku || "").trim().toLowerCase() === p.trim().toLowerCase());
+    out.set(p.trim().toLowerCase(), await countRefs(client, p, sm?.id ?? null));
+  }
+  return out;
 }
 
 /**
@@ -173,12 +196,15 @@ export async function POST(request: Request) {
     const live = await loadLive(admin);
 
     let refs: RefCounts | null = null;
+    let parentRefs: Map<string, RefCounts> | null = null;
     if (body.intent === "hard_delete") {
       const sm = live.skuMaster.find((s) => (s.new_master_sku || "").trim().toLowerCase() === (body.sku || "").trim().toLowerCase());
       refs = await countRefs(admin, body.sku || "", sm?.id ?? null);
+    } else if (body.intent === "purge_ghost") {
+      parentRefs = await countParentRefs(admin, live, body.sku || "");
     }
 
-    const plan = makePlan(body, live, refs);
+    const plan = makePlan(body, live, refs, parentRefs);
 
     // Dry run: hand back a plan whose hash is bound to state the SERVER just read.
     if (body.dryRun) return NextResponse.json({ plan, refs });

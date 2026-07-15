@@ -371,7 +371,7 @@ export function planFix(live: LiveState, sku: string, mapperSetId: string): Plan
  * Per the admin's decision: the ghost is a discontinued SKU, so the combos built
  * around it are dead too and get deleted outright.
  */
-export function planPurgeGhost(live: LiveState, ghostSku: string): Plan {
+export function planPurgeGhost(live: LiveState, ghostSku: string, refsByParent?: Map<string, RefCounts>): Plan {
   const changes: Change[] = [];
   const skipped: string[] = [];
   const writes: Write[] = [];
@@ -383,11 +383,27 @@ export function planPurgeGhost(live: LiveState, ghostSku: string): Plan {
 
   const deletedKeys = new Set<string>();
   for (const p of parents) {
-    setIds.add(p.mapper_set_id);
     touched.push(p.master_sku);
     const key = `${norm(p.master_sku)}|${p.mapper_set_id}`;
     if (deletedKeys.has(key)) continue; // duplicate rows: one delete covers them
+
+    // forecast_data.sku_id and channel_sku_mapping.sku_id are ON DELETE CASCADE
+    // against sku_master(id) — confirmed in the live database. Deleting a parent's
+    // sku_master row would therefore SILENTLY destroy its forecast history, with no
+    // error. Refuse the whole parent rather than delete half of it: dropping only
+    // the mapper row would leave the sku_master row behind as a fresh orphan.
+    const refs = refsByParent?.get(norm(p.master_sku));
+    const blocking = refs ? (Object.entries(refs) as Array<[string, number]>).filter(([, n]) => n > 0) : [];
+    if (blocking.length > 0) {
+      skipped.push(
+        `${p.master_sku}: referenced by ${blocking.map(([t, n]) => `${t} (${n})`).join(", ")}. ` +
+        `Deleting it would cascade and destroy that history. Remove "${ghostSku}" from its components by hand, or retire it.`
+      );
+      continue;
+    }
+
     deletedKeys.add(key);
+    setIds.add(p.mapper_set_id);
 
     const others = (p.products || []).filter((x) => norm(x) !== norm(ghostSku));
     writes.push({ op: "delete_mapper", masterSku: p.master_sku, mapperSetId: p.mapper_set_id });

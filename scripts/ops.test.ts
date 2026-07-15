@@ -253,6 +253,30 @@ test("purging deletes a parent's sku_master row too — never leaves an orphan",
   assert.equal(plan.newBlocking.length, 0);
 });
 
+test("purging REFUSES a parent with history — the FK cascades", () => {
+  // Confirmed in the live DB: forecast_data.sku_id and channel_sku_mapping.sku_id are
+  // ON DELETE CASCADE against sku_master(id). Deleting a parent's sku_master row would
+  // silently destroy its forecast history, with no error from Postgres.
+  const live: LiveState = {
+    skuMaster: [sm({ new_master_sku: "P1", new_fg_code: "1G" })],
+    mapperRows: [mr({ master_sku: "P1", is_combo: true, products: ["GHOST", "KEEP"] }), mr({ master_sku: "KEEP" })],
+  };
+  const refs = new Map([["p1", { ...NO_REFS, forecast_data: 240 }]]);
+  const plan = planPurgeGhost(live, "GHOST", refs);
+  assert.equal(plan.writes.length, 0, "not even the mapper row — deleting half would leave an orphan");
+  assert.match(plan.skipped.join(), /forecast_data \(240\)/);
+  assert.match(plan.skipped.join(), /cascade and destroy that history/);
+});
+
+test("purging proceeds for a parent with no history", () => {
+  const live: LiveState = {
+    skuMaster: [sm({ new_master_sku: "P1", new_fg_code: "1G" })],
+    mapperRows: [mr({ master_sku: "P1", is_combo: true, products: ["GHOST"] })],
+  };
+  const plan = planPurgeGhost(live, "GHOST", new Map([["p1", NO_REFS]]));
+  assert.deepEqual(plan.writes.map((w) => w.op).sort(), ["delete_mapper", "delete_sku_master"]);
+});
+
 test("purging a non-existent ghost is a safe no-op", () => {
   const plan = planPurgeGhost({ skuMaster: [], mapperRows: [] }, "NOPE");
   assert.equal(plan.writes.length, 0);

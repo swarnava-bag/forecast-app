@@ -212,7 +212,8 @@ type SetRow = { id: string; name: string; is_default: boolean; row_count: number
     say(`    supply_plan            : ${await countWhere("supply_plan", "master_sku", skuArg)}`);
     say(`    mapper_suggestions     : ${await countWhere("mapper_suggestions", "master_sku", skuArg)}`);
     say();
-    say(`  uuid-FK tables (these will error or cascade — behaviour UNKNOWN until the pg_constraint probe is run):`);
+    say(`  uuid-FK tables — BOTH ARE "ON DELETE CASCADE" (verified against the live DB):`);
+    say(`    deleting this SKU's sku_master row DESTROYS these rows silently, with no error.`);
     if (sm) {
       say(`    forecast_data          : ${await countWhere("forecast_data", "sku_id", sm.id)}`);
       say(`    channel_sku_mapping    : ${await countWhere("channel_sku_mapping", "sku_id", sm.id)}`);
@@ -247,20 +248,37 @@ type SetRow = { id: string; name: string; is_default: boolean; row_count: number
   }
 
   say("═".repeat(78));
-  say("  Run this in the Supabase SQL editor — PostgREST cannot reach pg_catalog,");
-  say("  and FK delete behaviour is UNKNOWN until you do:");
+  say("  SCHEMA FACTS  (probed 2026-07-15; re-check with the SQL below if in doubt)");
   say("═".repeat(78));
   say(`
-  select conrelid::regclass as child, conname, confdeltype,
-         pg_get_constraintdef(oid)
+  DELETING A sku_master ROW CASCADES. Both children are ON DELETE CASCADE:
+      forecast_data.sku_id       -> sku_master(id)  ON DELETE CASCADE
+      channel_sku_mapping.sku_id -> sku_master(id)  ON DELETE CASCADE
+  Postgres will not stop you and will not warn you: the forecast history for that
+  SKU is simply gone. Every delete path must count references FIRST — which is why
+  planHardDelete and planPurgeGhost both refuse rather than rely on the database.
+
+  RLS is ENABLED on all three tables, and INSERT/UPDATE/DELETE are gated on
+  profiles.role = 'admin'. SELECT is open. The API route holds the service key,
+  which bypasses RLS by design, and performs its own admin check.
+
+  NOTE: sku_master carries an extra SELECT policy for role {public} ("Allow public
+  read on sku_master"), so the anon key can read the whole catalogue — FG codes,
+  MRPs, names. The other two tables are {authenticated} only. Probably a leftover;
+  sku_master_read already covers logged-in users.
+
+  -- Re-probe:
+  select conrelid::regclass as child, conname, confdeltype, pg_get_constraintdef(oid)
   from pg_constraint where confrelid = 'sku_master'::regclass;
 
-  select tablename, policyname, cmd, qual
+  select tablename, policyname, cmd, roles, qual, with_check
   from pg_policies
   where tablename in ('sku_master','combo_mapper_rows','combo_mapper_sets');
 
+  select relname, relrowsecurity from pg_class
+  where relname in ('sku_master','combo_mapper_rows','combo_mapper_sets');
+
   -- confdeltype:  a = NO ACTION   c = CASCADE   n = SET NULL
-  -- Any 'c' means a hard delete silently destroys forecast history.
 `);
 
   if (asJson) console.log(JSON.stringify(report, null, 2));
