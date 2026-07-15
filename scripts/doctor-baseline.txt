@@ -1,0 +1,72 @@
+══════════════════════════════════════════════════════════════════════════════
+  MAPPER DOCTOR
+  2026-07-15T19:46:25.509Z
+══════════════════════════════════════════════════════════════════════════════
+
+sku_master rows          : 261  (active 250)
+combo_mapper_rows (all)  : 1650
+combo_mapper_sets        : 1
+
+──────────────────────────────────────────────────────────────────────────────
+SET  "Absolute Single Mapper"  [DEFAULT]
+──────────────────────────────────────────────────────────────────────────────
+  mapper rows        : 1650   (singles 805 / combos 845)
+  unified rows       : 1463
+  row_count          : stored=1650 actual=1650   OK
+  product_col_count  : stored=48 actual=48   OK
+  duplicate SKUs     : 165   (all agree)
+  nested combos      : 0   OK
+  reference cycles   : 0   OK
+  blocking rows      : 0
+
+  issues:
+    CRITICAL                     0
+    GHOST                        0
+    ORPHAN                       0
+    UNKNOWN_COMPONENT            0
+    DISCONTINUED_IN_COMBO       11
+    NO_FG                       12
+    NO_MRP                       8
+    UNENRICHED                1203
+
+══════════════════════════════════════════════════════════════════════════════
+  ATOMICITY
+══════════════════════════════════════════════════════════════════════════════
+  apply_mapper_batch : NOT INSTALLED
+  New Launch writes 2N+M rows across two tables SEQUENTIALLY — a failure
+  part-way leaves the mapper half-written (the orphan shape).
+  Fix: paste supabase/sql/apply_mapper_batch.sql into the Supabase SQL editor.
+
+══════════════════════════════════════════════════════════════════════════════
+  SCHEMA FACTS  (probed 2026-07-15; re-check with the SQL below if in doubt)
+══════════════════════════════════════════════════════════════════════════════
+
+  DELETING A sku_master ROW CASCADES. Both children are ON DELETE CASCADE:
+      forecast_data.sku_id       -> sku_master(id)  ON DELETE CASCADE
+      channel_sku_mapping.sku_id -> sku_master(id)  ON DELETE CASCADE
+  Postgres will not stop you and will not warn you: the forecast history for that
+  SKU is simply gone. Every delete path must count references FIRST — which is why
+  planHardDelete and planPurgeGhost both refuse rather than rely on the database.
+
+  RLS is ENABLED on all three tables, and INSERT/UPDATE/DELETE are gated on
+  profiles.role = 'admin'. SELECT is open. The API route holds the service key,
+  which bypasses RLS by design, and performs its own admin check.
+
+  NOTE: sku_master carries an extra SELECT policy for role {public} ("Allow public
+  read on sku_master"), so the anon key can read the whole catalogue — FG codes,
+  MRPs, names. The other two tables are {authenticated} only. Probably a leftover;
+  sku_master_read already covers logged-in users.
+
+  -- Re-probe:
+  select conrelid::regclass as child, conname, confdeltype, pg_get_constraintdef(oid)
+  from pg_constraint where confrelid = 'sku_master'::regclass;
+
+  select tablename, policyname, cmd, roles, qual, with_check
+  from pg_policies
+  where tablename in ('sku_master','combo_mapper_rows','combo_mapper_sets');
+
+  select relname, relrowsecurity from pg_class
+  where relname in ('sku_master','combo_mapper_rows','combo_mapper_sets');
+
+  -- confdeltype:  a = NO ACTION   c = CASCADE   n = SET NULL
+

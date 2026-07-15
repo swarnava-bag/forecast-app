@@ -218,7 +218,11 @@ export default function FGCodeManagerPage() {
     return null;
   }
 
-  async function saveInlineEdit(masterSku: string) {
+  // `mapperSetId` scopes the write to the set the displayed row actually came from.
+  // Without it these updates hit every mapper set that happens to share the SKU —
+  // the list is deduplicated across sets (getUniqueCombos), so the UI would be
+  // showing one set's row while silently rewriting all of them.
+  async function saveInlineEdit(masterSku: string, mapperSetId: string) {
     const edit = editingRow[masterSku];
     if (!edit) return;
     // Validate FG code
@@ -246,7 +250,8 @@ export default function FGCodeManagerPage() {
     const { error: err } = await supabase
       .from("combo_mapper_rows")
       .update({ fg_code: edit.fg_code || null, product_name: edit.product_name || null, products: newProducts, is_combo: correctedIsCombo })
-      .eq("master_sku", masterSku);
+      .eq("master_sku", masterSku)
+      .eq("mapper_set_id", mapperSetId);
     if (err) {
       setError(`Failed to save: ${err.message}`);
     } else {
@@ -269,19 +274,31 @@ export default function FGCodeManagerPage() {
     setSaving(false);
   }
 
-  async function deleteCombo(masterSku: string) {
-    if (!confirm(`Delete combo "${masterSku}" from the mapper? This cannot be undone.`)) return;
+  async function deleteCombo(masterSku: string, mapperSetId: string) {
+    const setName = mapperSets.find(s => s.id === mapperSetId)?.name || "this mapper";
+    if (!confirm(`Delete combo "${masterSku}" from "${setName}"? This cannot be undone.`)) return;
     setSaving(true);
     setError(null);
+    // Scoped to one set — see saveInlineEdit. Unscoped, this deleted the SKU from
+    // every mapper set at once while the confirm dialog implied a single row.
     const { error: err } = await supabase
       .from("combo_mapper_rows")
       .delete()
-      .eq("master_sku", masterSku);
+      .eq("master_sku", masterSku)
+      .eq("mapper_set_id", mapperSetId);
     if (err) {
       setError(`Failed to delete: ${err.message}`);
     } else {
-      setSuccessMsg(`Combo "${masterSku}" deleted.`);
-      setComboRows(prev => prev.filter(r => r.master_sku !== masterSku));
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from("audit_log").insert({
+        user_id: user?.id,
+        user_email: user?.email,
+        action: "mapper_row_delete",
+        table_name: "combo_mapper_rows",
+        old_values: { master_sku: masterSku, mapper_set_id: mapperSetId },
+      });
+      setSuccessMsg(`Combo "${masterSku}" deleted from "${setName}".`);
+      setComboRows(prev => prev.filter(r => !(r.master_sku === masterSku && r.mapper_set_id === mapperSetId)));
       setTimeout(() => setSuccessMsg(null), 3000);
     }
     setSaving(false);
@@ -469,10 +486,21 @@ export default function FGCodeManagerPage() {
     const defaultSet = mapperSets.find(s => s.is_default) || mapperSets[0];
     let updated = 0, added = 0, deleted = 0;
 
+    // Errors are collected, not swallowed: a bulk run that half-failed used to
+    // report success for the rows it silently skipped.
+    const failures: string[] = [];
+
     for (const change of bulkPreview.changes) {
       if (change.action === "delete") {
-        const { error: err } = await supabase.from("combo_mapper_rows").delete().eq("master_sku", change.sku);
-        if (!err) deleted++;
+        const existing = comboRows.find(r => r.master_sku.toLowerCase() === change.sku.toLowerCase() && r.is_combo);
+        if (!existing) continue;
+        // Scoped to the row's own set — unscoped, one spreadsheet row deleted the
+        // SKU from every mapper set at once.
+        const { error: err } = await supabase.from("combo_mapper_rows").delete()
+          .eq("master_sku", existing.master_sku)
+          .eq("mapper_set_id", existing.mapper_set_id);
+        if (err) failures.push(`${change.sku}: delete failed — ${err.message}`);
+        else deleted++;
       } else if (change.action === "update") {
         const existing = comboRows.find(r => r.master_sku.toLowerCase() === change.sku.toLowerCase() && r.is_combo);
         if (existing) {
@@ -480,8 +508,11 @@ export default function FGCodeManagerPage() {
           if (change.fg) updates.fg_code = change.fg;
           if (change.name) updates.product_name = change.name;
           if (Object.keys(updates).length > 0) {
-            const { error: err } = await supabase.from("combo_mapper_rows").update(updates).eq("master_sku", existing.master_sku);
-            if (!err) updated++;
+            const { error: err } = await supabase.from("combo_mapper_rows").update(updates)
+              .eq("master_sku", existing.master_sku)
+              .eq("mapper_set_id", existing.mapper_set_id);
+            if (err) failures.push(`${change.sku}: update failed — ${err.message}`);
+            else updated++;
           }
         }
       } else if (change.action === "add" && change.components && defaultSet) {
@@ -493,30 +524,40 @@ export default function FGCodeManagerPage() {
           fg_code: change.fg || null,
           product_name: change.name || null,
         });
-        if (!err) added++;
+        if (err) failures.push(`${change.sku}: add failed — ${err.message}`);
+        else added++;
+      }
+    }
+
+    // row_count is stored on combo_mapper_sets and shown in the mapper dropdowns,
+    // but almost no write path maintains it. Recount once after the batch.
+    if (defaultSet && (added > 0 || deleted > 0)) {
+      const { count } = await supabase.from("combo_mapper_rows")
+        .select("id", { count: "exact", head: true }).eq("mapper_set_id", defaultSet.id);
+      if (count !== null) {
+        await supabase.from("combo_mapper_sets").update({ row_count: count }).eq("id", defaultSet.id);
       }
     }
 
     const msg = `Bulk import complete: ${updated} updated, ${added} added, ${deleted} deleted.${bulkPreview.skipped.length > 0 ? ` ${bulkPreview.skipped.length} skipped.` : ""}`;
     setSuccessMsg(msg);
-    if (bulkPreview.skipped.length > 0) setError(`Skipped rows:\n${bulkPreview.skipped.join("\n")}`);
+    const problems = [...bulkPreview.skipped.map(s => `Skipped — ${s}`), ...failures];
+    if (problems.length > 0) setError(problems.join("\n"));
     setTimeout(() => setSuccessMsg(null), 4000);
     setBulkPreview(null);
     setSaving(false);
     await loadAll();
   }
 
-  async function approveSuggestion(id: string) {
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from("mapper_suggestions").update({
-      status: "approved",
-      reviewed_by: user?.id,
-      reviewed_at: new Date().toISOString(),
-    }).eq("id", id);
-    setSuggestions(prev => prev.filter(s => s.id !== id));
-    setSuccessMsg("Suggestion approved.");
-    setTimeout(() => setSuccessMsg(null), 3000);
-  }
+  // approveSuggestion was removed. It marked the suggestion "approved" and wrote
+  // NOTHING to combo_mapper_rows or sku_master — so the admin saw "Suggestion
+  // approved", the suggestion left the queue, and the mapper was never changed.
+  // A no-op that reports success is worse than no button at all.
+  //
+  // The real approval lives in /combo-converter (approveSuggestion, ~line 1768):
+  // it upserts the mapper row, targets chosen mapper sets, records
+  // applied_to_mapper_ids and recounts row_count. Rejection is only a status
+  // flip, so it stays here.
 
   async function rejectSuggestion(id: string) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -871,7 +912,7 @@ export default function FGCodeManagerPage() {
                         <td className="py-2 px-3">
                           {isEditing ? (
                             <div className="flex gap-1">
-                              <button onClick={() => saveInlineEdit(combo.master_sku)} disabled={saving}
+                              <button onClick={() => saveInlineEdit(combo.master_sku, combo.mapper_set_id)} disabled={saving}
                                 className="px-2 py-1 bg-green-600/20 border border-green-600/40 text-green-400 text-xs rounded hover:bg-green-600/30 transition">Save</button>
                               <button onClick={() => setEditingRow(prev => { const n = { ...prev }; delete n[combo.master_sku]; return n; })}
                                 className="px-2 py-1 bg-atlas-surface-soft text-atlas-ink-muted text-xs rounded hover:bg-atlas-surface-soft transition">Cancel</button>
@@ -880,7 +921,7 @@ export default function FGCodeManagerPage() {
                             <div className="flex gap-1">
                               <button onClick={() => setEditingRow(prev => ({ ...prev, [combo.master_sku]: { fg_code: combo.fg_code || "", product_name: combo.product_name || "", components: combo.products.join(", ") } }))}
                                 className="px-2 py-1 bg-atlas-surface-soft border border-atlas-line text-atlas-ink text-xs rounded hover:bg-atlas-surface-soft transition">Edit</button>
-                              <button onClick={() => deleteCombo(combo.master_sku)} disabled={saving}
+                              <button onClick={() => deleteCombo(combo.master_sku, combo.mapper_set_id)} disabled={saving}
                                 className="px-2 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-xs rounded hover:bg-red-900/40 transition">{"\u2715"}</button>
                             </div>
                           )}
@@ -968,11 +1009,17 @@ export default function FGCodeManagerPage() {
                         <p className="text-xs text-atlas-ink-faint mt-1">Components: {s.products.join(", ")}</p>
                       )}
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => approveSuggestion(s.id)}
-                        className="px-3 py-1.5 bg-green-600/20 border border-green-600/40 text-green-400 text-xs rounded-lg hover:bg-green-600/30 transition">Approve</button>
+                    <div className="flex gap-2 items-center shrink-0">
+                      {/* Approving here used to flip the status and write nothing to
+                          the mapper. Approval happens in Combo Converter, where it
+                          actually applies to the chosen mapper sets. */}
+                      <a href="/combo-converter"
+                        title="Approval applies the suggestion to the mapper — that flow lives in Combo Converter"
+                        className="px-3 py-1.5 bg-atlas-accent/10 border border-atlas-accent/40 text-atlas-accent text-xs rounded-lg hover:bg-atlas-accent/20 transition">
+                        Review in Combo Converter →
+                      </a>
                       <button onClick={() => rejectSuggestion(s.id)}
-                        className="px-3 py-1.5 bg-red-600/20 border border-red-600/40 text-red-400 text-xs rounded-lg hover:bg-red-600/30 transition">Reject</button>
+                        className="px-3 py-1.5 bg-atlas-red-bg border border-atlas-red/40 text-atlas-red text-xs rounded-lg hover:opacity-80 transition">Reject</button>
                     </div>
                   </div>
                 );

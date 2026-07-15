@@ -1,0 +1,27 @@
+{
+  "sets": [
+    {
+      "name": "Absolute Single Mapper",
+      "isDefault": true,
+      "mapperRows": 1650,
+      "unifiedRows": 1463,
+      "rowCountStored": 1650,
+      "rowCountActual": 1650,
+      "rowCountDrift": false,
+      "productColStored": 48,
+      "productColActual": 48,
+      "duplicates": 165,
+      "duplicatesDisagreeing": 0,
+      "nested": 0,
+      "cycles": 0,
+      "blocking": 0,
+      "issues": {
+        "UNENRICHED": 1203,
+        "DISCONTINUED_IN_COMBO": 11,
+        "NO_MRP": 8,
+        "NO_FG": 12
+      }
+    }
+  ],
+  "atomicBatch": false
+}

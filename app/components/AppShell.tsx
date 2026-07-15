@@ -27,6 +27,7 @@ const MAIN_NAV: NavItem[] = [
 ];
 
 const ADMIN_NAV = [
+  { href: "/admin/mapper", label: "Mapper Studio", icon: AdminMapperStudioIcon },
   { href: "/admin/skus", label: "SKU Master", icon: AdminSkuIcon },
   { href: "/admin/sku-channels", label: "SKU-Channel Map", icon: AdminMapIcon },
   { href: "/admin/users", label: "Manage Users", icon: AdminUsersIcon },
@@ -316,6 +317,7 @@ function getBreadcrumb(pathname: string) {
     "/admin/users": "Admin / Manage Users",
     "/admin/channels": "Admin / Channels & Clusters",
     "/admin/cycles": "Admin / Forecast Cycles",
+    "/admin/mapper": "Admin / Mapper Studio",
     "/admin/fg-codes": "Admin / Combo Mapper",
     "/admin/audit": "Admin / Audit Log",
     "/admin/workflow": "Admin / Workflow Guide",
@@ -408,6 +410,9 @@ function AdminChannelsIcon() {
 }
 function AdminCyclesIcon() {
   return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>);
+}
+function AdminMapperStudioIcon() {
+  return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>);
 }
 function AdminComboIcon() {
   return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>);
