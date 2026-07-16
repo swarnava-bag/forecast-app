@@ -8,8 +8,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { SkuMasterRow, MapperDbRow } from "../lib/mapper/model";
 import {
-  planAddBatch, planFix, planCellEdit, planPurgeGhost, planRetire, planHardDelete,
-  expandComponents, parseMrp, type LiveState, type DraftSku, type RefCounts,
+  planAddBatch, planFix, planCellEdit, planPurgeComponent, planRetire, planHardDelete,
+  expandComponents, parseComponents, componentsToText, parseMrp, type LiveState, type DraftSku, type RefCounts,
 } from "../lib/mapper/ops";
 
 const SET = "set-1";
@@ -35,6 +35,44 @@ const NO_REFS: RefCounts = {
 test("component quantity is encoded as repetition", () => {
   assert.deepEqual(expandComponents([{ sku: "A", qty: 3 }, { sku: "B", qty: 1 }]), ["A", "A", "A", "B"]);
   assert.deepEqual(expandComponents([{ sku: "  ", qty: 2 }]), [], "blank rows are ignored, not expanded");
+});
+
+test("parseComponents expands a quantity suffix instead of repeating by hand", () => {
+  const ten = Array(10).fill("WB_10g_CCG");
+  assert.deepEqual(parseComponents("WB_10g_CCG x10"), ten, "x10");
+  assert.deepEqual(parseComponents("WB_10g_CCG×10"), ten, "×10 glued");
+  assert.deepEqual(parseComponents("WB_10g_CCG*10"), ten, "*10");
+  assert.deepEqual(parseComponents("WB_10g_CCG=x10"), ten, "the =x10 people actually type is repaired, not made a ghost");
+  assert.deepEqual(parseComponents("A x2, B"), ["A", "A", "B"], "mix of suffix and plain, comma-separated");
+  assert.deepEqual(parseComponents("A, A, A"), ["A", "A", "A"], "plain repetition still works");
+});
+
+test("parseComponents never reinterprets a real SKU's trailing number", () => {
+  // The separator before the number must be one that cannot occur inside a SKU.
+  // '_' is not one, so these keep their digits and stay single, literal tokens.
+  assert.deepEqual(parseComponents("PC_BC_150_P2"), ["PC_BC_150_P2"]);
+  assert.deepEqual(parseComponents("WB_10g_SP_P10G"), ["WB_10g_SP_P10G"]);
+  assert.deepEqual(parseComponents(""), [], "empty is empty");
+});
+
+test("componentsToText collapses repetition back to ×N, and round-trips", () => {
+  assert.equal(componentsToText(Array(10).fill("WB_10g_CCG")), "WB_10g_CCG ×10");
+  assert.equal(componentsToText(["A", "B", "A"]), "A ×2, B", "grouped by first appearance");
+  assert.equal(componentsToText(["A"]), "A", "a single copy has no suffix");
+  const products = parseComponents("EB_CCG x3, PC_DC_150G");
+  assert.deepEqual(parseComponents(componentsToText(products)), products, "text → array → text is stable");
+});
+
+test("a quantity suffix in the components cell promotes a single to a combo", () => {
+  const live: LiveState = {
+    skuMaster: [sm({ new_master_sku: "WB_10g_CC_P10G" }), sm({ new_master_sku: "WB_10g_CCG" })],
+    mapperRows: [mr({ master_sku: "WB_10g_CC_P10G", is_combo: false, products: [] }), mr({ master_sku: "WB_10g_CCG" })],
+  };
+  const plan = planCellEdit(live, "WB_10g_CC_P10G", "components", "WB_10g_CCG x10", SET);
+  const w = plan.writes.find((x) => x.op === "update_mapper");
+  assert.ok(w && "patch" in w);
+  assert.equal(w.patch.is_combo, true, "components present ⇒ combo");
+  assert.equal((w.patch.products as string[]).length, 10, "ten copies, not one ghost named 'WB_10g_CCG x10'");
 });
 
 test("MRP parsing accepts blanks and thousands separators, rejects junk", () => {
@@ -222,7 +260,7 @@ test("clearing components demotes a combo back to a single", () => {
   assert.equal(w.patch.is_combo, false, "a combo flag with no components is CRITICAL — never leave that state behind");
 });
 
-// ── planPurgeGhost ───────────────────────────────────────────────────────────
+// ── planPurgeComponent ───────────────────────────────────────────────────────────
 
 test("purging a ghost deletes its parent combos (the real production shape)", () => {
   // Mirrors Oats_NS_400G: a ghost with no row anywhere, used by parents that each
@@ -235,7 +273,7 @@ test("purging a ghost deletes its parent combos (the real production shape)", ()
       mr({ master_sku: "P2", is_combo: true, products: ["GHOST"] }),
     ],
   };
-  const plan = planPurgeGhost(live, "GHOST");
+  const plan = planPurgeComponent(live, "GHOST");
   assert.deepEqual(plan.writes.map((w) => w.op), ["delete_mapper", "delete_mapper"]);
   assert.match(plan.changes.map((c) => c.details).join(), /survive independently/);
   const survivor = plan.impact.find((d) => d.masterSku === "Oats_Rolled_400G");
@@ -247,7 +285,7 @@ test("purging deletes a parent's sku_master row too — never leaves an orphan",
     skuMaster: [sm({ new_master_sku: "P1", new_fg_code: "1G" })],
     mapperRows: [mr({ master_sku: "P1", is_combo: true, products: ["GHOST"] })],
   };
-  const plan = planPurgeGhost(live, "GHOST");
+  const plan = planPurgeComponent(live, "GHOST");
   assert.deepEqual(plan.writes.map((w) => w.op).sort(), ["delete_mapper", "delete_sku_master"],
     "deleting only the mapper row would leave P1 in sku_master as a fresh orphan");
   assert.equal(plan.newBlocking.length, 0);
@@ -262,7 +300,7 @@ test("purging REFUSES a parent with history — the FK cascades", () => {
     mapperRows: [mr({ master_sku: "P1", is_combo: true, products: ["GHOST", "KEEP"] }), mr({ master_sku: "KEEP" })],
   };
   const refs = new Map([["p1", { ...NO_REFS, forecast_data: 240 }]]);
-  const plan = planPurgeGhost(live, "GHOST", refs);
+  const plan = planPurgeComponent(live, "GHOST", refs);
   assert.equal(plan.writes.length, 0, "not even the mapper row — deleting half would leave an orphan");
   assert.match(plan.skipped.join(), /forecast_data \(240\)/);
   assert.match(plan.skipped.join(), /cascade and destroy that history/);
@@ -273,14 +311,14 @@ test("purging proceeds for a parent with no history", () => {
     skuMaster: [sm({ new_master_sku: "P1", new_fg_code: "1G" })],
     mapperRows: [mr({ master_sku: "P1", is_combo: true, products: ["GHOST"] })],
   };
-  const plan = planPurgeGhost(live, "GHOST", new Map([["p1", NO_REFS]]));
+  const plan = planPurgeComponent(live, "GHOST", new Map([["p1", NO_REFS]]));
   assert.deepEqual(plan.writes.map((w) => w.op).sort(), ["delete_mapper", "delete_sku_master"]);
 });
 
 test("purging a non-existent ghost is a safe no-op", () => {
-  const plan = planPurgeGhost({ skuMaster: [], mapperRows: [] }, "NOPE");
+  const plan = planPurgeComponent({ skuMaster: [], mapperRows: [] }, "NOPE");
   assert.equal(plan.writes.length, 0);
-  assert.match(plan.skipped.join(), /nothing references it/);
+  assert.match(plan.skipped.join(), /no combo uses it/);
 });
 
 // ── planRetire ───────────────────────────────────────────────────────────────

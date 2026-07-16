@@ -14,6 +14,7 @@ type SKU = {
   product_name: string;
   category: string;
   product_category: string;
+  mrp: number | null;
   is_active: boolean;
   discontinued_at: string | null;
 };
@@ -99,6 +100,7 @@ export default function MasterDataPage() {
     active: skus.filter((s) => s.is_active && !s.discontinued_at).length,
     discontinued: skus.filter((s) => s.discontinued_at).length,
     categories: categories.length,
+    missingMrp: skus.filter((s) => s.is_active && !s.discontinued_at && (s.mrp == null || s.mrp === 0)).length,
   }), [skus, categories]);
 
   function downloadMasterList() {
@@ -111,10 +113,11 @@ export default function MasterDataPage() {
       "Product Name": s.product_name,
       "Category": s.category,
       "Product Category": s.product_category,
+      "MRP": s.mrp ?? "",
       "Status": s.discontinued_at ? "Discontinued" : "Active",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [{ wch: 5 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 10 }, { wch: 45 }, { wch: 15 }, { wch: 20 }, { wch: 12 }];
+    ws["!cols"] = [{ wch: 5 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 10 }, { wch: 45 }, { wch: 15 }, { wch: 20 }, { wch: 10 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "SKU Master");
     XLSX.writeFile(wb, "SKU_Master_List.xlsx");
@@ -156,15 +159,15 @@ export default function MasterDataPage() {
           </div>
           <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
             <p className="text-xs text-atlas-ink-muted uppercase tracking-wider">Active</p>
-            <p className="text-2xl font-bold mt-1 text-green-400">{stats.active}</p>
+            <p className="text-2xl font-bold mt-1 text-atlas-green">{stats.active}</p>
           </div>
           <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
             <p className="text-xs text-atlas-ink-muted uppercase tracking-wider">Discontinued</p>
-            <p className="text-2xl font-bold mt-1 text-red-400">{stats.discontinued}</p>
+            <p className="text-2xl font-bold mt-1 text-atlas-red">{stats.discontinued}</p>
           </div>
           <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
             <p className="text-xs text-atlas-ink-muted uppercase tracking-wider">Categories</p>
-            <p className="text-2xl font-bold mt-1 text-blue-400">{stats.categories}</p>
+            <p className="text-2xl font-bold mt-1 text-atlas-blue">{stats.categories}</p>
           </div>
         </div>
 
@@ -175,12 +178,12 @@ export default function MasterDataPage() {
             placeholder="Search by name, SKU code, or FG code..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 min-w-[250px] px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 min-w-[250px] px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm placeholder-atlas-ink-muted focus:outline-none focus:ring-2 focus:ring-atlas-accent"
           />
           <select
             value={categoryFilter}
             onChange={(e) => { setCategoryFilter(e.target.value); setSubCategoryFilter(""); }}
-            className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-atlas-accent"
           >
             <option value="">All Categories</option>
             {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
@@ -188,7 +191,7 @@ export default function MasterDataPage() {
           <select
             value={subCategoryFilter}
             onChange={(e) => setSubCategoryFilter(e.target.value)}
-            className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-atlas-accent"
           >
             <option value="">All Sub-Categories</option>
             {subCategories.map((sc) => (<option key={sc} value={sc}>{sc}</option>))}
@@ -196,7 +199,7 @@ export default function MasterDataPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-atlas-accent"
           >
             <option value="active">Active Only</option>
             <option value="discontinued">Discontinued</option>
@@ -208,7 +211,7 @@ export default function MasterDataPage() {
         <p className="text-xs text-atlas-ink-muted mb-3">
           Showing {filteredSKUs.length} of {skus.length} SKUs
           {(searchTerm || categoryFilter || subCategoryFilter || statusFilter !== "active") && (
-            <button onClick={() => { setSearchTerm(""); setCategoryFilter(""); setSubCategoryFilter(""); setStatusFilter("active"); }} className="ml-2 text-blue-400 hover:text-blue-300">
+            <button onClick={() => { setSearchTerm(""); setCategoryFilter(""); setSubCategoryFilter(""); setStatusFilter("active"); }} className="ml-2 text-atlas-blue hover:text-atlas-blue/70">
               Clear filters
             </button>
           )}
@@ -226,13 +229,14 @@ export default function MasterDataPage() {
                   <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Category</th>
                   <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Sub-Category</th>
                   <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">New FG Code</th>
+                  <th className="text-right py-3 px-4 text-atlas-ink-muted font-medium">MRP</th>
                   <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSKUs.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-atlas-ink-muted">
+                    <td colSpan={8} className="py-12 text-center text-atlas-ink-muted">
                       {searchTerm || categoryFilter || subCategoryFilter ? "No SKUs match your filters." : "No SKUs found."}
                     </td>
                   </tr>
@@ -244,12 +248,19 @@ export default function MasterDataPage() {
                       <td className="py-3 px-4">{sku.product_name}</td>
                       <td className="py-3 px-4 text-atlas-ink-muted">{sku.category}</td>
                       <td className="py-3 px-4 text-atlas-ink-muted">{sku.product_category}</td>
-                      <td className="py-3 px-4 font-mono text-xs text-blue-400/80">{sku.new_fg_code}</td>
+                      <td className="py-3 px-4 font-mono text-xs text-atlas-blue/80">{sku.new_fg_code}</td>
+                      <td className="py-3 px-4 text-right font-mono text-xs">
+                        {sku.mrp != null && sku.mrp > 0 ? (
+                          <span className="text-atlas-ink">{sku.mrp.toLocaleString("en-IN")}</span>
+                        ) : (
+                          <span className="text-atlas-ink-faint">—</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4">
                         {sku.discontinued_at ? (
-                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400">Discontinued</span>
+                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-atlas-red-bg text-atlas-red">Discontinued</span>
                         ) : (
-                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">Active</span>
+                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-atlas-green-bg text-atlas-green">Active</span>
                         )}
                       </td>
                     </tr>

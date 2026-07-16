@@ -7,6 +7,7 @@ import {
   type Row, type IssueCode, type MapperSet, type SkuMasterRow, type MapperDbRow,
 } from "@/lib/mapper/model";
 import { applyDirect, StalePlanError, type ApplyIntent } from "@/lib/mapper/client";
+import { componentsToText } from "@/lib/mapper/ops";
 import NewLaunchPanel from "./NewLaunchPanel";
 import ActionPreview from "./ActionPreview";
 
@@ -51,6 +52,9 @@ export default function MapperStudioPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "single" | "combo">("all");
   const [issueFilter, setIssueFilter] = useState<"all" | IssueCode | "any">("all");
+  // Shrink-to-grow means retiring SKUs in volume, and every retired single leaves
+  // dead combos behind. This filter is how you find them.
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "discontinued">("all");
 
   // Excel-like editing: one cell at a time, keyboard-driven.
   const [cursor, setCursor] = useState<{ sku: string; field: Field } | null>(null);
@@ -62,7 +66,8 @@ export default function MapperStudioPage() {
   // Destructive actions are never immediate — they open a preview computed from
   // fresh server state and confirmed against a hash.
   const [action, setAction] = useState<{
-    intent: ApplyIntent; title: string; blurb: string; confirmLabel: string; danger?: boolean; row: Row;
+    intent: ApplyIntent; title: string; blurb: string; confirmLabel: string;
+    danger?: boolean; requireTyping?: string; row: Row;
   } | null>(null);
 
   useEffect(() => { loadAll(); }, []);
@@ -141,11 +146,16 @@ export default function MapperStudioPage() {
   const rows = useMemo(() => buildRows(skuMaster, mapperRows), [skuMaster, mapperRows]);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { total: rows.length, singles: 0, combos: 0, issues: 0, blocking: 0 };
+    const c: Record<string, number> = { total: rows.length, singles: 0, combos: 0, issues: 0, blocking: 0, discontinued: 0, deadCombos: 0 };
     for (const r of rows) {
       if (r.isCombo) c.combos++; else c.singles++;
       if (r.issues.length) c.issues++;
       if (isBlocking(r)) c.blocking++;
+      if (r.discontinued) {
+        c.discontinued++;
+        // Combos still hanging off a retired single — the shrink-to-grow cleanup list.
+        if (r.usedIn.length > 0) c.deadCombos += r.usedIn.length;
+      }
     }
     return c;
   }, [rows]);
@@ -155,13 +165,15 @@ export default function MapperStudioPage() {
     return rows.filter((r) => {
       if (typeFilter === "single" && r.isCombo) return false;
       if (typeFilter === "combo" && !r.isCombo) return false;
+      if (statusFilter === "active" && r.discontinued) return false;
+      if (statusFilter === "discontinued" && !r.discontinued) return false;
       if (issueFilter === "any" && r.issues.length === 0) return false;
       if (issueFilter !== "all" && issueFilter !== "any" && !r.issues.some((i) => i.code === issueFilter)) return false;
       if (!q) return true;
       return norm(r.masterSku).includes(q) || norm(r.fgCode).includes(q) || norm(r.productName).includes(q) ||
         r.products.some((p) => norm(p).includes(q)) || r.usedIn.some((u) => norm(u.sku).includes(q));
     });
-  }, [rows, search, typeFilter, issueFilter]);
+  }, [rows, search, typeFilter, issueFilter, statusFilter]);
 
   // ── Writes ─────────────────────────────────────────────────────────────────
   //
@@ -197,6 +209,17 @@ export default function MapperStudioPage() {
     );
   }
 
+  /** Flip a row between single and combo from the Type dropdown.
+   *  There is no combo without components — is_combo is derived, never set on its
+   *  own (a combo flag with an empty products[] is the CRITICAL state). So going to
+   *  "combo" just opens the components editor; the write promotes the row once a
+   *  component lands. Going back to "single" clears the components, and commitCell
+   *  runs the same "are you sure" as editing the cell by hand. */
+  function changeType(row: Row, next: "single" | "combo") {
+    if (next === "combo" && !row.isCombo) { openCell(row, "components"); return; }
+    if (next === "single" && row.isCombo) commitCell(row, "components", "");
+  }
+
   /** Create whichever side is missing so the converter can resolve the SKU. */
   async function fixRow(row: Row) {
     await runIntent(
@@ -212,13 +235,21 @@ export default function MapperStudioPage() {
 
   /** A ghost has no row anywhere — it exists only inside other combos' components.
    *  There is nothing to delete, so the operation is on its parents. */
-  function purgeGhost(row: Row) {
+  /**
+   * Delete every combo built on a dead component. The component itself is never
+   * touched — for a retired single that is the whole point: its mapper row must
+   * stay so historical forecasts still decompose.
+   */
+  function purgeComponent(row: Row) {
+    const isGhost = !row.inMapper && !row.inSkuMaster;
     setAction({
-      intent: { intent: "purge_ghost", sku: row.masterSku },
-      title: `Remove "${row.masterSku}"`,
-      blurb: `"${row.masterSku}" is defined in neither table — it exists only inside other combos' component lists, so there is no row to delete. The combos built around it are deleted instead.`,
-      confirmLabel: "Delete these combos",
-      danger: true, row,
+      intent: { intent: "purge_component", sku: row.masterSku },
+      title: `Remove the ${row.usedIn.length} combo(s) built on "${row.masterSku}"`,
+      blurb: isGhost
+        ? `"${row.masterSku}" is defined in neither table — it exists only inside other combos' component lists, so there is no row to delete. The combos built around it are deleted instead.`
+        : `Deletes every combo that still consumes "${row.masterSku}". The SKU itself is KEPT and stays retired — deleting it would cascade away its forecast history. Any combo with history of its own is refused and listed below.`,
+      confirmLabel: `Delete ${row.usedIn.length} combo(s)`,
+      danger: true, requireTyping: row.masterSku, row,
     });
   }
 
@@ -241,9 +272,9 @@ export default function MapperStudioPage() {
     setAction({
       intent: { intent: "hard_delete", sku: row.masterSku },
       title: `Delete "${row.masterSku}" permanently`,
-      blurb: "Removes it from both tables across every mapper set. Refused if any combo consumes it or any forecast, supply or history row references it — retire it instead.",
+      blurb: "Removes it from both tables, across every mapper set. Refused if any combo consumes it or any forecast, supply or history row references it — retire it instead. There is no undo in the app: recovery means reading the snapshot out of the audit log.",
       confirmLabel: "Delete permanently",
-      danger: true, row,
+      danger: true, requireTyping: row.masterSku, row,
     });
   }
 
@@ -267,7 +298,7 @@ export default function MapperStudioPage() {
     if (f === "fgCode") return r.fgCode;
     if (f === "productName") return r.productName;
     if (f === "mrp") return r.mrp == null ? "" : String(r.mrp);
-    return r.products.join(", ");
+    return componentsToText(r.products);
   }
 
   function openCell(r: Row, f: Field) {
@@ -342,6 +373,7 @@ export default function MapperStudioPage() {
           blurb={action.blurb}
           confirmLabel={action.confirmLabel}
           danger={action.danger}
+          requireTyping={action.requireTyping}
           row={action.row}
           onClose={() => setAction(null)}
           onDone={async (msg) => { setAction(null); await loadAll(); flash("ok", msg); }}
@@ -379,13 +411,30 @@ export default function MapperStudioPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-5">
         <Stat label="Master SKUs" value={counts.total} />
         <Stat label="Singles" value={counts.singles} />
         <Stat label="Combos" value={counts.combos} />
+        <Stat label="Discontinued" value={counts.discontinued}
+          onClick={() => { setStatusFilter("discontinued"); setTypeFilter("all"); setIssueFilter("all"); setSearch(""); }} />
         <Stat label="With issues" value={counts.issues} tone={counts.issues ? "amber" : undefined} />
         <Stat label="Blocking" value={counts.blocking} tone={counts.blocking ? "red" : "green"} />
       </div>
+
+      {/* Shrink-to-grow: retired singles that combos still hang off. Each one means
+          combos the converter still expands into a product you no longer sell. */}
+      {counts.deadCombos > 0 && (
+        <div className="mb-4 p-3 bg-atlas-amber-bg border border-atlas-amber-warn/40 rounded-xl flex items-center justify-between gap-3">
+          <p className="text-sm text-atlas-amber-warn">
+            {counts.deadCombos} combo{counts.deadCombos > 1 ? "s" : ""} still build on discontinued SKUs.
+            <span className="text-atlas-ink-soft"> They keep converting into products you no longer sell.</span>
+          </p>
+          <button onClick={() => { setStatusFilter("discontinued"); setTypeFilter("single"); setIssueFilter("all"); setSearch(""); }}
+            className="px-3 py-1.5 bg-atlas-amber-warn text-white text-xs font-semibold rounded-lg hover:opacity-90 transition shrink-0">
+            Show them
+          </button>
+        </div>
+      )}
 
       {stale && (
         <div className="mb-4 p-3 rounded-xl border border-atlas-blue/40 bg-atlas-blue-bg flex items-center justify-between gap-3">
@@ -427,6 +476,9 @@ export default function MapperStudioPage() {
         <Seg value={typeFilter} onChange={setTypeFilter} options={[
           { v: "all", l: `All (${counts.total})` }, { v: "single", l: `Singles (${counts.singles})` }, { v: "combo", l: `Combos (${counts.combos})` },
         ]} />
+        <Seg value={statusFilter} onChange={setStatusFilter} options={[
+          { v: "all", l: "Any status" }, { v: "active", l: "Active" }, { v: "discontinued", l: `Discontinued (${counts.discontinued})` },
+        ]} />
         <select value={issueFilter} onChange={(e) => setIssueFilter(e.target.value as typeof issueFilter)}
           className="px-3 py-2 bg-atlas-surface border border-atlas-line rounded-lg text-atlas-ink text-sm focus:outline-none focus:ring-2 focus:ring-atlas-accent">
           <option value="all">All rows</option>
@@ -441,7 +493,8 @@ export default function MapperStudioPage() {
         Click any cell to edit · <kbd className="px-1 rounded bg-atlas-surface-soft border border-atlas-line">Enter</kbd> save ·
         {" "}<kbd className="px-1 rounded bg-atlas-surface-soft border border-atlas-line">Tab</kbd> save &amp; next ·
         {" "}<kbd className="px-1 rounded bg-atlas-surface-soft border border-atlas-line">Esc</kbd> cancel ·
-        {" "}components are comma-separated, repeat a SKU for quantity (<span className="font-mono">A, A</span> = ×2)
+        {" "}components are comma-separated; for quantity repeat the SKU or write a suffix (<span className="font-mono">A, A</span> or <span className="font-mono">A ×2</span>)
+        {" "}· change <span className="text-atlas-ink-soft">Single ⇄ Combo</span> from the Type dropdown
       </p>
 
       {/* Grid */}
@@ -485,10 +538,23 @@ export default function MapperStudioPage() {
                     </td>
 
                     <td className="py-1.5 px-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ring-1 ${
-                        r.isCombo ? toneClass.blue : "bg-atlas-surface-soft text-atlas-ink-muted ring-atlas-line"}`}>
-                        {r.isCombo ? "Combo" : "Single"}
-                      </span>
+                      {/* A single can be a combo added by mistake, and vice versa.
+                          Only offered where a mapper row exists to hold components —
+                          a row missing from the mapper must be Fixed first. */}
+                      {r.inMapper ? (
+                        <select value={r.isCombo ? "combo" : "single"} disabled={saving}
+                          onChange={(e) => changeType(r, e.target.value as "single" | "combo")}
+                          title="Change type. Picking Combo opens the components editor — a combo is defined by its components."
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ring-1 cursor-pointer bg-transparent focus:outline-none focus:ring-2 focus:ring-atlas-accent disabled:opacity-50 ${
+                            r.isCombo ? toneClass.blue : "bg-atlas-surface-soft text-atlas-ink-muted ring-atlas-line"}`}>
+                          <option value="single">{r.isCombo ? "Single — clear components" : "Single"}</option>
+                          <option value="combo">{r.isCombo ? "Combo" : "Combo — add components…"}</option>
+                        </select>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase ring-1 bg-atlas-surface-soft text-atlas-ink-muted ring-atlas-line">
+                          {r.isCombo ? "Combo" : "Single"}
+                        </span>
+                      )}
                     </td>
 
                     <Cell r={r} f="fgCode" cursor={cursor} draft={draft} setDraft={setDraft} inputRef={inputRef}
@@ -522,13 +588,22 @@ export default function MapperStudioPage() {
                       <div className="flex gap-1 justify-end">
                         {/* A ghost has no row to fix — the only action is on its parents. */}
                         {!r.inMapper && !r.inSkuMaster ? (
-                          <button onClick={() => purgeGhost(r)} disabled={saving}
+                          <button onClick={() => purgeComponent(r)} disabled={saving}
                             title="Defined nowhere. Delete the combos built around it."
                             className="px-2 py-1 bg-atlas-red-bg border border-atlas-red/40 text-atlas-red text-xs font-semibold rounded hover:opacity-80 transition disabled:opacity-50">
                             Remove
                           </button>
                         ) : (
                           <>
+                            {/* A retired single with live combos is the shrink-to-grow
+                                cleanup: the combos are dead, the single must stay. */}
+                            {r.discontinued && r.usedIn.length > 0 && (
+                              <button onClick={() => purgeComponent(r)} disabled={saving}
+                                title={`Retired, but ${r.usedIn.length} combo(s) still use it. Delete those combos — this SKU is kept.`}
+                                className="px-2 py-1 bg-atlas-amber-bg border border-atlas-amber-warn/40 text-atlas-amber-warn text-xs font-semibold rounded hover:opacity-80 transition disabled:opacity-50">
+                                Clear {r.usedIn.length} combo{r.usedIn.length > 1 ? "s" : ""}
+                              </button>
+                            )}
                             {(!r.inMapper || !r.inSkuMaster) && (
                               <button onClick={() => fixRow(r)} disabled={saving}
                                 title={!r.inMapper
@@ -545,12 +620,16 @@ export default function MapperStudioPage() {
                                 {r.discontinued ? "Restore" : "Retire"}
                               </button>
                             )}
-                            {/* Only offered where it could actually succeed: nothing
-                                consumes it. The server re-checks every reference anyway. */}
+                            {/* Only offered where it could succeed: nothing consumes it.
+                                Note that is true of nearly EVERY combo — combos are
+                                rarely components — so this button is reachable on most
+                                rows. It is deliberately low-contrast, and the dialog
+                                requires typing the SKU. The server re-checks regardless. */}
                             {r.usedIn.length === 0 && (
                               <button onClick={() => hardDelete(r)} disabled={saving}
-                                title="Delete permanently. Refused if anything references it."
-                                className="px-2 py-1 text-atlas-red/70 text-xs rounded hover:bg-atlas-red-bg transition disabled:opacity-50">
+                                aria-label={`Delete ${r.masterSku} permanently`}
+                                title="Delete permanently — requires typing the SKU to confirm. Retire is usually what you want."
+                                className="px-2 py-1 text-atlas-ink-faint text-xs rounded hover:text-atlas-red hover:bg-atlas-red-bg transition disabled:opacity-50">
                                 ✕
                               </button>
                             )}
@@ -578,13 +657,20 @@ export default function MapperStudioPage() {
 
 // ─── Presentational bits ─────────────────────────────────────────────────────
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: "red" | "amber" | "green" }) {
+function Stat({ label, value, tone, onClick }: { label: string; value: number; tone?: "red" | "amber" | "green"; onClick?: () => void }) {
   const c = tone === "red" ? "text-atlas-red" : tone === "amber" ? "text-atlas-amber-warn" : tone === "green" ? "text-atlas-green" : "text-atlas-ink";
-  return (
-    <div className="bg-atlas-surface border border-atlas-line rounded-xl p-3">
+  const body = (
+    <>
       <p className="text-[10px] text-atlas-ink-muted uppercase tracking-wider">{label}</p>
       <p className={`text-xl font-bold mt-0.5 ${c}`}>{value}</p>
-    </div>
+    </>
+  );
+  if (!onClick) return <div className="bg-atlas-surface border border-atlas-line rounded-xl p-3">{body}</div>;
+  return (
+    <button onClick={onClick}
+      className="bg-atlas-surface border border-atlas-line rounded-xl p-3 text-left hover:border-atlas-accent transition focus:outline-none focus:ring-2 focus:ring-atlas-accent">
+      {body}
+    </button>
   );
 }
 
@@ -614,7 +700,7 @@ function Cell({ r, f, cursor, draft, setDraft, inputRef, open, onKey, className,
 }) {
   const editing = cursor?.sku === r.masterSku && cursor.field === f;
   const shown = f === "fgCode" ? r.fgCode : f === "productName" ? r.productName
-    : f === "mrp" ? (r.mrp == null ? "" : r.mrp.toLocaleString("en-IN")) : r.products.join(", ");
+    : f === "mrp" ? (r.mrp == null ? "" : r.mrp.toLocaleString("en-IN")) : componentsToText(r.products);
   const empty = !shown;
   const critical = f === "components" && r.isCombo && r.products.length === 0;
 

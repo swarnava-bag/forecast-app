@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient, SupabaseClient } from "@supabase/supabase-js";
 import type { SkuMasterRow, MapperDbRow } from "@/lib/mapper/model";
 import {
-  planAddBatch, planFix, planCellEdit, planPurgeGhost, planRetire, planHardDelete,
+  planAddBatch, planFix, planCellEdit, planPurgeComponent, planRetire, planHardDelete,
   type LiveState, type Plan, type Write, type DraftSku, type CellField, type RefCounts,
 } from "@/lib/mapper/ops";
 
@@ -21,7 +21,7 @@ import {
 //   { intent: "add_batch",   mapperSetId, draft: DraftSku[] }
 //   { intent: "fix",         mapperSetId, sku }
 //   { intent: "cell_edit",   mapperSetId, sku, field, value }
-//   { intent: "purge_ghost", sku }
+//   { intent: "purge_component", sku }
 //   { intent: "retire",      sku, retire?: boolean }
 //   { intent: "hard_delete", sku }
 //
@@ -31,7 +31,7 @@ import {
 export const dynamic = "force-dynamic";
 
 type Body = {
-  intent: "add_batch" | "fix" | "cell_edit" | "purge_ghost" | "retire" | "hard_delete";
+  intent: "add_batch" | "fix" | "cell_edit" | "purge_component" | "retire" | "hard_delete";
   planHash?: string;
   dryRun?: boolean;
   mapperSetId?: string;
@@ -91,7 +91,7 @@ function makePlan(body: Body, live: LiveState, refs: RefCounts | null, parentRef
     case "add_batch":   return planAddBatch(live, body.draft || [], setId);
     case "fix":         return planFix(live, body.sku || "", setId);
     case "cell_edit":   return planCellEdit(live, body.sku || "", body.field || "fgCode", body.value ?? "", setId);
-    case "purge_ghost": return planPurgeGhost(live, body.sku || "", parentRefs ?? undefined);
+    case "purge_component": return planPurgeComponent(live, body.sku || "", parentRefs ?? undefined);
     case "retire":      return planRetire(live, body.sku || "", body.retire !== false);
     case "hard_delete": return planHardDelete(live, body.sku || "", refs!);
   }
@@ -200,7 +200,7 @@ export async function POST(request: Request) {
     if (body.intent === "hard_delete") {
       const sm = live.skuMaster.find((s) => (s.new_master_sku || "").trim().toLowerCase() === (body.sku || "").trim().toLowerCase());
       refs = await countRefs(admin, body.sku || "", sm?.id ?? null);
-    } else if (body.intent === "purge_ghost") {
+    } else if (body.intent === "purge_component") {
       parentRefs = await countParentRefs(admin, live, body.sku || "");
     }
 

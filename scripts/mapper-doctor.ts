@@ -256,7 +256,7 @@ type SetRow = { id: string; name: string; is_default: boolean; row_count: number
       channel_sku_mapping.sku_id -> sku_master(id)  ON DELETE CASCADE
   Postgres will not stop you and will not warn you: the forecast history for that
   SKU is simply gone. Every delete path must count references FIRST — which is why
-  planHardDelete and planPurgeGhost both refuse rather than rely on the database.
+  planHardDelete and planPurgeComponent both refuse rather than rely on the database.
 
   RLS is ENABLED on all three tables, and INSERT/UPDATE/DELETE are gated on
   profiles.role = 'admin'. SELECT is open. The API route holds the service key,

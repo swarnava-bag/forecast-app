@@ -79,6 +79,55 @@ export const expandComponents = (components: Array<{ sku: string; qty: number }>
   return out;
 };
 
+/**
+ * Parse the components CELL — free text an admin typed — into the stored
+ * repetition array. Quantity may be written as a suffix instead of retyping the
+ * SKU: `SKU x10`, `SKU ×10`, `SKU *10`, or `SKU=x10` all expand to ten copies.
+ *
+ * The multiplier must be introduced by a separator that never appears inside a
+ * SKU here (whitespace, *, ×, =, or x/X). A bare trailing number is left alone —
+ * `PC_BC_150_P2` keeps its `2`, because the `_` before it is not a separator. So
+ * the sugar can only ever ADD copies, never silently reinterpret a real SKU.
+ *
+ * `SKU=x10` is deliberately accepted: it is the exact thing people type on the
+ * first try (it is how WB_10g_CC_P10G's ghost was born), so re-saving that cell
+ * now repairs it instead of minting another ghost.
+ */
+const QTY_SUFFIX = /^(.+?)[\s*×xX=]+(\d+)$/;
+export function parseComponents(raw: string): string[] {
+  const out: string[] = [];
+  for (const token of (raw || "").split(",")) {
+    const t = token.trim();
+    if (!t) continue;
+    const m = QTY_SUFFIX.exec(t);
+    if (m) {
+      const sku = m[1].trim();
+      const qty = Math.min(999, Math.max(1, parseInt(m[2], 10)));
+      if (sku) for (let i = 0; i < qty; i++) out.push(sku);
+    } else {
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+/**
+ * The inverse, for display and for re-editing: collapse the repetition array back
+ * to `SKU ×N` text, first-appearance order preserved. What parseComponents reads,
+ * this writes — a cell round-trips without ballooning into ten identical tokens.
+ */
+export function componentsToText(products: string[]): string {
+  const order: string[] = [];
+  const counts = new Map<string, number>();
+  for (const p of products) {
+    const s = (p || "").trim();
+    if (!s) continue;
+    if (!counts.has(s)) order.push(s);
+    counts.set(s, (counts.get(s) || 0) + 1);
+  }
+  return order.map((s) => (counts.get(s)! > 1 ? `${s} ×${counts.get(s)}` : s)).join(", ");
+}
+
 // ── hashing ──────────────────────────────────────────────────────────────────
 
 /** FNV-1a. Not cryptographic — this detects concurrent edits, not tampering
@@ -362,16 +411,24 @@ export function planFix(live: LiveState, sku: string, mapperSetId: string): Plan
   return buildPlan(live, after, writes, changes, skipped, [sku], [mapperSetId]);
 }
 
-// ── planPurgeGhost — delete the combos that depend on a ghost ─────────────────
+// ── planPurgeComponent — delete the combos built on a dead component ──────────
 
 /**
- * A ghost has no row in either table; it exists only inside other combos'
- * products[]. There is nothing to DELETE — so the operation is on its parents.
+ * Delete every combo that consumes `component`. The component's OWN rows are never
+ * touched.
  *
- * Per the admin's decision: the ghost is a discontinued SKU, so the combos built
- * around it are dead too and get deleted outright.
+ * Two callers, one shape:
+ *   - a ghost (no row in either table) — there is nothing to delete but its parents
+ *   - a retired single — the combos around it are dead, but the single must stay
+ *
+ * Why the single stays: deleting a sku_master row is ON DELETE CASCADE into
+ * forecast_data and channel_sku_mapping, and historical_forecast_data joins by text
+ * so it would dangle. PC_BC_150G alone has 8 forecast rows, 22 channel mappings and
+ * 131 history rows. Retirement keeps the mapper row, so those 131 rows still
+ * decompose correctly when an old forecast is re-run. Deleting is not the clean
+ * end state — retiring is.
  */
-export function planPurgeGhost(live: LiveState, ghostSku: string, refsByParent?: Map<string, RefCounts>): Plan {
+export function planPurgeComponent(live: LiveState, ghostSku: string, refsByParent?: Map<string, RefCounts>): Plan {
   const changes: Change[] = [];
   const skipped: string[] = [];
   const writes: Write[] = [];
@@ -379,11 +436,13 @@ export function planPurgeGhost(live: LiveState, ghostSku: string, refsByParent?:
   const setIds = new Set<string>();
 
   const parents = live.mapperRows.filter((m) => (m.products || []).some((p) => norm(p) === norm(ghostSku)));
-  if (parents.length === 0) skipped.push(`${ghostSku}: nothing references it`);
+  if (parents.length === 0) skipped.push(`${ghostSku}: no combo uses it — nothing to remove`);
 
   const deletedKeys = new Set<string>();
   for (const p of parents) {
     touched.push(p.master_sku);
+    // A combo cannot be deleted as a parent of itself.
+    if (norm(p.master_sku) === norm(ghostSku)) continue;
     const key = `${norm(p.master_sku)}|${p.mapper_set_id}`;
     if (deletedKeys.has(key)) continue; // duplicate rows: one delete covers them
 
@@ -548,7 +607,7 @@ export function planCellEdit(live: LiveState, sku: string, field: CellField, raw
 
   if (field === "components") {
     if (mrRows.length === 0) { skipped.push(`${sku}: no mapper row in this set`); return buildPlan(live, live, writes, changes, skipped, touched, [mapperSetId]); }
-    const products = value.split(",").map((p) => p.trim()).filter(Boolean);
+    const products = parseComponents(value);
     if (products.some((p) => norm(p) === norm(sku))) { skipped.push(`${sku}: a combo cannot contain itself`); return buildPlan(live, live, writes, changes, skipped, touched, [mapperSetId]); }
     const universe = toNestRows(live.mapperRows);
     const { resolved, expanded } = flattenOne(products, universe, sku);
