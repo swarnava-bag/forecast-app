@@ -79,6 +79,55 @@ export const expandComponents = (components: Array<{ sku: string; qty: number }>
   return out;
 };
 
+/**
+ * Parse the components CELL — free text an admin typed — into the stored
+ * repetition array. Quantity may be written as a suffix instead of retyping the
+ * SKU: `SKU x10`, `SKU ×10`, `SKU *10`, or `SKU=x10` all expand to ten copies.
+ *
+ * The multiplier must be introduced by a separator that never appears inside a
+ * SKU here (whitespace, *, ×, =, or x/X). A bare trailing number is left alone —
+ * `PC_BC_150_P2` keeps its `2`, because the `_` before it is not a separator. So
+ * the sugar can only ever ADD copies, never silently reinterpret a real SKU.
+ *
+ * `SKU=x10` is deliberately accepted: it is the exact thing people type on the
+ * first try (it is how WB_10g_CC_P10G's ghost was born), so re-saving that cell
+ * now repairs it instead of minting another ghost.
+ */
+const QTY_SUFFIX = /^(.+?)[\s*×xX=]+(\d+)$/;
+export function parseComponents(raw: string): string[] {
+  const out: string[] = [];
+  for (const token of (raw || "").split(",")) {
+    const t = token.trim();
+    if (!t) continue;
+    const m = QTY_SUFFIX.exec(t);
+    if (m) {
+      const sku = m[1].trim();
+      const qty = Math.min(999, Math.max(1, parseInt(m[2], 10)));
+      if (sku) for (let i = 0; i < qty; i++) out.push(sku);
+    } else {
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+/**
+ * The inverse, for display and for re-editing: collapse the repetition array back
+ * to `SKU ×N` text, first-appearance order preserved. What parseComponents reads,
+ * this writes — a cell round-trips without ballooning into ten identical tokens.
+ */
+export function componentsToText(products: string[]): string {
+  const order: string[] = [];
+  const counts = new Map<string, number>();
+  for (const p of products) {
+    const s = (p || "").trim();
+    if (!s) continue;
+    if (!counts.has(s)) order.push(s);
+    counts.set(s, (counts.get(s) || 0) + 1);
+  }
+  return order.map((s) => (counts.get(s)! > 1 ? `${s} ×${counts.get(s)}` : s)).join(", ");
+}
+
 // ── hashing ──────────────────────────────────────────────────────────────────
 
 /** FNV-1a. Not cryptographic — this detects concurrent edits, not tampering
@@ -558,7 +607,7 @@ export function planCellEdit(live: LiveState, sku: string, field: CellField, raw
 
   if (field === "components") {
     if (mrRows.length === 0) { skipped.push(`${sku}: no mapper row in this set`); return buildPlan(live, live, writes, changes, skipped, touched, [mapperSetId]); }
-    const products = value.split(",").map((p) => p.trim()).filter(Boolean);
+    const products = parseComponents(value);
     if (products.some((p) => norm(p) === norm(sku))) { skipped.push(`${sku}: a combo cannot contain itself`); return buildPlan(live, live, writes, changes, skipped, touched, [mapperSetId]); }
     const universe = toNestRows(live.mapperRows);
     const { resolved, expanded } = flattenOne(products, universe, sku);

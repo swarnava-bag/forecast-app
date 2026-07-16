@@ -7,6 +7,7 @@ import {
   type Row, type IssueCode, type MapperSet, type SkuMasterRow, type MapperDbRow,
 } from "@/lib/mapper/model";
 import { applyDirect, StalePlanError, type ApplyIntent } from "@/lib/mapper/client";
+import { componentsToText } from "@/lib/mapper/ops";
 import NewLaunchPanel from "./NewLaunchPanel";
 import ActionPreview from "./ActionPreview";
 
@@ -208,6 +209,17 @@ export default function MapperStudioPage() {
     );
   }
 
+  /** Flip a row between single and combo from the Type dropdown.
+   *  There is no combo without components — is_combo is derived, never set on its
+   *  own (a combo flag with an empty products[] is the CRITICAL state). So going to
+   *  "combo" just opens the components editor; the write promotes the row once a
+   *  component lands. Going back to "single" clears the components, and commitCell
+   *  runs the same "are you sure" as editing the cell by hand. */
+  function changeType(row: Row, next: "single" | "combo") {
+    if (next === "combo" && !row.isCombo) { openCell(row, "components"); return; }
+    if (next === "single" && row.isCombo) commitCell(row, "components", "");
+  }
+
   /** Create whichever side is missing so the converter can resolve the SKU. */
   async function fixRow(row: Row) {
     await runIntent(
@@ -286,7 +298,7 @@ export default function MapperStudioPage() {
     if (f === "fgCode") return r.fgCode;
     if (f === "productName") return r.productName;
     if (f === "mrp") return r.mrp == null ? "" : String(r.mrp);
-    return r.products.join(", ");
+    return componentsToText(r.products);
   }
 
   function openCell(r: Row, f: Field) {
@@ -481,7 +493,8 @@ export default function MapperStudioPage() {
         Click any cell to edit · <kbd className="px-1 rounded bg-atlas-surface-soft border border-atlas-line">Enter</kbd> save ·
         {" "}<kbd className="px-1 rounded bg-atlas-surface-soft border border-atlas-line">Tab</kbd> save &amp; next ·
         {" "}<kbd className="px-1 rounded bg-atlas-surface-soft border border-atlas-line">Esc</kbd> cancel ·
-        {" "}components are comma-separated, repeat a SKU for quantity (<span className="font-mono">A, A</span> = ×2)
+        {" "}components are comma-separated; for quantity repeat the SKU or write a suffix (<span className="font-mono">A, A</span> or <span className="font-mono">A ×2</span>)
+        {" "}· change <span className="text-atlas-ink-soft">Single ⇄ Combo</span> from the Type dropdown
       </p>
 
       {/* Grid */}
@@ -525,10 +538,23 @@ export default function MapperStudioPage() {
                     </td>
 
                     <td className="py-1.5 px-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ring-1 ${
-                        r.isCombo ? toneClass.blue : "bg-atlas-surface-soft text-atlas-ink-muted ring-atlas-line"}`}>
-                        {r.isCombo ? "Combo" : "Single"}
-                      </span>
+                      {/* A single can be a combo added by mistake, and vice versa.
+                          Only offered where a mapper row exists to hold components —
+                          a row missing from the mapper must be Fixed first. */}
+                      {r.inMapper ? (
+                        <select value={r.isCombo ? "combo" : "single"} disabled={saving}
+                          onChange={(e) => changeType(r, e.target.value as "single" | "combo")}
+                          title="Change type. Picking Combo opens the components editor — a combo is defined by its components."
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ring-1 cursor-pointer bg-transparent focus:outline-none focus:ring-2 focus:ring-atlas-accent disabled:opacity-50 ${
+                            r.isCombo ? toneClass.blue : "bg-atlas-surface-soft text-atlas-ink-muted ring-atlas-line"}`}>
+                          <option value="single">{r.isCombo ? "Single — clear components" : "Single"}</option>
+                          <option value="combo">{r.isCombo ? "Combo" : "Combo — add components…"}</option>
+                        </select>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase ring-1 bg-atlas-surface-soft text-atlas-ink-muted ring-atlas-line">
+                          {r.isCombo ? "Combo" : "Single"}
+                        </span>
+                      )}
                     </td>
 
                     <Cell r={r} f="fgCode" cursor={cursor} draft={draft} setDraft={setDraft} inputRef={inputRef}
@@ -674,7 +700,7 @@ function Cell({ r, f, cursor, draft, setDraft, inputRef, open, onKey, className,
 }) {
   const editing = cursor?.sku === r.masterSku && cursor.field === f;
   const shown = f === "fgCode" ? r.fgCode : f === "productName" ? r.productName
-    : f === "mrp" ? (r.mrp == null ? "" : r.mrp.toLocaleString("en-IN")) : r.products.join(", ");
+    : f === "mrp" ? (r.mrp == null ? "" : r.mrp.toLocaleString("en-IN")) : componentsToText(r.products);
   const empty = !shown;
   const critical = f === "components" && r.isCombo && r.products.length === 0;
 

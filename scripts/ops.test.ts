@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import type { SkuMasterRow, MapperDbRow } from "../lib/mapper/model";
 import {
   planAddBatch, planFix, planCellEdit, planPurgeComponent, planRetire, planHardDelete,
-  expandComponents, parseMrp, type LiveState, type DraftSku, type RefCounts,
+  expandComponents, parseComponents, componentsToText, parseMrp, type LiveState, type DraftSku, type RefCounts,
 } from "../lib/mapper/ops";
 
 const SET = "set-1";
@@ -35,6 +35,44 @@ const NO_REFS: RefCounts = {
 test("component quantity is encoded as repetition", () => {
   assert.deepEqual(expandComponents([{ sku: "A", qty: 3 }, { sku: "B", qty: 1 }]), ["A", "A", "A", "B"]);
   assert.deepEqual(expandComponents([{ sku: "  ", qty: 2 }]), [], "blank rows are ignored, not expanded");
+});
+
+test("parseComponents expands a quantity suffix instead of repeating by hand", () => {
+  const ten = Array(10).fill("WB_10g_CCG");
+  assert.deepEqual(parseComponents("WB_10g_CCG x10"), ten, "x10");
+  assert.deepEqual(parseComponents("WB_10g_CCG×10"), ten, "×10 glued");
+  assert.deepEqual(parseComponents("WB_10g_CCG*10"), ten, "*10");
+  assert.deepEqual(parseComponents("WB_10g_CCG=x10"), ten, "the =x10 people actually type is repaired, not made a ghost");
+  assert.deepEqual(parseComponents("A x2, B"), ["A", "A", "B"], "mix of suffix and plain, comma-separated");
+  assert.deepEqual(parseComponents("A, A, A"), ["A", "A", "A"], "plain repetition still works");
+});
+
+test("parseComponents never reinterprets a real SKU's trailing number", () => {
+  // The separator before the number must be one that cannot occur inside a SKU.
+  // '_' is not one, so these keep their digits and stay single, literal tokens.
+  assert.deepEqual(parseComponents("PC_BC_150_P2"), ["PC_BC_150_P2"]);
+  assert.deepEqual(parseComponents("WB_10g_SP_P10G"), ["WB_10g_SP_P10G"]);
+  assert.deepEqual(parseComponents(""), [], "empty is empty");
+});
+
+test("componentsToText collapses repetition back to ×N, and round-trips", () => {
+  assert.equal(componentsToText(Array(10).fill("WB_10g_CCG")), "WB_10g_CCG ×10");
+  assert.equal(componentsToText(["A", "B", "A"]), "A ×2, B", "grouped by first appearance");
+  assert.equal(componentsToText(["A"]), "A", "a single copy has no suffix");
+  const products = parseComponents("EB_CCG x3, PC_DC_150G");
+  assert.deepEqual(parseComponents(componentsToText(products)), products, "text → array → text is stable");
+});
+
+test("a quantity suffix in the components cell promotes a single to a combo", () => {
+  const live: LiveState = {
+    skuMaster: [sm({ new_master_sku: "WB_10g_CC_P10G" }), sm({ new_master_sku: "WB_10g_CCG" })],
+    mapperRows: [mr({ master_sku: "WB_10g_CC_P10G", is_combo: false, products: [] }), mr({ master_sku: "WB_10g_CCG" })],
+  };
+  const plan = planCellEdit(live, "WB_10g_CC_P10G", "components", "WB_10g_CCG x10", SET);
+  const w = plan.writes.find((x) => x.op === "update_mapper");
+  assert.ok(w && "patch" in w);
+  assert.equal(w.patch.is_combo, true, "components present ⇒ combo");
+  assert.equal((w.patch.products as string[]).length, 10, "ten copies, not one ghost named 'WB_10g_CCG x10'");
 });
 
 test("MRP parsing accepts blanks and thousands separators, rejects junk", () => {
