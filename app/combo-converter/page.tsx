@@ -739,6 +739,172 @@ function buildMultiOutputExcel(result: MultiResult, mapperRows: MapperRow[], sku
   return wb;
 }
 
+// ========== DAILY PENDING-QTY CONVERTER ==========
+// Purpose: one-click daily flow. Input file is keyed by FG Code with a Product Name and a single
+// order-qty column (e.g. "FG code" | "Product Name" | "Sum of Order Qty"). We resolve each FG Code to
+// its Master SKU, expand combos into their component singles, and emit ONE flat sheet:
+//   Master SKU | FG Code | Product Name | Qty | Remarks(Converted / Not in Mapper)
+// FG Codes in the daily file carry a trailing letter that may differ from sku_master (e.g. "14048N"
+// vs "14048G"). So matching is: exact FG first, then the numeric "base" (trailing letter(s) stripped).
+
+type DailyInputRow = { fg_code: string; product_name: string; qty: number };
+type DailyOutputRow = { master_sku: string; fg_code: string; product_name: string; qty: number; remark: "Converted" | "Not in Mapper" };
+type DailyResult = { rows: DailyOutputRow[]; inputCount: number; convertedCount: number; notInMapperCount: number; comboExpandedCount: number };
+
+// Strip a trailing alphabetic suffix only when a digit-bearing stem remains (so "14048N" -> "14048",
+// but a purely-alpha code like "NPIaG" is left untouched to avoid collapsing to an empty base).
+function fgBase(fg: string): string {
+  const s = String(fg || "").trim();
+  const m = s.match(/^(.*?)[a-zA-Z]+$/);
+  if (m && /\d/.test(m[1]) && m[1].length > 0) return m[1].toLowerCase();
+  return s.toLowerCase();
+}
+
+function parseDailyPending(ws: XLSX.WorkSheet): DailyInputRow[] {
+  const json = XLSX.utils.sheet_to_json<any>(ws);
+  if (json.length === 0) return [];
+  const headers = Object.keys(json[0]);
+  const fgCol = headers.find((h) => { const l = h.toLowerCase(); return l.includes("fg") && (l.includes("code") || l === "fg"); })
+    || headers.find((h) => h.toLowerCase().includes("fg")) || headers[0];
+  const nameCol = headers.find((h) => { const l = h.toLowerCase(); return l.includes("product") || l.includes("name") || l.includes("description"); }) || "";
+  const qtyCol = headers.find((h) => { const l = h.toLowerCase(); return l.includes("qty") || l.includes("quantity") || l.includes("order"); })
+    || headers.filter((h) => h !== fgCol && h !== nameCol).slice(-1)[0] || "";
+  const rows: DailyInputRow[] = [];
+  for (const r of json) {
+    const fg = String(r[fgCol] ?? "").trim();
+    if (!fg) continue;
+    const qty = Number(String(r[qtyCol] ?? "").toString().replace(/[, ]/g, "")) || 0;
+    rows.push({ fg_code: fg, product_name: nameCol ? String(r[nameCol] ?? "").trim() : "", qty });
+  }
+  return rows;
+}
+
+function runDailyConversion(input: DailyInputRow[], mapperRows: MapperRow[], skuMaster: SingleSku[]): DailyResult {
+  // --- Lookups ---
+  // FG (exact + base) -> single SKU from sku_master
+  const fgExact = new Map<string, SingleSku>();
+  const fgBaseMap = new Map<string, SingleSku>();
+  const masterToSingle = new Map<string, SingleSku>();
+  for (const s of skuMaster) {
+    if (s.new_master_sku) masterToSingle.set(s.new_master_sku.toLowerCase(), s);
+    const fg = s.new_fg_code;
+    if (fg) {
+      fgExact.set(fg.toLowerCase(), s);
+      const b = fgBase(fg);
+      if (b && !fgBaseMap.has(b)) fgBaseMap.set(b, s);
+    }
+  }
+  // Master SKU -> mapper row, and combo FG (exact + base) -> mapper row
+  const masterToMapper = new Map<string, MapperRow>();
+  const comboFgExact = new Map<string, MapperRow>();
+  const comboFgBase = new Map<string, MapperRow>();
+  for (const m of mapperRows) {
+    masterToMapper.set(m.master_sku.toLowerCase(), m);
+    const isCombo = ["yes", "y", "1", "true"].includes(m.combo.toLowerCase()) || m.products.some((p) => p.length > 0);
+    if (isCombo && m.fg_code) {
+      comboFgExact.set(m.fg_code.toLowerCase(), m);
+      const b = fgBase(m.fg_code);
+      if (b && !comboFgBase.has(b)) comboFgBase.set(b, m);
+    }
+  }
+
+  // --- Aggregation ---
+  // Output rows accumulate qty by a stable key (resolved -> master SKU; unresolved -> the raw FG code).
+  const agg = new Map<string, DailyOutputRow>();
+  function add(key: string, master: string, fg: string, name: string, qty: number, remark: "Converted" | "Not in Mapper") {
+    const existing = agg.get(key);
+    if (existing) {
+      existing.qty += qty;
+      // "Not in Mapper" is the attention-worthy state — let it stick if any contribution was unmapped.
+      if (remark === "Not in Mapper") existing.remark = "Not in Mapper";
+      if (!existing.product_name && name) existing.product_name = name;
+      if (!existing.fg_code && fg) existing.fg_code = fg;
+    } else {
+      agg.set(key, { master_sku: master, fg_code: fg, product_name: name, qty, remark });
+    }
+  }
+  function nameFor(single: SingleSku | undefined, fallback: string): string {
+    return single?.product_name || fallback || "";
+  }
+
+  let comboExpandedCount = 0;
+
+  for (const row of input) {
+    const l = row.fg_code.toLowerCase();
+    const b = fgBase(row.fg_code);
+
+    // 1) Combo FG? (a combo master lives in the mapper with its own fg_code)
+    const comboMapper = comboFgExact.get(l) || comboFgBase.get(b);
+    if (comboMapper) {
+      comboExpandedCount++;
+      for (const p of comboMapper.products) {
+        if (!p) continue;
+        const single = masterToSingle.get(p.toLowerCase());
+        add(p.toLowerCase(), p, single?.new_fg_code || "", nameFor(single, ""), row.qty, "Converted");
+      }
+      continue;
+    }
+
+    // 2) Single FG -> master SKU (exact then base)
+    const single = fgExact.get(l) || fgBaseMap.get(b);
+    if (single) {
+      const master = single.new_master_sku;
+      const mapper = masterToMapper.get(master.toLowerCase());
+      const inMapper = !!mapper;
+      // If the resolved master IS a combo in the mapper, expand it.
+      if (mapper) {
+        const isCombo = ["yes", "y", "1", "true"].includes(mapper.combo.toLowerCase()) || mapper.products.some((p) => p.length > 0);
+        if (isCombo) {
+          comboExpandedCount++;
+          for (const p of mapper.products) {
+            if (!p) continue;
+            const comp = masterToSingle.get(p.toLowerCase());
+            add(p.toLowerCase(), p, comp?.new_fg_code || "", nameFor(comp, ""), row.qty, "Converted");
+          }
+          continue;
+        }
+      }
+      add(master.toLowerCase(), master, single.new_fg_code, nameFor(single, row.product_name), row.qty, inMapper ? "Converted" : "Not in Mapper");
+      continue;
+    }
+
+    // 3) Unresolved — not in sku_master nor mapper. Copy through as-is, flagged.
+    add("fg::" + l, "", row.fg_code, row.product_name, row.qty, "Not in Mapper");
+  }
+
+  const rows = [...agg.values()]
+    .map((r) => ({ ...r, qty: Math.round(r.qty * 100) / 100 }))
+    .filter((r) => r.qty !== 0)
+    // Not-in-Mapper first (needs attention), then by Master SKU / FG.
+    .sort((a, b2) => {
+      if (a.remark !== b2.remark) return a.remark === "Not in Mapper" ? -1 : 1;
+      return (a.master_sku || a.fg_code).localeCompare(b2.master_sku || b2.fg_code);
+    });
+
+  return {
+    rows,
+    inputCount: input.length,
+    convertedCount: rows.filter((r) => r.remark === "Converted").length,
+    notInMapperCount: rows.filter((r) => r.remark === "Not in Mapper").length,
+    comboExpandedCount,
+  };
+}
+
+function buildDailyOutputExcel(result: DailyResult): XLSX.WorkBook {
+  const wb = XLSX.utils.book_new();
+  const data = result.rows.map((r) => ({
+    "Master SKU": r.master_sku,
+    "FG Code": r.fg_code,
+    "Product Name": r.product_name,
+    "Qty": r.qty,
+    "Remarks": r.remark,
+  }));
+  const ws = XLSX.utils.json_to_sheet(data.length > 0 ? data : [{ "Master SKU": "", "FG Code": "", "Product Name": "No rows", "Qty": 0, "Remarks": "" }]);
+  ws["!cols"] = [{ wch: 22 }, { wch: 12 }, { wch: 60 }, { wch: 12 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, ws, "Singles");
+  return wb;
+}
+
 // ========== COMPONENT ==========
 
 type SingleSku = { new_master_sku: string; new_fg_code: string; product_name: string; mrp: number | null };
@@ -761,7 +927,7 @@ export default function ComboConverterPage() {
   const [uploadingMapper, setUploadingMapper] = useState(false);
   const [mapperMsg, setMapperMsg] = useState<string | null>(null);
   // Mode / View: qty-only (existing) | nto-only (MRP-ratio split) | nto + qty multi-platform
-  const [mode, setMode] = useState<"qty" | "nto" | "multi">("qty");
+  const [mode, setMode] = useState<"qty" | "nto" | "multi" | "daily">("qty");
   // Input identifier: Master SKU or FG Code
   const [inputIdentifier, setInputIdentifier] = useState<"sku" | "fg">("sku");
   // Unresolved FG codes (FG mode only): fg_code -> { quantities, action user wants to take }
@@ -771,6 +937,7 @@ export default function ComboConverterPage() {
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [ntoResult, setNtoResult] = useState<NtoResult | null>(null);
   const [multiResult, setMultiResult] = useState<MultiResult | null>(null);
+  const [dailyResult, setDailyResult] = useState<DailyResult | null>(null);
   const [allMapperRows, setAllMapperRows] = useState<MapperRow[]>([]);
   const [processing, setProcessing] = useState(false);
   // Inline edit for unmapped rows: key = master_sku, value = { combo, products }
@@ -799,7 +966,7 @@ export default function ComboConverterPage() {
   const supabase = createClient();
 
   // Log usage for analytics
-  async function logUsage(conversionType: "qty" | "nto" | "multi", skuCount: number) {
+  async function logUsage(conversionType: "qty" | "nto" | "multi" | "daily", skuCount: number) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -1432,6 +1599,38 @@ export default function ComboConverterPage() {
     XLSX.writeFile(buildMultiOutputExcel(multiResult, allMapperRows, skuLookup), "MultiPlatform_NTO_Qty_Output.xlsx");
   }
 
+  // ====== DAILY PENDING-QTY CONVERSION ======
+  // One-click: upload the daily "pending qty" file (FG Code, Product Name, Order Qty) and get back a
+  // single flat sheet of singles with FG Code, Name, Qty and a Converted / Not in Mapper remark.
+
+  function handleDailyFile(file: File) {
+    setError(null); setProcessing(true); setDailyResult(null);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target?.result;
+        const wb = XLSX.read(data, { type: "binary" });
+        const input = parseDailyPending(wb.Sheets[wb.SheetNames[0]]);
+        if (input.length === 0) { setError("No rows found. Expecting columns: FG Code, Product Name, Order Qty."); setProcessing(false); return; }
+
+        // Always uses the DB mapper + SKU Master (FG-code resolution depends on both).
+        if (dbMapperRows.length === 0) { setError("No mapper loaded. Select a mapper first (or ask an admin to upload one)."); setProcessing(false); return; }
+        if (skuMaster.length === 0) { setError("SKU Master not loaded yet — try again in a moment."); setProcessing(false); return; }
+
+        const res = runDailyConversion(input, dbMapperRows, skuMaster);
+        setDailyResult(res);
+        logUsage("daily", res.rows.length);
+      } catch (err: any) { setError(`Processing failed: ${err.message}`); }
+      setProcessing(false);
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  function downloadDailyResult() {
+    if (!dailyResult) return;
+    XLSX.writeFile(buildDailyOutputExcel(dailyResult), "Pending_Qty_Singles.xlsx");
+  }
+
   // Intuitive multi-sheet template: Instructions → Quantity → NTO.
   // Qty and NTO share the same (Master SKU, Channel) row order.
   // Sample numbers are deliberately different so users can see what goes where.
@@ -1873,7 +2072,7 @@ export default function ComboConverterPage() {
             <h2 className="text-2xl font-bold">Combo → Singles Converter</h2>
             <div className="flex items-center gap-3 mt-1">
               <p className="text-sm text-atlas-ink-muted">Convert combo SKU forecasts into individual single SKU quantities</p>
-              {!result && !ntoResult && !multiResult && (
+              {!result && !ntoResult && !multiResult && !dailyResult && mode !== "daily" && (
                 <div className="flex items-center gap-2 ml-4 shrink-0">
                   <span className={`text-xs font-medium transition ${inputIdentifier === "sku" ? "text-atlas-ink" : "text-atlas-ink-muted"}`}>Master SKU</span>
                   <button
@@ -1899,7 +2098,7 @@ export default function ComboConverterPage() {
                 <button onClick={() => { setResult(null); setError(null); setUnresolvedFgCodes([]); }} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">New Conversion</button>
               </>
             )}
-            {!result && mode !== "multi" && (
+            {!result && mode !== "multi" && mode !== "daily" && (
               <>
                 <button onClick={downloadTemplate} className="px-4 py-2 text-sm bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition">
                   Download Template
@@ -2015,6 +2214,7 @@ export default function ComboConverterPage() {
             { k: "qty", label: "Qty Only", desc: "Original converter — quantities" },
             { k: "nto", label: "NTO Only", desc: "Split NTO by MRP ratio" },
             { k: "multi", label: "NTO + Qty (Multi-Platform)", desc: "Per-channel Qty + NTO" },
+            { k: "daily", label: "Daily Pending Qty", desc: "Upload the daily FG-Code pending file → one flat Singles sheet" },
           ] as const).map((t) => {
             const active = mode === t.k;
             return (
@@ -2027,9 +2227,10 @@ export default function ComboConverterPage() {
                   if (t.k !== "qty") setResult(null);
                   if (t.k !== "nto") setNtoResult(null);
                   if (t.k !== "multi") setMultiResult(null);
+                  if (t.k !== "daily") setDailyResult(null);
                   setUnresolvedFgCodes([]);
-                  // NTO and Multi modes always use DB mapper — auto-load if needed
-                  if ((t.k === "nto" || t.k === "multi") && dbMapperRows.length === 0) {
+                  // NTO, Multi and Daily modes always use DB mapper — auto-load if needed
+                  if ((t.k === "nto" || t.k === "multi" || t.k === "daily") && dbMapperRows.length === 0) {
                     const setId = selectedMapperSetId || (mapperSets.find((s) => s.is_default) || mapperSets[0])?.id || "";
                     if (setId) {
                       if (setId !== selectedMapperSetId) setSelectedMapperSetId(setId);
@@ -2704,6 +2905,99 @@ export default function ComboConverterPage() {
                             </tr>
                           );
                         })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ====== DAILY PENDING-QTY VIEW ====== */}
+        {mode === "daily" && (
+          <div className="space-y-6">
+            {!dailyResult ? (
+              <div className="bg-atlas-surface border border-atlas-line rounded-xl p-6">
+                <label className="block text-sm font-medium text-atlas-ink">Upload Daily Pending-Qty File</label>
+                <p className="text-xs text-atlas-ink-muted mt-1 mb-4">
+                  One sheet with columns <span className="font-mono text-atlas-ink">FG Code</span>, <span className="font-mono text-atlas-ink">Product Name</span>, and an order-qty column
+                  (e.g. <span className="font-mono text-atlas-ink">Sum of Order Qty</span>). Each FG Code is resolved to its Master SKU, combos are expanded into singles,
+                  and you get back a single flat sheet: <span className="text-atlas-ink font-medium">Master SKU · FG Code · Product Name · Qty · Remarks</span>.
+                  Rows whose Master SKU isn&apos;t in the mapper are copied through and flagged <span className="text-atlas-amber-warn font-medium">Not in Mapper</span>.
+                </p>
+                <label
+                  className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-12 cursor-pointer transition ${dragActive ? "border-atlas-accent bg-atlas-accent-bg/30" : "border-atlas-line hover:border-atlas-accent/50 hover:bg-atlas-surface-soft/30"}`}
+                  onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                  onDragLeave={() => setDragActive(false)}
+                  onDrop={(e) => { e.preventDefault(); setDragActive(false); const f = e.dataTransfer.files?.[0]; if (f) handleDailyFile(f); }}
+                >
+                  <svg className="w-10 h-10 text-atlas-ink-faint" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.9A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" /></svg>
+                  <p className="text-sm text-atlas-ink">{processing ? "Processing…" : "Drop the pending-qty Excel here, or click to browse"}</p>
+                  <p className="text-xs text-atlas-ink-muted">Uses the selected DB mapper &amp; SKU Master · FG Codes matched exactly, then by base number</p>
+                  <input type="file" accept=".xlsx,.xls" className="hidden" disabled={processing}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleDailyFile(f); e.currentTarget.value = ""; }} />
+                </label>
+                {mapperSource === "db" && (
+                  <p className="text-xs text-atlas-ink-muted mt-3">
+                    Mapper: <span className="text-atlas-ink font-medium">{mapperSets.find((s) => s.id === selectedMapperSetId)?.name || "—"}</span>
+                    {loadingMapper ? " · loading…" : ` · ${dbMapperRows.length} rows`}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                {/* Summary tiles */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
+                    <p className="text-xs text-atlas-ink-muted">Input Rows</p>
+                    <p className="text-2xl font-bold">{dailyResult.inputCount}</p>
+                  </div>
+                  <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
+                    <p className="text-xs text-atlas-ink-muted">Output Singles</p>
+                    <p className="text-2xl font-bold text-atlas-green">{dailyResult.rows.length}</p>
+                  </div>
+                  <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
+                    <p className="text-xs text-atlas-ink-muted">Combos Expanded</p>
+                    <p className="text-2xl font-bold text-atlas-blue">{dailyResult.comboExpandedCount}</p>
+                  </div>
+                  <div className="bg-atlas-surface border border-atlas-line rounded-xl p-4">
+                    <p className="text-xs text-atlas-ink-muted">Not in Mapper</p>
+                    <p className={`text-2xl font-bold ${dailyResult.notInMapperCount > 0 ? "text-atlas-amber-warn" : "text-atlas-ink-faint"}`}>{dailyResult.notInMapperCount}</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mb-4">
+                  <button onClick={downloadDailyResult} className="px-5 py-2 bg-atlas-navy text-white font-semibold rounded-lg hover:bg-atlas-navy-soft transition text-sm">Download Singles (Excel)</button>
+                  <button onClick={() => setDailyResult(null)} className="px-5 py-2 bg-atlas-surface-soft text-atlas-ink rounded-lg hover:bg-atlas-surface-soft transition text-sm">Upload Another</button>
+                </div>
+
+                <div className="bg-atlas-surface border border-atlas-line rounded-xl overflow-hidden">
+                  <div className="overflow-auto max-h-[600px]">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-atlas-surface">
+                        <tr className="border-b border-atlas-line">
+                          <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Master SKU</th>
+                          <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">FG Code</th>
+                          <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Product Name</th>
+                          <th className="text-right py-3 px-4 text-atlas-ink-muted font-medium">Qty</th>
+                          <th className="text-left py-3 px-4 text-atlas-ink-muted font-medium">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dailyResult.rows.map((r, i) => (
+                          <tr key={`${r.master_sku || r.fg_code}-${i}`} className="border-b border-atlas-line/50 hover:bg-atlas-surface-soft/30">
+                            <td className="py-2 px-4 font-mono text-xs">{r.master_sku || <span className="text-atlas-ink-faint">—</span>}</td>
+                            <td className="py-2 px-4 font-mono text-xs text-atlas-ink-muted">{r.fg_code || "—"}</td>
+                            <td className="py-2 px-4 text-xs text-atlas-ink-soft max-w-[420px] truncate" title={r.product_name}>{r.product_name || "—"}</td>
+                            <td className="py-2 px-4 text-right font-mono text-xs">{r.qty.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                            <td className="py-2 px-4 text-xs">
+                              {r.remark === "Not in Mapper"
+                                ? <span className="px-2 py-0.5 rounded bg-atlas-amber-bg text-atlas-amber-warn text-[10px] uppercase">Not in Mapper</span>
+                                : <span className="px-2 py-0.5 rounded bg-atlas-green-bg text-atlas-green text-[10px] uppercase">Converted</span>}
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
