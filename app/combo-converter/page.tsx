@@ -51,20 +51,28 @@ function parseMapper(ws: XLSX.WorkSheet): { mapperRows: MapperRow[]; productCoun
 }
 
 function parseCombo(ws: XLSX.WorkSheet): { comboRows: ComboInputRow[]; qtyColumns: string[] } {
-  const json = XLSX.utils.sheet_to_json<any>(ws);
-  if (json.length === 0) return { comboRows: [], qtyColumns: [] };
-  const headers = Object.keys(json[0]);
+  // Read the ACTUAL header row (row 0) — NOT Object.keys of the first data row. The object form only
+  // carries keys for cells that are populated in that specific row, so a sparse first row (e.g. one
+  // where only the "Amazon" column has a value) would silently drop every other quantity column.
+  const grid = XLSX.utils.sheet_to_json<any>(ws, { header: 1, blankrows: false });
+  if (grid.length < 2) return { comboRows: [], qtyColumns: [] };
+  const headers = (grid[0] as any[]).map((h) => String(h ?? "").trim());
   // Detect SKU column: Master SKU, SKU, FG Code, New FG Code — fallback to first column
-  const skuCol = headers.find((h) => h.toLowerCase().includes("master") || h.toLowerCase().includes("sku")) ||
-    headers.find((h) => { const l = h.toLowerCase(); return l.includes("fg") && (l.includes("code") || l === "fg"); }) ||
-    headers[0];
-  const qtyColumns = headers.filter((h) => h !== skuCol && h.trim() !== "");
+  let skuIdx = headers.findIndex((h) => h.toLowerCase().includes("master") || h.toLowerCase().includes("sku"));
+  if (skuIdx < 0) skuIdx = headers.findIndex((h) => { const l = h.toLowerCase(); return l.includes("fg") && (l.includes("code") || l === "fg"); });
+  if (skuIdx < 0) skuIdx = 0;
+  const qtyCols = headers.map((h, i) => ({ h, i })).filter(({ h, i }) => i !== skuIdx && h !== "");
+  const qtyColumns = qtyCols.map(({ h }) => h);
   const comboRows: ComboInputRow[] = [];
-  for (const row of json) {
-    const sku = String(row[skuCol] || "").trim();
+  for (let r = 1; r < grid.length; r++) {
+    const row = grid[r] as any[];
+    const sku = String(row?.[skuIdx] ?? "").trim();
     if (!sku) continue;
     const quantities: Record<string, number> = {};
-    for (const col of qtyColumns) { const val = Number(row[col]); quantities[col] = isNaN(val) ? 0 : val; }
+    for (const { h, i } of qtyCols) {
+      const val = Number(String(row?.[i] ?? "").replace(/[, ]/g, ""));
+      quantities[h] = isNaN(val) ? 0 : val;
+    }
     comboRows.push({ master_sku: sku, quantities });
   }
   return { comboRows, qtyColumns };
@@ -272,28 +280,28 @@ type MultiResult = {
 // Month columns are every column that isn't SKU / Channel.
 type SingleSheetRow = { master_sku: string; channel: string; values: Record<string, number> };
 function parseSingleValueSheet(ws: XLSX.WorkSheet): { rows: SingleSheetRow[]; months: string[] } {
-  const json = XLSX.utils.sheet_to_json<any>(ws);
-  if (json.length === 0) return { rows: [], months: [] };
-  const headers = Object.keys(json[0]);
-  const skuCol = headers.find((h) => /master.*sku/i.test(h) || /^sku$/i.test(h)) ||
-    headers.find((h) => /fg\s*code/i.test(h) || /^fg$/i.test(h)) || headers[0];
-  const channelCol = headers.find((h) => /channel/i.test(h)) || headers[1];
-  const months = headers.filter((h) => h !== skuCol && h !== channelCol).map((h) => String(h).trim());
-  const monthSrcMap = new Map<string, string>(); // trimmed -> original
-  for (const h of headers) {
-    if (h === skuCol || h === channelCol) continue;
-    monthSrcMap.set(String(h).trim(), h);
-  }
+  // Read the real header row — see parseCombo: Object.keys of a sparse first data row would drop columns.
+  const grid = XLSX.utils.sheet_to_json<any>(ws, { header: 1, blankrows: false });
+  if (grid.length < 2) return { rows: [], months: [] };
+  const headers = (grid[0] as any[]).map((h) => String(h ?? ""));
+  let skuIdx = headers.findIndex((h) => /master.*sku/i.test(h) || /^sku$/i.test(h));
+  if (skuIdx < 0) skuIdx = headers.findIndex((h) => /fg\s*code/i.test(h) || /^fg$/i.test(h));
+  if (skuIdx < 0) skuIdx = 0;
+  let channelIdx = headers.findIndex((h) => /channel/i.test(h));
+  if (channelIdx < 0) channelIdx = skuIdx === 1 ? 0 : 1;
+  const monthCols = headers.map((h, i) => ({ name: String(h).trim(), i }))
+    .filter(({ name, i }) => i !== skuIdx && i !== channelIdx && name !== "");
+  const months = monthCols.map((m) => m.name);
 
   const rows: SingleSheetRow[] = [];
-  for (const r of json) {
-    const sku = String(r[skuCol] || "").trim();
+  for (let r = 1; r < grid.length; r++) {
+    const row = grid[r] as any[];
+    const sku = String(row?.[skuIdx] ?? "").trim();
     if (!sku) continue;
-    const channel = String(r[channelCol] || "").trim();
+    const channel = String(row?.[channelIdx] ?? "").trim();
     const values: Record<string, number> = {};
-    for (const m of months) {
-      const srcKey = monthSrcMap.get(m);
-      values[m] = srcKey !== undefined ? (Number(String(r[srcKey] ?? "").replace(/[, ]/g, "")) || 0) : 0;
+    for (const m of monthCols) {
+      values[m.name] = Number(String(row?.[m.i] ?? "").replace(/[, ]/g, "")) || 0;
     }
     rows.push({ master_sku: sku, channel, values });
   }
