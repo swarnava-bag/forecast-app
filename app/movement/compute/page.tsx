@@ -12,18 +12,18 @@ import AppShell from "@/app/components/AppShell";
 import { createClient } from "@/lib/supabase/client";
 import { downloadTemplate } from "../templates";
 import { loadMappers } from "../mappers";
-import { computeSnapshot, EngineFiles } from "../engine";
+import { computeSnapshot, detectMonth, forecastFromSnapshot, EngineFiles } from "../engine";
 import type { Snapshot } from "../lib";
 import { fmtQty, fmtPct, pctOf, fmtInt } from "../lib";
 
 const surface: React.CSSProperties = { background: "var(--atlas-surface)", border: "1px solid var(--atlas-line)" };
 const mono = "font-mono uppercase";
 type Slot = "forecast" | "so" | "stn" | "shipsheet";
-const SLOTS: { k: Slot; label: string; required: boolean }[] = [
-  { k: "forecast", label: "Forecast", required: true },
-  { k: "so", label: "SO (Sales Orders)", required: true },
-  { k: "stn", label: "STN (Stock Transfers)", required: true },
-  { k: "shipsheet", label: "Shipsheet", required: false },
+const SLOTS: { k: Slot; label: string; hint: string; required: boolean }[] = [
+  { k: "forecast", label: "Forecast", hint: "monthly — reused if omitted", required: false },
+  { k: "so", label: "SO (Sales Orders)", hint: "daily", required: true },
+  { k: "stn", label: "STN (Stock Transfers)", hint: "daily", required: true },
+  { k: "shipsheet", label: "Shipsheet", hint: "yesterday's", required: false },
 ];
 
 export default function ComputePage() {
@@ -31,7 +31,7 @@ export default function ComputePage() {
   const [files, setFiles] = useState<Partial<Record<Slot, { name: string; wb: XLSX.WorkBook }>>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ snapshot: Snapshot; diagnostics: Record<string, number>; stats: Record<string, number>; warnings: string[] } | null>(null);
+  const [result, setResult] = useState<{ snapshot: Snapshot; diagnostics: Record<string, number>; stats: Record<string, number>; warnings: string[]; fcSource: string } | null>(null);
   const [published, setPublished] = useState<string | null>(null);
   const refs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -45,14 +45,24 @@ export default function ComputePage() {
 
   const compute = async () => {
     setError(null); setResult(null); setPublished(null);
-    if (!files.forecast || !files.so || !files.stn) { setError("Forecast, SO and STN are required."); return; }
+    if (!files.so || !files.stn) { setError("SO and STN are required."); return; }
     setBusy("Loading Mapper Studio…");
     try {
       const { mappers, stats, warnings } = await loadMappers(supabase);
+      const ef: EngineFiles = { forecast: files.forecast?.wb, so: files.so.wb, stn: files.stn.wb, ship: files.shipsheet?.wb };
+      // Forecast is monthly: if not uploaded, reuse the month's last publish.
+      let preset; let fcSource = "uploaded now";
+      if (!files.forecast) {
+        setBusy("Finding this month's forecast…");
+        const mi = detectMonth(files.so.wb, files.stn.wb);
+        const r = await fetch(`/api/movement-snapshot?month=${mi.monthKey}`, { cache: "no-store" });
+        if (!r.ok) { setError(`No forecast on file for ${mi.month}. Upload the Forecast file once for ${mi.month} — after that, daily updates need only SO / STN / Shipsheet.`); setBusy(null); return; }
+        preset = forecastFromSnapshot(await r.json());
+        fcSource = `reused from ${mi.month} (last publish)`;
+      }
       setBusy("Computing…");
-      const ef: EngineFiles = { forecast: files.forecast.wb, so: files.so.wb, stn: files.stn.wb, ship: files.shipsheet?.wb };
-      const { snapshot, diagnostics } = computeSnapshot(ef, mappers);
-      setResult({ snapshot, diagnostics, stats, warnings });
+      const { snapshot, diagnostics } = computeSnapshot(ef, mappers, preset);
+      setResult({ snapshot, diagnostics, stats, warnings, fcSource });
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(null); }
   };
@@ -78,7 +88,7 @@ export default function ComputePage() {
           <div>
             <div className={mono} style={{ fontSize: 10, letterSpacing: "0.14em", color: "var(--atlas-ink-muted)" }}>Forecast vs Movement</div>
             <h1 className="font-display" style={{ fontSize: 28, fontWeight: 400, color: "var(--atlas-ink)", marginTop: 2 }}>Compute from raw files</h1>
-            <div style={{ fontSize: 12, color: "var(--atlas-ink-muted)", marginTop: 2 }}>Drop the 4 files → computed in-browser via Mapper Studio → publish the month.</div>
+            <div style={{ fontSize: 12, color: "var(--atlas-ink-muted)", marginTop: 2 }}>Daily: drop <b>SO + STN + Shipsheet</b> and Compute. Forecast is monthly — upload it once at the start of the month; later runs reuse it automatically.</div>
           </div>
           <div className="flex gap-2">
             <Link href="/movement/mappers" className="px-3 py-1.5 rounded-lg" style={{ ...surface, fontSize: 12, color: "var(--atlas-ink-soft)", textDecoration: "none" }}>Movement Mappers</Link>
@@ -99,7 +109,7 @@ export default function ComputePage() {
           {SLOTS.map((s) => (
             <div key={s.k} className="p-3 rounded-xl" style={surface}>
               <div className="flex items-center justify-between mb-2">
-                <span style={{ fontSize: 13, color: "var(--atlas-ink)", fontWeight: 600 }}>{s.label}{s.required && <span style={{ color: "var(--atlas-red)" }}> *</span>}</span>
+                <span style={{ fontSize: 13, color: "var(--atlas-ink)", fontWeight: 600 }}>{s.label}{s.required ? <span style={{ color: "var(--atlas-red)" }}> *</span> : <span style={{ fontSize: 10.5, color: "var(--atlas-ink-faint)", fontWeight: 400 }}> · {s.hint}</span>}</span>
                 {files[s.k] && <span style={{ fontSize: 11, color: "var(--atlas-green)" }}>✓ loaded</span>}
               </div>
               <input ref={(el) => { refs.current[s.k] = el; }} type="file" accept=".xlsx,.xlsb,.xlsm,.csv" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(s.k, f); }} />
@@ -125,7 +135,8 @@ export default function ComputePage() {
             <div className="p-3 rounded-xl flex items-center gap-2 flex-wrap" style={{ background: "var(--atlas-accent-bg)", border: "1px solid var(--atlas-line)" }}>
               <span className={mono} style={{ fontSize: 10, letterSpacing: "0.08em", color: "var(--atlas-ink-muted)" }}>Detected month</span>
               <b style={{ fontSize: 15, color: "var(--atlas-ink)" }}>{m.month}</b>
-              <span style={{ fontSize: 12, color: "var(--atlas-ink-muted)" }}>· through day {m.daysElapsed} of {m.daysInMonth} · {m.counts.overall} SKUs · {m.channels.length} channels · {m.platforms.length} platforms</span>
+              <span style={{ fontSize: 12, color: "var(--atlas-ink-muted)" }}>· through day {m.daysElapsed} of {m.daysInMonth} · {m.counts.overall} SKUs</span>
+              <span className="px-2 py-0.5 rounded" style={{ background: "var(--atlas-surface-soft)", border: "1px solid var(--atlas-line)", fontSize: 11, color: "var(--atlas-ink-soft)" }}>Forecast: {result.fcSource}</span>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

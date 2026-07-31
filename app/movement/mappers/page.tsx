@@ -8,6 +8,7 @@
 // ============================================================================
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import * as XLSX from "xlsx";
 import AppShell from "@/app/components/AppShell";
 import { createClient } from "@/lib/supabase/client";
 
@@ -77,6 +78,23 @@ export default function MovementMappersPage() {
     setRows((rs) => rs.filter((r) => r._rid !== row._rid));
   };
 
+  // Download all 3 movement mappers as one Excel workbook (a sheet each).
+  const downloadExcel = async () => {
+    setStatus("Building Excel…");
+    try {
+      const wb = XLSX.utils.book_new();
+      for (const t of Object.keys(CONF) as Tab[]) {
+        const c = CONF[t];
+        const { data } = await supabase.from(c.table).select("*").order(c.key).limit(20000);
+        const cols = c.cols.map((x) => x.k);
+        const aoa: (string | null)[][] = [cols, ...((data as Record<string, string | null>[]) ?? []).map((r) => cols.map((k) => r[k] ?? ""))];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), c.label.slice(0, 31));
+      }
+      XLSX.writeFile(wb, `movement_mappers_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      setStatus("Downloaded.");
+    } catch (e) { setStatus(`Export failed: ${e instanceof Error ? e.message : String(e)}`); }
+  };
+
   return (
     <AppShell>
       <div className="space-y-4" style={{ maxWidth: 1000 }}>
@@ -103,6 +121,7 @@ export default function MovementMappersPage() {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="px-3 py-1.5 rounded-lg text-sm" style={{ background: "var(--atlas-surface-soft)", border: "1px solid var(--atlas-line)", color: "var(--atlas-ink)", minWidth: 200 }} />
           <button onClick={addRow} className="px-3 py-1.5 rounded-lg" style={{ ...surface, fontSize: 12, color: "var(--atlas-ink-soft)", cursor: "pointer" }}>+ Add row</button>
           <button onClick={save} className="px-3 py-1.5 rounded-lg font-mono" style={{ background: "var(--atlas-accent)", color: "#fff", border: "none", fontSize: 11.5, cursor: "pointer" }}>Save changes</button>
+          <button onClick={downloadExcel} className="px-3 py-1.5 rounded-lg" style={{ ...surface, fontSize: 12, color: "var(--atlas-ink-soft)", cursor: "pointer" }} title="Download all 3 mappers as one Excel workbook">↓ Excel</button>
           <span style={{ fontSize: 11.5, color: "var(--atlas-ink-muted)" }}>{loading ? "loading…" : `${filtered.length} rows`}{dirty.size > 0 && ` · ${dirty.size} edited`}</span>
           {status && <span style={{ fontSize: 12, color: status.toLowerCase().includes("fail") ? "var(--atlas-red)" : "var(--atlas-green)" }}>{status}</span>}
         </div>

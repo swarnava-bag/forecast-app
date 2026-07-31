@@ -340,18 +340,36 @@ export function parseForecast(wb: XLSX.WorkBook, mp: Mappers): Forecast {
   return { bySku, byChannel, byPlatform };
 }
 
-// ── Daily movement (timing view): SO dispatch + STN by day, ex-node ──────────
-export type DailyResult = { daily: DailyRow[]; dailyChannel: Record<string, { day: number; value: number }[]>; monthKey: string; month: string; daysInMonth: number; daysElapsed: number };
-export function computeDaily(soWb: XLSX.WorkBook, stnWb: XLSX.WorkBook, mp: Mappers): DailyResult {
-  const sg = sheetGrid(soWb); const SH = findHeader(sg, ["Warehouse", "Dispatch Qty", "Last Dispatch Date", "Party Name"]);
-  const tg = sheetGrid(stnWb); const TH = findHeader(tg, ["From Warehouse", "Status", "Qty", "Date"]);
-  // active month = modal YYYY-M across STN dates (fallback SO dispatch dates)
+// Rebuild the Forecast object from an already-published snapshot, so a daily
+// re-compute can reuse the month's forecast without re-uploading the file.
+export function forecastFromSnapshot(snap: Snapshot): Forecast {
+  const bySku: SkuAgg = new Map(), byChannel: SkuChanAgg = new Map(), byPlatform: SkuChanAgg = new Map();
+  for (const r of snap.overall) if (r.forecast) bySku.set(r.masterSku, r.forecast);
+  for (const r of snap.channelwise) if (r.forecast) add2(byChannel, r.masterSku, r.channel, r.forecast);
+  for (const r of snap.qcom) if (r.forecast) add2(byPlatform, r.masterSku, r.platform, r.forecast);
+  return { bySku, byChannel, byPlatform };
+}
+
+// Detect the active month from STN transfer dates (fallback SO dispatch dates).
+export type MonthInfo = { monthKey: string; month: string; actY: number; actM: number; daysInMonth: number };
+export function detectMonth(soWb: XLSX.WorkBook, stnWb: XLSX.WorkBook): MonthInfo {
+  const sg = sheetGrid(soWb); const SH = findHeader(sg, ["Warehouse", "Last Dispatch Date"]);
+  const tg = sheetGrid(stnWb); const TH = findHeader(tg, ["From Warehouse", "Date"]);
   const ymCount: Record<string, number> = {};
   const tally = (v: unknown) => { const p = ymd(v); if (p) { const k = `${p.y}-${p.m}`; ymCount[k] = (ymCount[k] ?? 0) + 1; } };
   for (let i = TH.row + 1; i < tg.length; i++) if (tg[i]?.[TH.H["From Warehouse"]] === NODE) tally(tg[i][TH.H["Date"]]);
   if (Object.keys(ymCount).length === 0) for (let i = SH.row + 1; i < sg.length; i++) if (sg[i]?.[SH.H["Warehouse"]] === NODE) tally(sg[i][SH.H["Last Dispatch Date"]]);
   const topYm = Object.entries(ymCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "2026-6";
   const [actY, actM] = topYm.split("-").map(Number);
+  return { monthKey: `${actY}-${String(actM).padStart(2, "0")}`, month: `${MONTHS[actM - 1]} ${actY}`, actY, actM, daysInMonth: new Date(actY, actM, 0).getDate() };
+}
+
+// ── Daily movement (timing view): SO dispatch + STN by day, ex-node ──────────
+export type DailyResult = { daily: DailyRow[]; dailyChannel: Record<string, { day: number; value: number }[]>; monthKey: string; month: string; daysInMonth: number; daysElapsed: number };
+export function computeDaily(soWb: XLSX.WorkBook, stnWb: XLSX.WorkBook, mp: Mappers): DailyResult {
+  const sg = sheetGrid(soWb); const SH = findHeader(sg, ["Warehouse", "Dispatch Qty", "Last Dispatch Date", "Party Name"]);
+  const tg = sheetGrid(stnWb); const TH = findHeader(tg, ["From Warehouse", "Status", "Qty", "Date"]);
+  const { actY, actM } = detectMonth(soWb, stnWb);
   const dayOf = (v: unknown): number | null => { const p = ymd(v); return p && p.y === actY && p.m === actM ? p.d : null; };
 
   const dSo: Record<number, number> = {}, dStn: Record<number, number> = {}, dCh: Record<string, Record<number, number>> = {};
@@ -376,13 +394,17 @@ export function computeDaily(soWb: XLSX.WorkBook, stnWb: XLSX.WorkBook, mp: Mapp
   return { daily, dailyChannel, monthKey: `${actY}-${String(actM).padStart(2, "0")}`, month: `${MONTHS[actM - 1]} ${actY}`, daysInMonth: new Date(actY, actM, 0).getDate(), daysElapsed: days.length ? Math.max(...days) : new Date(actY, actM, 0).getDate() };
 }
 
-// ── Assemble the full snapshot from the 4 files + mappers ────────────────────
-export type EngineFiles = { forecast: XLSX.WorkBook; so: XLSX.WorkBook; stn: XLSX.WorkBook; ship?: XLSX.WorkBook };
-export function computeSnapshot(files: EngineFiles, mp: Mappers): { snapshot: Snapshot; diagnostics: Record<string, number> } {
+// ── Assemble the full snapshot from the files + mappers ──────────────────────
+//   `forecast` is optional: if omitted, pass `presetForecast` (e.g. rebuilt from
+//   the month's last published snapshot) so daily re-computes need only the 3
+//   movement files.
+export type EngineFiles = { forecast?: XLSX.WorkBook; so: XLSX.WorkBook; stn: XLSX.WorkBook; ship?: XLSX.WorkBook };
+export function computeSnapshot(files: EngineFiles, mp: Mappers, presetForecast?: Forecast): { snapshot: Snapshot; diagnostics: Record<string, number>; forecast: Forecast } {
   const so = computeSO(files.so, mp);
   const stn = computeSTN(files.stn, mp);
   const qcom = computeQcom(files.so, mp);
-  const fc = parseForecast(files.forecast, mp);
+  const fc = files.forecast ? parseForecast(files.forecast, mp) : presetForecast;
+  if (!fc) throw new Error("No forecast available for this month — upload the Forecast file once, then daily updates can reuse it.");
   const ship = files.ship ? computeShipsheet(files.so, files.ship, mp) : null;
   const dly = computeDaily(files.so, files.stn, mp);
 
@@ -445,5 +467,5 @@ export function computeSnapshot(files: EngineFiles, mp: Mappers): { snapshot: Sn
     shipSheetPOs: ship?.sheetPOs ?? 0, shipMatchedPOs: ship?.matchedPOs ?? 0, shipAddedBack: ship?.addedBack ?? 0,
     forecastTotal: snapshot.meta.forecastV7Total, movedTotal: overall.reduce((a, r) => a + r.totalSupplied, 0),
   };
-  return { snapshot, diagnostics };
+  return { snapshot, diagnostics, forecast: fc };
 }
