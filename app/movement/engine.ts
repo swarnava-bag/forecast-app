@@ -207,12 +207,15 @@ export function computeShipsheet(soWb: XLSX.WorkBook, shipWb: XLSX.WorkBook, mp:
 }
 
 // ── STN: Overall STN (by sku) + Channelwise STN (by sku×channel) ─────────────
-export type StnResult = { bySku: SkuAgg; bySkuChan: SkuChanAgg; rawClosedExNode: number; unmapped: number };
+//   Also tallies internal transfers OUT of the node that are not channel supply:
+//   to Central / factory (repacking) and to Quarantine — shown separately.
+export type StnResult = { bySku: SkuAgg; bySkuChan: SkuChanAgg; rawClosedExNode: number; unmapped: number; internalCentral: number; internalQuarantine: number; centralBySku: SkuAgg; quarantineBySku: SkuAgg };
 export function computeSTN(wb: XLSX.WorkBook, mp: Mappers): StnResult {
   const g = sheetGrid(wb);
   const { row, H } = findHeader(g, ["From Warehouse", "To Warehouse", "FG Code", "Qty", "Status"]);
   const bySku: SkuAgg = new Map(); const bySkuChan: SkuChanAgg = new Map();
-  let rawClosedExNode = 0, unmapped = 0;
+  const centralBySku: SkuAgg = new Map(); const quarantineBySku: SkuAgg = new Map();
+  let rawClosedExNode = 0, unmapped = 0, internalCentral = 0, internalQuarantine = 0;
   for (let i = row + 1; i < g.length; i++) {
     const r = g[i]; if (!r) continue;
     // Count all ex-node transfers except Cancelled. GT (and some MT/B2C) is
@@ -221,11 +224,16 @@ export function computeSTN(wb: XLSX.WorkBook, mp: Mappers): StnResult {
     if (r[H["From Warehouse"]] !== NODE || txt(r[H["Status"]]) === "Cancelled") continue;
     const q = num(r[H["Qty"]]); if (q === 0) continue;
     rawClosedExNode += q;
+    // Internal transfers (not channel supply): stock sent to Quarantine, or back
+    // to Central / factory for repacking. Tallied (total + per SKU) for visibility.
+    const to = txt(r[H["To Warehouse"]]);
+    const internal = /quarantine/i.test(to) ? "q" : /central/i.test(to) ? "c" : "";
+    if (internal) {
+      if (internal === "q") internalQuarantine += q; else internalCentral += q;
+      for (const p of resolveLine(txt(r[H["FG Code"]]), q, mp)) add(internal === "q" ? quarantineBySku : centralBySku, p.sku, p.qty);
+    }
     // Only transfers to a channel-mapped destination are real outbound supply.
-    // Internal / production warehouses (Tumkur, Central, Quarantine…) are not in
-    // the warehouse→channel map and are excluded — matching the source workbook,
-    // whose Overall STN equals the sum of its channel STN.
-    const channel = mp.warehouseToChannel(txt(r[H["To Warehouse"]]));
+    const channel = mp.warehouseToChannel(to);
     if (!channel) continue;
     const parts = resolveLine(txt(r[H["FG Code"]]), q, mp);
     if (parts.length === 0) { unmapped += q; continue; }
@@ -234,7 +242,7 @@ export function computeSTN(wb: XLSX.WorkBook, mp: Mappers): StnResult {
       add2(bySkuChan, p.sku, channel, p.qty);
     }
   }
-  return { bySku, bySkuChan, rawClosedExNode, unmapped };
+  return { bySku, bySkuChan, rawClosedExNode, unmapped, internalCentral, internalQuarantine, centralBySku, quarantineBySku };
 }
 
 // ── Forecast file → per-sku / per-channel / per-platform (Qcom) ───────────────
@@ -364,34 +372,65 @@ export function detectMonth(soWb: XLSX.WorkBook, stnWb: XLSX.WorkBook): MonthInf
   return { monthKey: `${actY}-${String(actM).padStart(2, "0")}`, month: `${MONTHS[actM - 1]} ${actY}`, actY, actM, daysInMonth: new Date(actY, actM, 0).getDate() };
 }
 
-// ── Daily movement (timing view): SO dispatch + STN by day, ex-node ──────────
-export type DailyResult = { daily: DailyRow[]; dailyChannel: Record<string, { day: number; value: number }[]>; monthKey: string; month: string; daysInMonth: number; daysElapsed: number };
+// ── Daily movement (timing view), all combo-exploded, ex-node ────────────────
+//   daily        overall STN + SO per day
+//   dailyChannel per channel per day (STN + SO combined)
+//   dailyInternal Central (repacking) + Quarantine per day
+//   dailySku     per New-Master-SKU per day (STN + SO), for the SKU day-on-day
+export type DaySeries = { day: number; value: number }[];
+export type DailyResult = {
+  daily: DailyRow[]; dailyChannel: Record<string, DaySeries>;
+  dailyInternal: { central: DaySeries; quarantine: DaySeries };
+  dailySkuChannel: Record<string, Record<string, DaySeries>>;   // sku → series(channel|__central|__quarantine) → day series
+  monthKey: string; month: string; daysInMonth: number; daysElapsed: number;
+};
 export function computeDaily(soWb: XLSX.WorkBook, stnWb: XLSX.WorkBook, mp: Mappers): DailyResult {
   const sg = sheetGrid(soWb); const SH = findHeader(sg, ["Warehouse", "Dispatch Qty", "Last Dispatch Date", "Party Name"]);
-  const tg = sheetGrid(stnWb); const TH = findHeader(tg, ["From Warehouse", "Status", "Qty", "Date"]);
+  const tg = sheetGrid(stnWb); const TH = findHeader(tg, ["From Warehouse", "To Warehouse", "Status", "Qty", "Date", "FG Code"]);
   const { actY, actM } = detectMonth(soWb, stnWb);
   const dayOf = (v: unknown): number | null => { const p = ymd(v); return p && p.y === actY && p.m === actM ? p.d : null; };
 
-  const dSo: Record<number, number> = {}, dStn: Record<number, number> = {}, dCh: Record<string, Record<number, number>> = {};
-  const CH = new Set(["MT", "GT", "Qcom", "B2B", "B2C", "Growth", "CSD"]);
+  const dStnTot: Record<number, number> = {}, dSoTot: Record<number, number> = {};
+  const dCh: Record<string, Record<number, number>> = {};
+  const dInt: Record<string, Record<number, number>> = { central: {}, quarantine: {} };
+  const dSkuSer: Record<string, Record<string, Record<number, number>>> = {};   // sku → series → day → qty
+  const bump = (m: Record<string, Record<number, number>>, k: string, d: number, q: number) => { (m[k] ??= {})[d] = (m[k][d] ?? 0) + q; };
+  const bumpSku = (sku: string, key: string, d: number, q: number) => { const s = (dSkuSer[sku] ??= {}); (s[key] ??= {})[d] = (s[key][d] ?? 0) + q; };
+
   for (let i = SH.row + 1; i < sg.length; i++) {
     const r = sg[i]; if (!r || r[SH.H["Warehouse"]] !== NODE) continue;
     const dq = num(r[SH.H["Dispatch Qty"]]); if (dq === 0) continue;
     const d = dayOf(r[SH.H["Last Dispatch Date"]]); if (d == null) continue;
-    dSo[d] = (dSo[d] ?? 0) + dq;
-    const ch = mp.customerToChannel(txt(r[SH.H["Party Name"]]));
-    if (ch && CH.has(ch)) { (dCh[ch] ??= {})[d] = (dCh[ch][d] ?? 0) + dq; }
+    const ch = mp.customerToChannel(txt(r[SH.H["Party Name"]])); if (!ch) continue;
+    for (const p of resolveLine(txt(r[SH.H["Product SKU"]]), dq, mp)) {
+      dSoTot[d] = (dSoTot[d] ?? 0) + p.qty; bump(dCh, ch, d, p.qty); bumpSku(p.sku, ch, d, p.qty);
+    }
   }
   for (let i = TH.row + 1; i < tg.length; i++) {
     const r = tg[i]; if (!r || r[TH.H["From Warehouse"]] !== NODE || txt(r[TH.H["Status"]]) === "Cancelled") continue;
+    const q = num(r[TH.H["Qty"]]); if (q === 0) continue;
     const d = dayOf(r[TH.H["Date"]]); if (d == null) continue;
-    dStn[d] = (dStn[d] ?? 0) + num(r[TH.H["Qty"]]);
+    const to = txt(r[TH.H["To Warehouse"]]);
+    const internal = /quarantine/i.test(to) ? "quarantine" : /central/i.test(to) ? "central" : "";
+    if (internal) {
+      dInt[internal][d] = (dInt[internal][d] ?? 0) + q;
+      for (const p of resolveLine(txt(r[TH.H["FG Code"]]), q, mp)) bumpSku(p.sku, internal === "quarantine" ? "__quarantine" : "__central", d, p.qty);
+      continue;
+    }
+    const ch = mp.warehouseToChannel(to); if (!ch) continue;
+    for (const p of resolveLine(txt(r[TH.H["FG Code"]]), q, mp)) {
+      dStnTot[d] = (dStnTot[d] ?? 0) + p.qty; bump(dCh, ch, d, p.qty); bumpSku(p.sku, ch, d, p.qty);
+    }
   }
-  const days = [...new Set([...Object.keys(dSo), ...Object.keys(dStn)].map(Number))].sort((a, b) => a - b);
-  const daily: DailyRow[] = days.map((d) => ({ day: d, stn: dStn[d] ?? 0, so: dSo[d] ?? 0, total: (dStn[d] ?? 0) + (dSo[d] ?? 0) }));
-  const dailyChannel: Record<string, { day: number; value: number }[]> = {};
+  const days = [...new Set([...Object.keys(dStnTot), ...Object.keys(dSoTot), ...Object.keys(dInt.central), ...Object.keys(dInt.quarantine)].map(Number))].sort((a, b) => a - b);
+  const ser = (m: Record<number, number>): DaySeries => days.filter((d) => (m[d] ?? 0) !== 0).map((d) => ({ day: d, value: m[d] }));
+  const daily: DailyRow[] = days.map((d) => ({ day: d, stn: dStnTot[d] ?? 0, so: dSoTot[d] ?? 0, total: (dStnTot[d] ?? 0) + (dSoTot[d] ?? 0) }));
+  const dailyChannel: Record<string, DaySeries> = {};
   for (const ch of Object.keys(dCh).sort()) dailyChannel[ch] = days.map((d) => ({ day: d, value: dCh[ch][d] ?? 0 }));
-  return { daily, dailyChannel, monthKey: `${actY}-${String(actM).padStart(2, "0")}`, month: `${MONTHS[actM - 1]} ${actY}`, daysInMonth: new Date(actY, actM, 0).getDate(), daysElapsed: days.length ? Math.max(...days) : new Date(actY, actM, 0).getDate() };
+  const dailySkuChannel: Record<string, Record<string, DaySeries>> = {};
+  for (const s of Object.keys(dSkuSer)) { dailySkuChannel[s] = {}; for (const k of Object.keys(dSkuSer[s])) dailySkuChannel[s][k] = ser(dSkuSer[s][k]); }
+  return { daily, dailyChannel, dailyInternal: { central: ser(dInt.central), quarantine: ser(dInt.quarantine) }, dailySkuChannel,
+    monthKey: `${actY}-${String(actM).padStart(2, "0")}`, month: `${MONTHS[actM - 1]} ${actY}`, daysInMonth: new Date(actY, actM, 0).getDate(), daysElapsed: days.length ? Math.max(...days) : new Date(actY, actM, 0).getDate() };
 }
 
 // ── Assemble the full snapshot from the files + mappers ──────────────────────
@@ -410,15 +449,16 @@ export function computeSnapshot(files: EngineFiles, mp: Mappers, presetForecast?
 
   const chanOf = (m: SkuChanAgg, sku: string, ch: string) => m.get(sku)?.get(ch) ?? 0;
 
-  // Overall — union of SKUs seen anywhere
-  const skus = new Set<string>([...fc.bySku.keys(), ...so.bySku.keys(), ...stn.bySku.keys(), ...(ship?.bySku.keys() ?? [])]);
+  // Overall — union of SKUs seen anywhere (incl. internal-only movement)
+  const skus = new Set<string>([...fc.bySku.keys(), ...so.bySku.keys(), ...stn.bySku.keys(), ...(ship?.bySku.keys() ?? []), ...stn.centralBySku.keys(), ...stn.quarantineBySku.keys()]);
   const overall: OverallRow[] = [];
   for (const sku of skus) {
     const info = mp.skuInfo(sku);
     const stnQ = stn.bySku.get(sku) ?? 0, soQ = so.bySku.get(sku) ?? 0, shQ = ship?.bySku.get(sku) ?? 0;
     overall.push({ masterSku: sku, fgCode: info.fgCode, productName: info.productName, category: info.category || "Uncategorised",
       productCategory: info.productCategory ?? "", forecastV9: 0, forecast: fc.bySku.get(sku) ?? 0,
-      stn: stnQ, so: soQ, shipsheet: shQ, totalSupplied: stnQ + soQ + shQ });
+      stn: stnQ, so: soQ, shipsheet: shQ, totalSupplied: stnQ + soQ + shQ,
+      toCentral: stn.centralBySku.get(sku) ?? 0, toQuarantine: stn.quarantineBySku.get(sku) ?? 0 });
   }
   overall.sort((a, b) => b.forecast - a.forecast);
 
@@ -454,6 +494,7 @@ export function computeSnapshot(files: EngineFiles, mp: Mappers, presetForecast?
       month: dly.month, monthKey: dly.monthKey, updatedOnDay: dly.daysElapsed, source: "computed from raw files",
       node: "YB FG Warehouse (Mother Node)", forecastBasis: "V7",
       daysElapsed: dly.daysElapsed, daysInMonth: dly.daysInMonth, pipelineUnits: ship?.addedBack ?? 0,
+      internalMoves: { central: stn.internalCentral, quarantine: stn.internalQuarantine },
       forecastV7Total: tot(overall), forecastV9Total: 0,
       channels: [...new Set(channelwise.map((r) => r.channel))].sort(),
       platforms: [...new Set(qrows.map((r) => r.platform))].sort(),
@@ -461,10 +502,12 @@ export function computeSnapshot(files: EngineFiles, mp: Mappers, presetForecast?
       counts: { overall: overall.length, channelwise: channelwise.length, qcom: qrows.length },
     },
     overall, channelwise, qcom: qrows, daily: dly.daily, dailyChannel: dly.dailyChannel,
+    dailyInternal: dly.dailyInternal, dailySkuChannel: dly.dailySkuChannel,
   };
   const diagnostics = {
     soRawExNode: so.rawExNodeDispatch, soUnmapped: so.unmappedDispatch, stnRawClosed: stn.rawClosedExNode, stnUnmapped: stn.unmapped,
     shipSheetPOs: ship?.sheetPOs ?? 0, shipMatchedPOs: ship?.matchedPOs ?? 0, shipAddedBack: ship?.addedBack ?? 0,
+    toCentral: stn.internalCentral, toQuarantine: stn.internalQuarantine,
     forecastTotal: snapshot.meta.forecastV7Total, movedTotal: overall.reduce((a, r) => a + r.totalSupplied, 0),
   };
   return { snapshot, diagnostics, forecast: fc };
