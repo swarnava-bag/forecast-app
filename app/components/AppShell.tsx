@@ -22,8 +22,9 @@ const MAIN_NAV: NavItem[] = [
   { href: "/combo-converter", label: "Combo \u2192 Singles", icon: ComboIcon },
   { href: "/master-data", label: "Master Data", icon: MasterDataIcon },
   { href: "/analytics", label: "Analytics", icon: AnalyticsIcon },
+  { href: "/movement", label: "Forecast vs Movement", icon: MovementIcon },
   { href: "#", label: "Base Data", icon: BaseDataIcon, comingSoon: true },
-  { href: "#", label: "Forecast Check", icon: ForecastCheckIcon, comingSoon: true },
+  { href: "/over-under-check", label: "Forecast Check", icon: ForecastCheckIcon },
 ];
 
 const ADMIN_NAV = [
@@ -383,6 +384,13 @@ function AnalyticsIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" />
+    </svg>
+  );
+}
+function MovementIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12h13" /><path d="M12 5l7 7-7 7" /><path d="M3 6v12" />
     </svg>
   );
 }
