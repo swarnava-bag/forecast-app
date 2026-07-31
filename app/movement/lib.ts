@@ -20,6 +20,7 @@ export type OverallRow = {
   masterSku: string; fgCode: string; productName: string; category: string;
   productCategory: string; forecastV9: number; forecast: number;
   stn: number; so: number; shipsheet: number; totalSupplied: number;
+  toCentral?: number; toQuarantine?: number;
 };
 export type ChannelRow = {
   masterSku: string; fgCode: string; productName: string; category: string;
@@ -36,12 +37,15 @@ export type Snapshot = {
     month: string; monthKey: string; updatedOnDay: number | null; source: string;
     node: string; forecastBasis: string;
     daysElapsed: number; daysInMonth: number; pipelineUnits: number;
+    internalMoves?: { central: number; quarantine: number };
     forecastV7Total: number; forecastV9Total: number;
     channels: string[]; platforms: string[]; categories: string[];
     counts: { overall: number; channelwise: number; qcom: number };
   };
   overall: OverallRow[]; channelwise: ChannelRow[]; qcom: QcomRow[];
   daily: DailyRow[]; dailyChannel: Record<string, { day: number; value: number }[]>;
+  dailyInternal?: { central: { day: number; value: number }[]; quarantine: { day: number; value: number }[] };
+  dailySkuChannel?: Record<string, Record<string, { day: number; value: number }[]>>;
 };
 
 // ── Formatting ───────────────────────────────────────────────────────────────

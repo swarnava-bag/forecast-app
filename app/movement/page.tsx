@@ -45,7 +45,6 @@ export default function MovementPage() {
   const [search, setSearch] = useState("");
   const [channel, setChannel] = useState("MT");
   const [platform, setPlatform] = useState("");
-  const [dailyScope, setDailyScope] = useState("__all");
   const [sort, setSort] = useState<Sort>({ k: "forecast", dir: -1 });
   const [exMode, setExMode] = useState<"over" | "under">("under");
   const [rca, setRca] = useState<string | null>(null);
@@ -198,7 +197,7 @@ export default function MovementPage() {
       .map((r) => ({ ...r, fill: pctOf(r.totalSupplied, r.forecast), gap: r.totalSupplied - r.forecast })).sort((a, b) => b.gap - a.gap);
     const gap = supplied - forecast;
     const drivers = byChannel.filter((r) => (gap >= 0 ? r.gap > 0 : r.gap < 0)).sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap)).slice(0, 3);
-    return { sku: rca, productName: head?.productName || rows[0].productName || rca, category: head?.category || rows[0].category, forecast, supplied, gap, fill: pctOf(supplied, forecast), byChannel, drivers };
+    return { sku: rca, productName: head?.productName || rows[0].productName || rca, category: head?.category || rows[0].category, forecast, supplied, gap, fill: pctOf(supplied, forecast), byChannel, drivers, toCentral: head?.toCentral ?? 0, toQuarantine: head?.toQuarantine ?? 0 };
   }, [rca, data]);
 
   if (err) return <AppShell><div className="p-8 space-y-3"><div className="font-mono text-sm" style={{ color: "var(--atlas-red)" }}>{err}</div><Link href="/movement/upload" className="text-sm" style={{ color: "var(--atlas-accent)" }}>→ Go to Upload</Link></div></AppShell>;
@@ -272,10 +271,9 @@ export default function MovementPage() {
         )}
 
         {view === "overall" && <OverallView {...{ overall, oKpi, meta: data.meta, catRollup, spread, narrative, sortedOverall, exList, exMode, setExMode, sort, setSort, pal, setRca }} />}
-        {view === "daily" && <DailyView rawDaily={data.daily} dailyChannel={data.dailyChannel} overallList={data.overall}
-          scope={dailyScope} setScope={setDailyScope} channels={data.meta.channels.filter((c) => CH_ORDER.includes(c))} forecastTotal={data.meta.forecastV7Total}
-          authMoved={oKpi.sup} authRemaining={oKpi.remaining} daysElapsed={data.meta.daysElapsed} daysInMonth={data.meta.daysInMonth}
-          chRollup={chRollup} pal={pal} setRca={setRca} />}
+        {view === "daily" && <DailyView rawDaily={data.daily} dailyChannel={data.dailyChannel} dailyInternal={data.dailyInternal} dailySkuChannel={data.dailySkuChannel} overallList={data.overall}
+          channels={data.meta.channels.filter((c) => CH_ORDER.includes(c))} forecastTotal={data.meta.forecastV7Total}
+          authMoved={oKpi.sup} authRemaining={oKpi.remaining} daysElapsed={data.meta.daysElapsed} pal={pal} />}
         {view === "channel" && <ChannelView {...{ chRollup, chanCat, channel, setChannel, channelRows, sort, setSort, pal, setRca }} />}
         {view === "qcom" && <QcomView {...{ qKpi, platRollup, qcomRows, qWidest, sort, setSort, pal }} />}
 
@@ -300,6 +298,8 @@ function OverallView({ overall, oKpi, meta, catRollup, spread, narrative, sorted
 }) {
   const maxF = Math.max(1, ...[...spread.values()].map((v) => v.forecast));
   const perDay = meta.daysElapsed ? oKpi.moved / meta.daysElapsed : 0;
+  // internal transfers respect the current filter (summed from the visible SKUs)
+  const oInternal = { central: overall.reduce((a, r) => a + (r.toCentral ?? 0), 0), quarantine: overall.reduce((a, r) => a + (r.toQuarantine ?? 0), 0) };
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
@@ -320,6 +320,19 @@ function OverallView({ overall, oKpi, meta, catRollup, spread, narrative, sorted
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel title="The two ways stock leaves the node" note="Scaled to forecast. The grey tail is demand not covered.">
           <PathBar stn={oKpi.stn} so={oKpi.so} forecast={oKpi.f} pal={pal} />
+          {(oInternal.central > 0 || oInternal.quarantine > 0) && (
+            <div className="mt-3 pt-3" style={{ borderTop: "1px dashed var(--atlas-line)" }}>
+              <div className={mono} style={{ fontSize: 9.5, letterSpacing: "0.08em", color: "var(--atlas-ink-muted)", marginBottom: 6 }}>Internal transfers (not counted as movement)</div>
+              <div className="flex items-center justify-between" style={{ fontSize: 12.5, marginBottom: 4 }}>
+                <span style={{ color: "var(--atlas-ink-soft)" }}>↻ To Central / factory (repacking)</span>
+                <span style={{ fontWeight: 600, color: "var(--atlas-ink)", fontVariantNumeric: "tabular-nums" }}>{fmtInt(oInternal.central)}</span>
+              </div>
+              <div className="flex items-center justify-between" style={{ fontSize: 12.5 }}>
+                <span style={{ color: "var(--atlas-ink-soft)" }}>⚠ To Quarantine</span>
+                <span style={{ fontWeight: 600, color: "var(--atlas-amber-warn, #D97706)", fontVariantNumeric: "tabular-nums" }}>{fmtInt(oInternal.quarantine)}</span>
+              </div>
+            </div>
+          )}
         </Panel>
         <Panel title="Service-level spread" note={`${overall.length} SKUs by supply against forecast`}>
           <div className="space-y-2">
@@ -428,168 +441,150 @@ function PathBar({ stn, so, forecast, pal }: { stn: number; so: number; forecast
 }
 
 // ════════════════════════ DAILY ════════════════════════
-function DailyView({ rawDaily, dailyChannel, overallList, scope, setScope, channels, forecastTotal, authMoved, authRemaining, daysElapsed, daysInMonth, chRollup, pal, setRca }: {
-  rawDaily: DailyRow[]; dailyChannel: Record<string, { day: number; value: number }[]>; overallList: OverallRow[];
-  scope: string; setScope: (s: string) => void; channels: string[]; forecastTotal: number; authMoved: number; authRemaining: number;
-  daysElapsed: number; daysInMonth: number; chRollup: { channel: string; forecast: number; so: number; supplied: number }[]; pal: Pal; setRca: (s: string) => void;
+type SeriesPt = { day: number; value: number };
+function DailyView({ rawDaily, dailyChannel, dailyInternal, dailySkuChannel, overallList, channels, forecastTotal, authMoved, authRemaining, daysElapsed, pal }: {
+  rawDaily: DailyRow[]; dailyChannel: Record<string, SeriesPt[]>; dailyInternal?: { central: SeriesPt[]; quarantine: SeriesPt[] };
+  dailySkuChannel?: Record<string, Record<string, SeriesPt[]>>; overallList: OverallRow[]; channels: string[]; forecastTotal: number; authMoved: number; authRemaining: number;
+  daysElapsed: number; pal: Pal;
 }) {
-  const [mode, setMode] = useState<"units" | "pct">("units");
-  const [selDay, setSelDay] = useState<number | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set(["__all"]));
+  const [sku, setSku] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const isAll = scope === "__all";
-  const chRow = chRollup.find((c) => c.channel === scope);
+  const [selDay, setSelDay] = useState<number | null>(null);
+  const days = rawDaily.map((d) => d.day);
 
-  // scope daily series (Overall = STN+SO; channel = SO dispatch only)
-  const series = isAll
-    ? rawDaily.map((d) => ({ day: d.day, stn: d.stn, so: d.so, total: d.total }))
-    : (dailyChannel[scope] ?? []).map((d) => ({ day: d.day, stn: 0, so: d.value, total: d.value }));
-  const dateStamped = series.reduce((a, d) => a + d.total, 0);
-  const scopeForecast = isAll ? forecastTotal : (chRow?.forecast ?? 0);
-  // Headline MTD: Overall uses the authoritative total; a channel uses its SO.
-  const scopeMoved = isAll ? authMoved : (chRow?.so ?? dateStamped);
-  const scopeRemaining = isAll ? authRemaining : scopeForecast - scopeMoved;
+  const SERIES: { k: string; label: string; color: string }[] = [
+    { k: "__all", label: "Overall", color: pal.sup.so },
+    ...channels.map((c) => ({ k: c, label: c, color: pal.chColor(c) })),
+    { k: "__central", label: "To Factory", color: "var(--atlas-ink-muted)" },
+    { k: "__quarantine", label: "Quarantine", color: "var(--atlas-amber-warn, #D97706)" },
+  ];
+  const toggle = (k: string) => setSelected((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); if (n.size === 0) n.add("__all"); return n; });
+  const sel = SERIES.filter((s) => selected.has(s.k));
 
-  const cums: number[] = [];
-  series.forEach((d, i) => { cums[i] = (i > 0 ? cums[i - 1] : 0) + d.total; });
-  const maxDay = series.reduce((m, d) => (d.total > (m?.total ?? -1) ? d : m), null as (typeof series)[number] | null);
-  const peakShare = dateStamped && maxDay ? maxDay.total / dateStamped : 0;
-  const paceExpected = daysInMonth ? daysElapsed / daysInMonth : 0;               // fraction of month elapsed
-  const paceActual = scopeForecast ? dateStamped / scopeForecast : 0;             // fraction of forecast moved
-  const chart = series.map((d, i) => ({
-    day: d.day, STN: d.stn, SO: d.so, total: d.total,
-    cumPct: scopeForecast ? (cums[i] / scopeForecast) * 100 : 0,
-    pacePct: (d.day / daysInMonth) * 100,
-  }));
+  const hits = q.trim().length < 2 ? [] : overallList.filter((r) => { const t = q.toLowerCase(); return r.masterSku.toLowerCase().includes(t) || r.fgCode.toLowerCase().includes(t) || (r.productName || "").toLowerCase().includes(t); }).slice(0, 8);
+  const skuRow = sku ? overallList.find((r) => r.masterSku === sku) : null;
 
-  // day-clicked team-wise breakdown (SO by channel that day + STN overall)
-  const dayTeam = selDay == null ? null : {
-    day: selDay,
-    stn: rawDaily.find((d) => d.day === selDay)?.stn ?? 0,
-    channels: channels.map((c) => ({ channel: c, value: (dailyChannel[c] ?? []).find((d) => d.day === selDay)?.value ?? 0 })).filter((c) => c.value > 0).sort((a, b) => b.value - a.value),
+  // per-series day→value, in the current mode (whole node, or the picked SKU)
+  const rawIdx = new Map(rawDaily.map((d) => [d.day, d]));
+  const idxCache: Record<string, Map<number, number>> = {};
+  const seriesIdx = (key: string): Map<number, number> => {
+    if (idxCache[key]) return idxCache[key];
+    const m = new Map<number, number>();
+    if (sku) {
+      const ss = dailySkuChannel?.[sku] ?? {};
+      if (key === "__all") { for (const k of Object.keys(ss)) for (const p of ss[k]) m.set(p.day, (m.get(p.day) ?? 0) + p.value); }
+      else for (const p of ss[key] ?? []) m.set(p.day, p.value);
+    } else {
+      if (key === "__all") for (const d of rawDaily) m.set(d.day, d.total);
+      else if (key === "__central") for (const p of dailyInternal?.central ?? []) m.set(p.day, p.value);
+      else if (key === "__quarantine") for (const p of dailyInternal?.quarantine ?? []) m.set(p.day, p.value);
+      else for (const p of dailyChannel[key] ?? []) m.set(p.day, p.value);
+    }
+    idxCache[key] = m; return m;
   };
+  const chart = days.map((d) => {
+    const rd = rawIdx.get(d)!;
+    const row: Record<string, number> = { day: d, STN: rd.stn, SO: rd.so };
+    for (const s of SERIES) row[s.k] = seriesIdx(s.k).get(d) ?? 0;
+    return row;
+  });
+  const maxDay = chart.reduce((m, d) => (d.__all > (m?.__all ?? -1) ? d : m), chart[0]);
 
-  // SKU search → open channel RCA (accurate; per-SKU daily needs combo explosion)
-  const hits = q.trim().length < 2 ? [] : overallList.filter((r) => {
-    const s = q.toLowerCase();
-    return r.masterSku.toLowerCase().includes(s) || r.fgCode.toLowerCase().includes(s) || r.productName.toLowerCase().includes(s);
-  }).slice(0, 8);
+  const kForecast = sku ? (skuRow?.forecast ?? 0) : forecastTotal;
+  const kMoved = sku ? (skuRow?.totalSupplied ?? 0) : authMoved;
+  const kRemaining = sku ? kForecast - kMoved : authRemaining;
+
+  const dayTeam = selDay == null || sku ? null : {
+    day: selDay, channels: channels.map((c) => ({ channel: c, value: seriesIdx(c).get(selDay) ?? 0 })).filter((c) => c.value > 0).sort((a, b) => b.value - a.value),
+  };
 
   return (
     <>
-      {/* Scope + view mode + SKU search */}
       <div className="p-3 rounded-xl space-y-2.5" style={surface}>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={mono} style={{ fontSize: 10, letterSpacing: "0.08em", color: "var(--atlas-ink-muted)", minWidth: 42 }}>Scope</span>
-          <div className="flex items-center rounded-full overflow-hidden flex-wrap" style={{ border: "1px solid var(--atlas-line)" }}>
-            <button onClick={() => { setScope("__all"); setSelDay(null); }} style={{ padding: "5px 14px", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, background: isAll ? "var(--atlas-accent)" : "var(--atlas-surface)", color: isAll ? "#fff" : "var(--atlas-ink-muted)" }}>Overall</button>
-            {channels.map((c) => <button key={c} onClick={() => { setScope(c); setSelDay(null); }} style={{ padding: "5px 12px", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, background: scope === c ? pal.chColor(c) : "var(--atlas-surface)", color: scope === c ? "#fff" : "var(--atlas-ink-muted)" }}>{c}</button>)}
-          </div>
-          <div className="flex-1" />
-          <span className={mono} style={{ fontSize: 10, letterSpacing: "0.08em", color: "var(--atlas-ink-muted)" }}>View</span>
-          <div className="flex items-center rounded-full overflow-hidden" style={{ border: "1px solid var(--atlas-line)" }}>
-            {([["units", "Units"], ["pct", "% vs pace"]] as const).map(([k, lbl]) => (
-              <button key={k} onClick={() => setMode(k)} style={{ padding: "5px 14px", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, background: mode === k ? "var(--atlas-ink)" : "var(--atlas-surface)", color: mode === k ? "var(--atlas-bg)" : "var(--atlas-ink-muted)" }}>{lbl}</button>
-            ))}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={mono} style={{ fontSize: 10, letterSpacing: "0.08em", color: "var(--atlas-ink-muted)", minWidth: 42 }}>RCA</span>
+          <span className={mono} style={{ fontSize: 10, letterSpacing: "0.08em", color: "var(--atlas-ink-muted)", minWidth: 42 }}>SKU</span>
           <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a Master SKU / FG code to open its channel RCA…" className="px-3 py-1.5 rounded-lg text-sm w-full" style={{ background: "var(--atlas-surface-soft)", border: "1px solid var(--atlas-line)", color: "var(--atlas-ink)" }} />
-            {hits.length > 0 && (
+            <input value={sku ?? q} onChange={(e) => { setSku(null); setQ(e.target.value); }} placeholder="Search a Master SKU / FG code for its day-on-day movement…" className="px-3 py-1.5 rounded-lg text-sm w-full" style={{ background: "var(--atlas-surface-soft)", border: "1px solid var(--atlas-line)", color: "var(--atlas-ink)" }} />
+            {!sku && hits.length > 0 && (
               <div className="rounded-lg" style={{ position: "absolute", zIndex: 20, top: "110%", left: 0, right: 0, background: "var(--atlas-surface)", border: "1px solid var(--atlas-line)", boxShadow: "0 12px 30px rgba(0,0,0,0.2)", overflow: "hidden" }}>
                 {hits.map((r) => (
-                  <button key={r.masterSku} onClick={() => { setRca(r.masterSku); setQ(""); }} className="w-full text-left movement-row" style={{ padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer", display: "block" }}>
-                    <span style={{ color: "var(--atlas-ink)", fontSize: 12.5 }}>{r.productName || r.masterSku}</span>
-                    <span style={{ color: "var(--atlas-ink-faint)", fontSize: 10.5, marginLeft: 6 }}>{r.masterSku} · {r.fgCode}</span>
+                  <button key={r.masterSku} onClick={() => { setSku(r.masterSku); setQ(""); setSelDay(null); }} className="w-full text-left movement-row" style={{ padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer", display: "block" }}>
+                    <span style={{ color: "var(--atlas-ink)", fontSize: 12.5 }}>{r.productName || r.masterSku}</span><span style={{ color: "var(--atlas-ink-faint)", fontSize: 10.5, marginLeft: 6 }}>{r.masterSku} · {r.fgCode}</span>
                   </button>
                 ))}
               </div>
             )}
           </div>
-          <span style={{ fontSize: 11, color: "var(--atlas-ink-faint)" }}>{isAll ? "Overall shows STN + SO by day" : `${scope}: SO direct-dispatch by day (STN transfers appear only in Overall)`}</span>
+          {sku && <button onClick={() => { setSku(null); setQ(""); }} className="px-2.5 py-1 rounded-full" style={{ background: "var(--atlas-accent-bg)", border: "1px solid var(--atlas-line)", fontSize: 11, color: "var(--atlas-ink)", cursor: "pointer" }}>{sku} ×</button>}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className={mono} style={{ fontSize: 10, letterSpacing: "0.08em", color: "var(--atlas-ink-muted)", minWidth: 42 }}>Show</span>
+          {SERIES.map((s) => { const on = selected.has(s.k); return (
+            <button key={s.k} onClick={() => toggle(s.k)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ border: "1px solid " + (on ? s.color : "var(--atlas-line)"), background: on ? "color-mix(in srgb, " + s.color + " 14%, transparent)" : "var(--atlas-surface)", cursor: "pointer", fontSize: 11 }}>
+              <span style={{ width: 11, height: 11, borderRadius: 3, border: "1.5px solid " + s.color, background: on ? s.color : "transparent", display: "inline-block" }} />
+              <span style={{ color: on ? "var(--atlas-ink)" : "var(--atlas-ink-muted)", fontWeight: on ? 600 : 400 }}>{s.label}</span>
+            </button>
+          ); })}
+          {sku && <span style={{ fontSize: 11, color: "var(--atlas-ink-faint)" }}>· {sku} split by the checked series</span>}
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <Kpi label={isAll ? "Forecast" : `${scope} forecast`} value={fmtQty(scopeForecast)} sub="monthly plan" />
-        <Kpi label={isAll ? "Moved (MTD)" : "SO dispatched"} value={fmtQty(scopeMoved)} sub={`${fmtPct(pctOf(scopeMoved, scopeForecast), 1)} of forecast`} color={achColor(pctOf(scopeMoved, scopeForecast))} accent={achColor(pctOf(scopeMoved, scopeForecast))} />
-        <Kpi label="Remaining" value={fmtQty(scopeRemaining)} sub={scopeRemaining > 0 ? "still to pick up" : "over plan"} color={scopeRemaining > 0 ? "var(--atlas-red)" : "var(--atlas-green)"} />
-        <Kpi label="Peak pickup day" value={maxDay ? `Day ${maxDay.day}` : "—"} sub={maxDay ? `${fmtQty(maxDay.total)} · ${fmtPct(peakShare)} of month` : ""} accent="var(--atlas-accent)" />
-        <Kpi label="Pace" value={paceActual >= paceExpected ? "Ahead" : "Behind"} sub={`${fmtPct(paceActual)} moved vs ${fmtPct(paceExpected)} of month elapsed`} color={paceActual >= paceExpected ? "var(--atlas-green)" : "var(--atlas-red)"} accent={paceActual >= paceExpected ? "var(--atlas-green)" : "var(--atlas-red)"} />
+        <Kpi label={sku ? "SKU forecast" : "Forecast"} value={fmtQty(kForecast)} sub={sku ? sku : "monthly plan"} />
+        <Kpi label="Moved (MTD)" value={fmtQty(kMoved)} sub={fmtPct(pctOf(kMoved, kForecast), 1) + " of forecast"} color={achColor(pctOf(kMoved, kForecast))} accent={achColor(pctOf(kMoved, kForecast))} />
+        <Kpi label="Remaining" value={fmtQty(kRemaining)} sub={kRemaining > 0 ? "still to pick up" : "over plan"} color={kRemaining > 0 ? "var(--atlas-red)" : "var(--atlas-green)"} />
+        <Kpi label="Peak day" value={maxDay ? "Day " + maxDay.day : "—"} sub={maxDay ? fmtQty(maxDay.__all) : ""} accent="var(--atlas-accent)" />
+        {sku ? <Kpi label="Internal (this SKU)" value={fmtQty((skuRow?.toCentral ?? 0) + (skuRow?.toQuarantine ?? 0))} sub={"factory " + fmtQty(skuRow?.toCentral ?? 0) + " · quar " + fmtQty(skuRow?.toQuarantine ?? 0)} />
+          : <Kpi label="Avg / day" value={fmtQty(daysElapsed ? authMoved / daysElapsed : 0)} sub={"over " + daysElapsed + " days"} />}
       </div>
 
-      {mode === "units" ? (
-        <Panel title={`Units moved per day — ${isAll ? "STN + SO" : scope + " · SO dispatch"}`} note="Click a bar to see that day's team-wise movement. The peak day is highlighted.">
-          <ResponsiveContainer width="100%" height={340}>
-            <BarChart data={chart} margin={{ left: 4, right: 8, top: 10, bottom: 4 }} onClick={(e) => { const d = Number(e?.activeLabel); if (Number.isFinite(d)) setSelDay(d); }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--atlas-line-soft)" vertical={false} />
-              <XAxis dataKey="day" tick={axisTick} label={{ value: "Day of month", position: "insideBottom", offset: -2, fontSize: 10, fill: "var(--atlas-ink-faint)" }} />
-              <YAxis tick={axisTick} tickFormatter={fmtQty} />
-              <Tooltip contentStyle={chartTip} formatter={(v, n) => [fmtInt(Number(v)), n]} labelFormatter={(l) => `Day ${l} — click to break down by team`} cursor={{ fill: "var(--atlas-accent-bg)" }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {isAll && <Bar dataKey="STN" stackId="d" fill={pal.sup.stn} name="STN → CFA/3PL" cursor="pointer" />}
-              <Bar dataKey="SO" stackId="d" fill={pal.sup.so} name={isAll ? "SO → direct dispatch" : "SO dispatch"} radius={[2, 2, 0, 0]} cursor="pointer">
-                {chart.map((d, i) => <Cell key={i} fill={maxDay && d.day === maxDay.day ? "var(--atlas-accent)" : pal.sup.so} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Panel>
-      ) : (
-        <Panel title="Cumulative % of forecast vs expected pace" note="Solid = share of forecast moved so far. Dashed = where you'd be if movement were evenly spread. Above the dashed line = ahead of pace (watch for early over-supply); below = behind.">
-          <ResponsiveContainer width="100%" height={340}>
-            <ComposedChart data={chart} margin={{ left: 4, right: 8, top: 10, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--atlas-line-soft)" vertical={false} />
-              <XAxis dataKey="day" tick={axisTick} label={{ value: "Day of month", position: "insideBottom", offset: -2, fontSize: 10, fill: "var(--atlas-ink-faint)" }} />
-              <YAxis tick={axisTick} tickFormatter={(v) => `${Math.round(v)}%`} domain={[0, (dm: number) => Math.max(100, Math.ceil(dm))]} />
-              <Tooltip contentStyle={chartTip} formatter={(v, n) => [`${Number(v).toFixed(1)}%`, n]} labelFormatter={(l) => `Day ${l}`} cursor={{ stroke: "var(--atlas-line)" }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="pacePct" name="Expected pace" stroke="var(--atlas-ink-faint)" strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
-              <Line type="monotone" dataKey="cumPct" name="% of forecast moved" stroke={pal.sup.so} strokeWidth={2.5} dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </Panel>
-      )}
+      <Panel title={sku ? "Day-on-day movement — " + sku : "Day-on-day movement"} note={sku ? "This SKU by day. Overall = its total; check channels / To Factory / Quarantine to split it." : "Overall = STN/SO bars; each checked channel / internal series is a line. Click a bar for that day's team split."}>
+        <ResponsiveContainer width="100%" height={360}>
+          <ComposedChart data={chart} margin={{ left: 4, right: 8, top: 10, bottom: 4 }} onClick={(e) => { if (sku) return; const d = Number((e as { activeLabel?: unknown })?.activeLabel); if (Number.isFinite(d)) setSelDay(d); }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--atlas-line-soft)" vertical={false} />
+            <XAxis dataKey="day" tick={axisTick} label={{ value: "Day of month", position: "insideBottom", offset: -2, fontSize: 10, fill: "var(--atlas-ink-faint)" }} />
+            <YAxis tick={axisTick} tickFormatter={fmtQty} />
+            <Tooltip contentStyle={chartTip} formatter={(v, n) => [fmtInt(Number(v)), n]} labelFormatter={(l) => "Day " + l} cursor={{ fill: "var(--atlas-accent-bg)" }} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            {!sku && selected.has("__all") && <Bar key="stn" dataKey="STN" stackId="o" fill={pal.sup.stn} name="STN" cursor="pointer" />}
+            {!sku && selected.has("__all") && <Bar key="so" dataKey="SO" stackId="o" fill={pal.sup.so} name="SO" radius={[2, 2, 0, 0]} cursor="pointer" />}
+            {sku && selected.has("__all") && <Bar key="all" dataKey="__all" name={sku} radius={[2, 2, 0, 0]}>{chart.map((d, i) => <Cell key={i} fill={maxDay && d.day === maxDay.day ? "var(--atlas-accent)" : pal.sup.so} />)}</Bar>}
+            {channels.filter((c) => selected.has(c)).map((c) => <Line key={c} type="monotone" dataKey={c} name={c} stroke={pal.chColor(c)} strokeWidth={2} dot={false} />)}
+            {selected.has("__central") && <Line key="central" type="monotone" dataKey="__central" name="To Factory" stroke="var(--atlas-ink-muted)" strokeWidth={2} strokeDasharray="5 3" dot={false} />}
+            {selected.has("__quarantine") && <Line key="quar" type="monotone" dataKey="__quarantine" name="Quarantine" stroke="var(--atlas-amber-warn, #D97706)" strokeWidth={2} strokeDasharray="5 3" dot={false} />}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </Panel>
 
-      {/* team-wise breakdown for the clicked day */}
       {dayTeam && (
-        <Panel title={`Team-wise movement — Day ${dayTeam.day}`} note="Direct dispatch (SO) split by team on this day. STN transfers are shown as an overall total." right={<button onClick={() => setSelDay(null)} style={{ border: "1px solid var(--atlas-line)", background: "var(--atlas-surface-soft)", color: "var(--atlas-ink-muted)", borderRadius: 8, padding: "2px 10px", cursor: "pointer", fontSize: 11 }}>Close ×</button>}>
-          {dayTeam.channels.length === 0 && dayTeam.stn === 0 ? <div style={{ fontSize: 12, color: "var(--atlas-ink-muted)" }}>No movement recorded on this day.</div> : (
+        <Panel title={"Team-wise movement — Day " + dayTeam.day} note="Movement split by team on this day." right={<button onClick={() => setSelDay(null)} style={{ border: "1px solid var(--atlas-line)", background: "var(--atlas-surface-soft)", color: "var(--atlas-ink-muted)", borderRadius: 8, padding: "2px 10px", cursor: "pointer", fontSize: 11 }}>Close ×</button>}>
+          {dayTeam.channels.length === 0 ? <div style={{ fontSize: 12, color: "var(--atlas-ink-muted)" }}>No channel movement recorded on this day.</div> : (
             <div className="space-y-1.5">
-              {dayTeam.channels.map((c) => {
-                const max = Math.max(dayTeam.stn, ...dayTeam.channels.map((x) => x.value), 1);
-                return (
-                  <div key={c.channel} className="flex items-center gap-3" style={{ fontSize: 12.5 }}>
-                    <span className="flex items-center gap-1.5" style={{ width: 96, color: "var(--atlas-ink)" }}><span style={{ width: 8, height: 8, borderRadius: 2, background: pal.chColor(c.channel) }} />{c.channel} <span style={{ color: "var(--atlas-ink-faint)", fontSize: 10 }}>SO</span></span>
-                    <div style={{ flex: 1, height: 12, background: "var(--atlas-line-soft)", borderRadius: 3, overflow: "hidden" }}><div style={{ width: `${(c.value / max) * 100}%`, height: "100%", background: pal.chColor(c.channel), borderRadius: 3 }} /></div>
-                    <span style={{ width: 70, textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--atlas-ink)" }}>{fmtInt(c.value)}</span>
-                  </div>
-                );
-              })}
-              {dayTeam.stn > 0 && (
-                <div className="flex items-center gap-3" style={{ fontSize: 12.5, borderTop: "1px solid var(--atlas-line-soft)", paddingTop: 6, marginTop: 4 }}>
-                  <span className="flex items-center gap-1.5" style={{ width: 96, color: "var(--atlas-ink)" }}><span style={{ width: 8, height: 8, borderRadius: 2, background: pal.sup.stn }} />STN <span style={{ color: "var(--atlas-ink-faint)", fontSize: 10 }}>all</span></span>
-                  <div style={{ flex: 1, height: 12, background: "var(--atlas-line-soft)", borderRadius: 3, overflow: "hidden" }}><div style={{ width: `${(dayTeam.stn / Math.max(dayTeam.stn, ...dayTeam.channels.map((x) => x.value), 1)) * 100}%`, height: "100%", background: pal.sup.stn, borderRadius: 3 }} /></div>
-                  <span style={{ width: 70, textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--atlas-ink)" }}>{fmtInt(dayTeam.stn)}</span>
+              {dayTeam.channels.map((c) => { const max = Math.max(...dayTeam.channels.map((x) => x.value), 1); return (
+                <div key={c.channel} className="flex items-center gap-3" style={{ fontSize: 12.5 }}>
+                  <span className="flex items-center gap-1.5" style={{ width: 90, color: "var(--atlas-ink)" }}><span style={{ width: 8, height: 8, borderRadius: 2, background: pal.chColor(c.channel) }} />{c.channel}</span>
+                  <div style={{ flex: 1, height: 12, background: "var(--atlas-line-soft)", borderRadius: 3, overflow: "hidden" }}><div style={{ width: (c.value / max) * 100 + "%", height: "100%", background: pal.chColor(c.channel), borderRadius: 3 }} /></div>
+                  <span style={{ width: 70, textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--atlas-ink)" }}>{fmtInt(c.value)}</span>
                 </div>
-              )}
+              ); })}
             </div>
           )}
         </Panel>
       )}
 
-      <Panel title="Daily detail" note="Click a day to break it down by team.">
+      <Panel title="Daily detail" note="One column per checked series.">
         <TableScroll max="40vh">
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
-            <thead><tr>{(isAll ? ["Day", "STN", "SO", "Total", "% of month"] : ["Day", "SO dispatch", "% of month"]).map((h, i) => <th key={h} className={mono} style={{ fontSize: 9.5, color: "var(--atlas-ink-muted)", textAlign: i === 0 ? "left" : "right", padding: "8px 12px", borderBottom: "1px solid var(--atlas-line)" }}>{h}</th>)}</tr></thead>
+            <thead><tr>
+              <th className={mono} style={{ fontSize: 9.5, color: "var(--atlas-ink-muted)", textAlign: "left", padding: "8px 12px", borderBottom: "1px solid var(--atlas-line)" }}>Day</th>
+              {sel.map((s) => <th key={s.k} className={mono} style={{ fontSize: 9.5, color: s.color, textAlign: "right", padding: "8px 12px", borderBottom: "1px solid var(--atlas-line)" }}>{s.label}</th>)}
+            </tr></thead>
             <tbody>
-              {series.map((d) => (
-                <tr key={d.day} onClick={() => setSelDay(d.day)} className="movement-row" style={{ borderBottom: "1px solid var(--atlas-line-soft)", cursor: "pointer", background: (selDay === d.day || (maxDay && d.day === maxDay.day)) ? "var(--atlas-accent-bg)" : undefined }}>
-                  <Td left><span style={{ color: "var(--atlas-ink)", fontWeight: maxDay && d.day === maxDay.day ? 700 : 400 }}>Day {d.day}{maxDay && d.day === maxDay.day ? " ◆ peak" : ""}</span></Td>
-                  {isAll && <NumTd v={d.stn} color={pal.sup.stn} />}
-                  <NumTd v={d.so} color={pal.sup.so} />
-                  {isAll && <NumTd v={d.total} strong />}
-                  <td style={{ padding: "7px 12px", textAlign: "right", color: "var(--atlas-ink-muted)" }}>{fmtPct(dateStamped ? d.total / dateStamped : null)}</td>
+              {chart.map((d) => (
+                <tr key={d.day} onClick={() => !sku && setSelDay(d.day)} className={sku ? "" : "movement-row"} style={{ borderBottom: "1px solid var(--atlas-line-soft)", cursor: sku ? "default" : "pointer", background: maxDay && d.day === maxDay.day ? "var(--atlas-accent-bg)" : undefined }}>
+                  <Td left><span style={{ color: "var(--atlas-ink)", fontWeight: maxDay && d.day === maxDay.day ? 700 : 400 }}>Day {d.day}{maxDay && d.day === maxDay.day ? " ◆" : ""}</span></Td>
+                  {sel.map((s) => <NumTd key={s.k} v={d[s.k]} strong={s.k === "__all"} />)}
                 </tr>
               ))}
             </tbody>
@@ -828,7 +823,7 @@ function QcomView({ qKpi, platRollup, qcomRows, qWidest, sort, setSort, pal }: {
 
 // ════════════════════════ RCA MODAL ════════════════════════
 type RcaChannel = ChannelRow & { fill: number | null; gap: number };
-type RcaShape = { sku: string; productName: string; category: string; forecast: number; supplied: number; gap: number; fill: number | null; byChannel: RcaChannel[]; drivers: RcaChannel[] };
+type RcaShape = { sku: string; productName: string; category: string; forecast: number; supplied: number; gap: number; fill: number | null; byChannel: RcaChannel[]; drivers: RcaChannel[]; toCentral: number; toQuarantine: number };
 
 function RcaModal({ d, pal, onClose }: { d: RcaShape; pal: Pal; onClose: () => void }) {
   useEffect(() => {
@@ -862,6 +857,13 @@ function RcaModal({ d, pal, onClose }: { d: RcaShape; pal: Pal; onClose: () => v
           {d.drivers.length > 0 && (
             <div className="p-3 rounded-lg" style={{ background: over ? "var(--atlas-blue-bg)" : "var(--atlas-red-bg)", border: "1px solid var(--atlas-line)" }}>
               <div style={{ fontSize: 12.5, color: "var(--atlas-ink-soft)", lineHeight: 1.5 }}><b style={{ color: "var(--atlas-ink)" }}>Why:</b> {over ? "over-supply" : "shortfall"} driven mainly by {d.drivers.map((r, i) => <span key={r.channel}><b style={{ color: pal.chColor(r.channel) }}>{r.channel}</b> ({r.gap >= 0 ? "+" : ""}{fmtQty(r.gap)}){i < d.drivers.length - 1 ? ", " : ""}</span>)}.</div>
+            </div>
+          )}
+          {(d.toCentral > 0 || d.toQuarantine > 0) && (
+            <div className="p-3 rounded-lg flex items-center gap-4 flex-wrap" style={{ background: "var(--atlas-surface-soft)", border: "1px solid var(--atlas-line)" }}>
+              <span className={mono} style={{ fontSize: 9, letterSpacing: "0.08em", color: "var(--atlas-ink-muted)" }}>Internal (not movement)</span>
+              <span style={{ fontSize: 12.5, color: "var(--atlas-ink-soft)" }}>↻ Central/repacking <b style={{ color: "var(--atlas-ink)", fontVariantNumeric: "tabular-nums" }}>{fmtInt(d.toCentral)}</b></span>
+              <span style={{ fontSize: 12.5, color: "var(--atlas-ink-soft)" }}>⚠ Quarantine <b style={{ color: "var(--atlas-amber-warn, #D97706)", fontVariantNumeric: "tabular-nums" }}>{fmtInt(d.toQuarantine)}</b></span>
             </div>
           )}
           <div>

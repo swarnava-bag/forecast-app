@@ -156,7 +156,7 @@ export default function ComputePage() {
 
             <div className="p-3 rounded-xl" style={surface}>
               <div style={{ fontSize: 12.5, color: "var(--atlas-ink-soft)", lineHeight: 1.6 }}>
-                <b style={{ color: "var(--atlas-ink)" }}>Diagnostics.</b> SO ex-node dispatch <b>{fmtInt(d.soRawExNode)}</b> · STN closed ex-node <b>{fmtInt(d.stnRawClosed)}</b>. Mapper Studio: {result.stats.skuMaster} SKUs, {result.stats.combos} combos, {result.stats.customers} customers, {result.stats.warehouses} warehouses, {result.stats.aliases} FG aliases.
+                <b style={{ color: "var(--atlas-ink)" }}>Diagnostics.</b> SO ex-node dispatch <b>{fmtInt(d.soRawExNode)}</b> · STN closed ex-node <b>{fmtInt(d.stnRawClosed)}</b> · internal: to Central <b>{fmtInt(d.toCentral)}</b>, to Quarantine <b>{fmtInt(d.toQuarantine)}</b>. Mapper Studio: {result.stats.skuMaster} SKUs, {result.stats.combos} combos, {result.stats.customers} customers, {result.stats.warehouses} warehouses, {result.stats.aliases} FG aliases.
               </div>
               {result.warnings.length > 0 && (
                 <ul style={{ marginTop: 8, fontSize: 12, color: "var(--atlas-amber-warn, #D97706)", listStyle: "disc", paddingLeft: 18 }}>
