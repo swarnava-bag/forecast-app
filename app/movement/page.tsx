@@ -26,10 +26,11 @@ import {
 } from "./lib";
 import {
   surface, mono, chartTip, axisTick, Kpi, Panel, Badge, PctBar, Th, Sort,
-  TableScroll, Td, NumTd, sortRows, InsightCallout,
+  TableScroll, Td, NumTd, sortRows,
 } from "./ui";
+import { ReadmeView } from "./readme";
 
-type View = "overall" | "daily" | "channel" | "qcom";
+type View = "overall" | "daily" | "channel" | "qcom" | "readme";
 type Pal = ReturnType<typeof palette>;
 
 export default function MovementPage() {
@@ -102,16 +103,6 @@ export default function MovementPage() {
     (["zero", "under", "ontarget", "over", "unforecast"] as Bucket[]).forEach((b) => m.set(b, { skus: 0, forecast: 0, supplied: 0 }));
     for (const r of overall) { const e = m.get(serviceBucket(r.forecast, r.totalSupplied))!; e.skus += 1; e.forecast += r.forecast; e.supplied += r.totalSupplied; }
     return m;
-  }, [overall]);
-
-  const narrative = useMemo(() => {
-    let underSkus = 0, underForecast = 0, zeroSkus = 0, zeroForecast = 0;
-    for (const r of overall) {
-      const f = r.forecast ? r.totalSupplied / r.forecast : 1;
-      if (r.forecast > 0 && f < 0.8) { underSkus++; underForecast += r.forecast; }
-      if (r.forecast > 0 && r.totalSupplied === 0) { zeroSkus++; zeroForecast += r.forecast; }
-    }
-    return { underSkus, underForecast, zeroSkus, zeroForecast };
   }, [overall]);
 
   const overallRows = useMemo(() => overall.map((r) => ({
@@ -208,6 +199,7 @@ export default function MovementPage() {
     { k: "daily", label: "Daily Movement", note: "day-on-day pickup" },
     { k: "channel", label: "Channel", note: "channel owners" },
     { k: "qcom", label: "Qcom", note: "orders vs sell-out" },
+    { k: "readme", label: "Readme", note: "how it works" },
   ];
 
   return (
@@ -247,8 +239,8 @@ export default function MovementPage() {
           ))}
         </div>
 
-        {/* Filter bar (not on Daily — it has its own scope) */}
-        {view !== "daily" && (
+        {/* Filter bar (not on Daily or Readme — they have their own scope) */}
+        {view !== "daily" && view !== "readme" && (
           <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl" style={surface}>
             <select value={category} onChange={(e) => setCategory(e.target.value)} className="px-3 py-1.5 rounded-lg text-sm" style={{ background: "var(--atlas-surface-soft)", border: "1px solid var(--atlas-line)", color: "var(--atlas-ink)" }}>
               <option value="">All categories</option>
@@ -270,16 +262,17 @@ export default function MovementPage() {
           </div>
         )}
 
-        {view === "overall" && <OverallView {...{ overall, oKpi, meta: data.meta, catRollup, spread, narrative, sortedOverall, exList, exMode, setExMode, sort, setSort, pal, setRca }} />}
+        {view === "overall" && <OverallView {...{ overall, oKpi, meta: data.meta, catRollup, spread, sortedOverall, exList, exMode, setExMode, sort, setSort, pal, setRca }} />}
         {view === "daily" && <DailyView rawDaily={data.daily} dailyChannel={data.dailyChannel} dailyInternal={data.dailyInternal} dailySkuChannel={data.dailySkuChannel} overallList={data.overall}
           channels={data.meta.channels.filter((c) => CH_ORDER.includes(c))} forecastTotal={data.meta.forecastV7Total}
           authMoved={oKpi.sup} authRemaining={oKpi.remaining} daysElapsed={data.meta.daysElapsed} pal={pal} />}
         {view === "channel" && <ChannelView {...{ chRollup, chanCat, channel, setChannel, channelRows, sort, setSort, pal, setRca }} />}
         {view === "qcom" && <QcomView {...{ qKpi, platRollup, qcomRows, qWidest, sort, setSort, pal }} />}
+        {view === "readme" && <ReadmeView />}
 
-        <div style={{ fontSize: 11, color: "var(--atlas-ink-faint)", lineHeight: 1.6 }}>
+        {view !== "readme" && <div style={{ fontSize: 11, color: "var(--atlas-ink-faint)", lineHeight: 1.6 }}>
           <b style={{ color: "var(--atlas-ink-muted)" }}>How to read this.</b> Moved = STN (transfers to CFA/3PL) + SO (direct dispatch), ex mother node, against Forecast {data.meta.forecastBasis}. Shipsheet is last-day POs not yet closed into SO (kept separate as open pipeline). Bands: <span style={{ color: "var(--atlas-red)" }}>Urgent &lt;70%</span>, <span style={{ color: "var(--atlas-amber-warn, #D97706)" }}>Pick up 70–90%</span>, <span style={{ color: "var(--atlas-green)" }}>On plan 90–100%</span>, <span style={{ color: "var(--atlas-red)" }}>Alert · over &gt;100%</span> (over-supply burns downstream working capital). Source: {data.meta.source}.
-        </div>
+        </div>}
       </div>
 
       {rcaData && <RcaModal d={rcaData} pal={pal} onClose={() => setRca(null)} />}
@@ -290,10 +283,10 @@ export default function MovementPage() {
 type OverRow = OverallRow & { fill: number | null; gap: number; action: { label: string; color: string } };
 
 // ════════════════════════ OVERALL ════════════════════════
-function OverallView({ overall, oKpi, meta, catRollup, spread, narrative, sortedOverall, exList, exMode, setExMode, sort, setSort, pal, setRca }: {
+function OverallView({ overall, oKpi, meta, catRollup, spread, sortedOverall, exList, exMode, setExMode, sort, setSort, pal, setRca }: {
   overall: OverallRow[]; oKpi: { f: number; stn: number; so: number; sup: number; moved: number; remaining: number; attn: number | null };
   meta: Snapshot["meta"]; catRollup: { category: string; skus: number; forecast: number; supplied: number; fill: number | null; gap: number }[];
-  spread: Map<Bucket, { skus: number; forecast: number; supplied: number }>; narrative: { underSkus: number; underForecast: number; zeroSkus: number; zeroForecast: number };
+  spread: Map<Bucket, { skus: number; forecast: number; supplied: number }>;
   sortedOverall: OverRow[]; exList: OverRow[]; exMode: "over" | "under"; setExMode: (m: "over" | "under") => void; sort: Sort; setSort: (s: Sort) => void; pal: Pal; setRca: (s: string) => void;
 }) {
   const maxF = Math.max(1, ...[...spread.values()].map((v) => v.forecast));
@@ -311,11 +304,6 @@ function OverallView({ overall, oKpi, meta, catRollup, spread, narrative, sorted
         <Kpi label="Avg / day" value={fmtQty(perDay)} sub={`over ${meta.daysElapsed} days`} />
       </div>
 
-      {narrative.underSkus > 0 && (
-        <InsightCallout tone="warn">
-          <b style={{ color: "var(--atlas-ink)" }}>Read first.</b> {narrative.underSkus} SKUs carrying {fmtQty(narrative.underForecast)} of forecast have moved under 80%{narrative.zeroSkus > 0 && <> — and {narrative.zeroSkus} of them ({fmtQty(narrative.zeroForecast)}) have not moved at all</>}. That is where the {fmtQty(Math.max(0, oKpi.remaining))} shortfall sits — concentrated, not spread thinly.
-        </InsightCallout>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel title="The two ways stock leaves the node" note="Scaled to forecast. The grey tail is demand not covered.">

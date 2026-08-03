@@ -12,18 +12,23 @@ import AppShell from "@/app/components/AppShell";
 import { createClient } from "@/lib/supabase/client";
 import { downloadTemplate } from "../templates";
 import { loadMappers } from "../mappers";
-import { computeSnapshot, detectMonth, forecastFromSnapshot, EngineFiles } from "../engine";
+import { computeSnapshot, forecastFromSnapshot, EngineFiles } from "../engine";
 import type { Snapshot } from "../lib";
 import { fmtQty, fmtPct, pctOf, fmtInt } from "../lib";
 
 const surface: React.CSSProperties = { background: "var(--atlas-surface)", border: "1px solid var(--atlas-line)" };
 const mono = "font-mono uppercase";
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const labelOf = (key: string) => { const [y, m] = key.split("-").map(Number); return `${MON[m - 1]} ${y}`; };
+// past 3 + current + next 3 months, so you can re-run an old month or set up a new one
+const MONTH_OPTIONS = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 3 + i); const y = d.getFullYear(), m = d.getMonth() + 1; return `${y}-${String(m).padStart(2, "0")}`; }).reverse();
+const CURRENT_MONTH = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })();
 type Slot = "forecast" | "so" | "stn" | "shipsheet";
 const SLOTS: { k: Slot; label: string; hint: string; required: boolean }[] = [
   { k: "forecast", label: "Forecast", hint: "monthly — reused if omitted", required: false },
-  { k: "so", label: "SO (Sales Orders)", hint: "daily", required: true },
-  { k: "stn", label: "STN (Stock Transfers)", hint: "daily", required: true },
-  { k: "shipsheet", label: "Shipsheet", hint: "yesterday's", required: false },
+  { k: "so", label: "SO (Sales Orders)", hint: "daily · optional", required: false },
+  { k: "stn", label: "STN (Stock Transfers)", hint: "daily · optional", required: false },
+  { k: "shipsheet", label: "Shipsheet", hint: "yesterday's · optional", required: false },
 ];
 
 export default function ComputePage() {
@@ -33,6 +38,7 @@ export default function ComputePage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ snapshot: Snapshot; diagnostics: Record<string, number>; stats: Record<string, number>; warnings: string[]; fcSource: string } | null>(null);
   const [published, setPublished] = useState<string | null>(null);
+  const [targetMonth, setTargetMonth] = useState<string>(CURRENT_MONTH);
   const refs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const pick = useCallback(async (slot: Slot, file: File) => {
@@ -45,23 +51,24 @@ export default function ComputePage() {
 
   const compute = async () => {
     setError(null); setResult(null); setPublished(null);
-    if (!files.so || !files.stn) { setError("SO and STN are required."); return; }
+    if (!files.forecast && !files.so && !files.stn) { setError("Upload at least the Forecast (to start a month) or SO / STN (for movement)."); return; }
     setBusy("Loading Mapper Studio…");
     try {
       const { mappers, stats, warnings } = await loadMappers(supabase);
-      const ef: EngineFiles = { forecast: files.forecast?.wb, so: files.so.wb, stn: files.stn.wb, ship: files.shipsheet?.wb };
+      const monthKey = targetMonth;                 // the selected month is the source of truth
+      const monthLabel = labelOf(monthKey);
+      const ef: EngineFiles = { forecast: files.forecast?.wb, so: files.so?.wb, stn: files.stn?.wb, ship: files.shipsheet?.wb };
       // Forecast is monthly: if not uploaded, reuse the month's last publish.
       let preset; let fcSource = "uploaded now";
       if (!files.forecast) {
-        setBusy("Finding this month's forecast…");
-        const mi = detectMonth(files.so.wb, files.stn.wb);
-        const r = await fetch(`/api/movement-snapshot?month=${mi.monthKey}`, { cache: "no-store" });
-        if (!r.ok) { setError(`No forecast on file for ${mi.month}. Upload the Forecast file once for ${mi.month} — after that, daily updates need only SO / STN / Shipsheet.`); setBusy(null); return; }
+        setBusy("Finding forecast…");
+        const r = await fetch(`/api/movement-snapshot?month=${monthKey}`, { cache: "no-store" });
+        if (!r.ok) { setError(`No forecast on file for ${monthLabel}. Upload the Forecast file once for ${monthLabel} — after that, daily updates need only SO / STN / Shipsheet.`); setBusy(null); return; }
         preset = forecastFromSnapshot(await r.json());
-        fcSource = `reused from ${mi.month} (last publish)`;
+        fcSource = `reused from ${monthLabel} (last publish)`;
       }
       setBusy("Computing…");
-      const { snapshot, diagnostics } = computeSnapshot(ef, mappers, preset);
+      const { snapshot, diagnostics } = computeSnapshot(ef, mappers, monthKey, preset);
       setResult({ snapshot, diagnostics, stats, warnings, fcSource });
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(null); }
@@ -88,7 +95,7 @@ export default function ComputePage() {
           <div>
             <div className={mono} style={{ fontSize: 10, letterSpacing: "0.14em", color: "var(--atlas-ink-muted)" }}>Forecast vs Movement</div>
             <h1 className="font-display" style={{ fontSize: 28, fontWeight: 400, color: "var(--atlas-ink)", marginTop: 2 }}>Compute from raw files</h1>
-            <div style={{ fontSize: 12, color: "var(--atlas-ink-muted)", marginTop: 2 }}>Daily: drop <b>SO + STN + Shipsheet</b> and Compute. Forecast is monthly — upload it once at the start of the month; later runs reuse it automatically.</div>
+            <div style={{ fontSize: 12, color: "var(--atlas-ink-muted)", marginTop: 2 }}>Daily: drop <b>SO + STN + Shipsheet</b> and Compute. Forecast is monthly — upload it once to start a month; later runs reuse it. SO / STN are optional (start a month with Forecast alone; re-run an old month when a late SO closes).</div>
           </div>
           <div className="flex gap-2">
             <Link href="/movement/mappers" className="px-3 py-1.5 rounded-lg" style={{ ...surface, fontSize: 12, color: "var(--atlas-ink-soft)", textDecoration: "none" }}>Movement Mappers</Link>
@@ -102,6 +109,18 @@ export default function ComputePage() {
           <div className="flex flex-wrap gap-2">
             {SLOTS.map((s) => <button key={s.k} onClick={() => downloadTemplate(s.k)} className="px-3 py-1.5 rounded-lg" style={{ background: "var(--atlas-surface-soft)", border: "1px solid var(--atlas-line)", color: "var(--atlas-ink-soft)", fontSize: 12, cursor: "pointer" }}>↓ {s.label}</button>)}
           </div>
+        </div>
+
+        {/* target month */}
+        <div className="p-3 rounded-xl flex flex-wrap items-center gap-3" style={{ background: "var(--atlas-accent-bg)", border: "1px solid var(--atlas-line)" }}>
+          <div>
+            <div style={{ fontSize: 13, color: "var(--atlas-ink)", fontWeight: 600 }}>Target month</div>
+            <div style={{ fontSize: 11.5, color: "var(--atlas-ink-muted)" }}>Every file is scoped to this month by date — so a multi-month export, or a late SO for an older month, only counts the rows that belong here. Pick a future month to <b>start it</b> from the Forecast alone.</div>
+          </div>
+          <div className="flex-1" />
+          <select value={targetMonth} onChange={(e) => setTargetMonth(e.target.value)} className="px-3 py-1.5 rounded-lg text-sm" style={{ ...surface, color: "var(--atlas-ink)", cursor: "pointer" }}>
+            {MONTH_OPTIONS.map((k) => <option key={k} value={k}>{labelOf(k)}</option>)}
+          </select>
         </div>
 
         {/* file slots */}
@@ -133,7 +152,7 @@ export default function ComputePage() {
         {result && m && d && (
           <div className="space-y-4">
             <div className="p-3 rounded-xl flex items-center gap-2 flex-wrap" style={{ background: "var(--atlas-accent-bg)", border: "1px solid var(--atlas-line)" }}>
-              <span className={mono} style={{ fontSize: 10, letterSpacing: "0.08em", color: "var(--atlas-ink-muted)" }}>Detected month</span>
+              <span className={mono} style={{ fontSize: 10, letterSpacing: "0.08em", color: "var(--atlas-ink-muted)" }}>Month</span>
               <b style={{ fontSize: 15, color: "var(--atlas-ink)" }}>{m.month}</b>
               <span style={{ fontSize: 12, color: "var(--atlas-ink-muted)" }}>· through day {m.daysElapsed} of {m.daysInMonth} · {m.counts.overall} SKUs</span>
               <span className="px-2 py-0.5 rounded" style={{ background: "var(--atlas-surface-soft)", border: "1px solid var(--atlas-line)", fontSize: 11, color: "var(--atlas-ink-soft)" }}>Forecast: {result.fcSource}</span>

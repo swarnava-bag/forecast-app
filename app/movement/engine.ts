@@ -70,6 +70,11 @@ export function ymd(v: unknown): { y: number; m: number; d: number } | null {
   return null;
 }
 
+/** Does a row's date belong to the target month? Rows dated to another month are
+ *  dropped (so a 2-month export only counts the selected month); undated rows are
+ *  kept, so a clean single-month file is unaffected. */
+const inMonth = (v: unknown, mi: MonthInfo) => { const p = ymd(v); return !p || (p.y === mi.actY && p.m === mi.actM); };
+
 export type Grid = unknown[][];
 const gridCache = new WeakMap<object, Grid>();   // parse each worksheet once
 export function sheetGrid(wb: XLSX.WorkBook, name?: string): Grid {
@@ -122,7 +127,8 @@ export function resolveLine(rawFg: string, lineQty: number, mp: Mappers): { sku:
 
 // ── SO: Overall SO (by sku) + Channelwise SO (by sku×channel) ────────────────
 export type SoResult = { bySku: SkuAgg; bySkuChan: SkuChanAgg; rawExNodeDispatch: number; unmappedDispatch: number };
-export function computeSO(wb: XLSX.WorkBook, mp: Mappers): SoResult {
+export function computeSO(wb: XLSX.WorkBook | undefined, mp: Mappers, mi: MonthInfo): SoResult {
+  if (!wb) return { bySku: new Map(), bySkuChan: new Map(), rawExNodeDispatch: 0, unmappedDispatch: 0 };
   const g = sheetGrid(wb);
   const { row, H } = findHeader(g, ["Warehouse", "Dispatch Qty", "Product SKU", "Party Name"]);
   const bySku: SkuAgg = new Map(); const bySkuChan: SkuChanAgg = new Map();
@@ -130,6 +136,7 @@ export function computeSO(wb: XLSX.WorkBook, mp: Mappers): SoResult {
   for (let i = row + 1; i < g.length; i++) {
     const r = g[i]; if (!r) continue;
     if (r[H["Warehouse"]] !== NODE) continue;
+    if (!inMonth(r[H["Last Dispatch Date"]], mi)) continue;   // scope to the selected month
     const dq = num(r[H["Dispatch Qty"]]); if (dq === 0) continue;
     rawExNodeDispatch += dq;
     // Only dispatch to a channel-mapped customer counts (sample/gifting/unmapped
@@ -152,13 +159,15 @@ export function computeSO(wb: XLSX.WorkBook, mp: Mappers): SoResult {
 //   customer→platform map; combo-exploded. Forecast per platform is joined
 //   later from the Forecast file (Qcom is clubbed in the channel view).
 export type QcomAgg = Map<string, Map<string, { orders: number; sales: number }>>; // sku → platform → {}
-export function computeQcom(wb: XLSX.WorkBook, mp: Mappers): QcomAgg {
+export function computeQcom(wb: XLSX.WorkBook | undefined, mp: Mappers, mi: MonthInfo): QcomAgg {
+  if (!wb) return new Map();
   const g = sheetGrid(wb);
   const { row, H } = findHeader(g, ["Warehouse", "Order Qty", "Dispatch Qty", "Product SKU", "Party Name"]);
   const out: QcomAgg = new Map();
   for (let i = row + 1; i < g.length; i++) {
     const r = g[i]; if (!r) continue;
     if (r[H["Warehouse"]] !== NODE) continue;
+    if (!inMonth(r[H["Last Dispatch Date"]], mi)) continue;   // scope to the selected month
     const party = txt(r[H["Party Name"]]);
     if (mp.customerToChannel(party) !== "Qcom") continue;
     const platform = mp.customerToPlatform(party); if (!platform) continue;
@@ -180,7 +189,8 @@ export function computeQcom(wb: XLSX.WorkBook, mp: Mappers): QcomAgg {
 //   from the matched SO line. Reverses next month when the SO closes.
 const normPO = (v: unknown) => txt(v).toUpperCase().replace(/\(.*?\)/g, "").replace(/[^A-Z0-9]/g, "");
 export type ShipResult = { bySku: SkuAgg; bySkuChan: SkuChanAgg; addedBack: number; matchedPOs: number; sheetPOs: number };
-export function computeShipsheet(soWb: XLSX.WorkBook, shipWb: XLSX.WorkBook, mp: Mappers): ShipResult {
+export function computeShipsheet(soWb: XLSX.WorkBook | undefined, shipWb: XLSX.WorkBook | undefined, mp: Mappers): ShipResult {
+  if (!soWb || !shipWb) return { bySku: new Map(), bySkuChan: new Map(), addedBack: 0, matchedPOs: 0, sheetPOs: 0 };
   // 1) PO set from the shipsheet (the detail sheet — consolidate has pivots too)
   const SH = findSheet(shipWb, ["PO Number", "Qty"]);
   const shipPOs = new Set<string>();
@@ -210,7 +220,8 @@ export function computeShipsheet(soWb: XLSX.WorkBook, shipWb: XLSX.WorkBook, mp:
 //   Also tallies internal transfers OUT of the node that are not channel supply:
 //   to Central / factory (repacking) and to Quarantine — shown separately.
 export type StnResult = { bySku: SkuAgg; bySkuChan: SkuChanAgg; rawClosedExNode: number; unmapped: number; internalCentral: number; internalQuarantine: number; centralBySku: SkuAgg; quarantineBySku: SkuAgg };
-export function computeSTN(wb: XLSX.WorkBook, mp: Mappers): StnResult {
+export function computeSTN(wb: XLSX.WorkBook | undefined, mp: Mappers, mi: MonthInfo): StnResult {
+  if (!wb) return { bySku: new Map(), bySkuChan: new Map(), rawClosedExNode: 0, unmapped: 0, internalCentral: 0, internalQuarantine: 0, centralBySku: new Map(), quarantineBySku: new Map() };
   const g = sheetGrid(wb);
   const { row, H } = findHeader(g, ["From Warehouse", "To Warehouse", "FG Code", "Qty", "Status"]);
   const bySku: SkuAgg = new Map(); const bySkuChan: SkuChanAgg = new Map();
@@ -222,6 +233,7 @@ export function computeSTN(wb: XLSX.WorkBook, mp: Mappers): StnResult {
     // booked to a dummy account as 'Raised', not 'Closed', so a Closed-only
     // filter drops it — the source workbook counts everything but Cancelled.
     if (r[H["From Warehouse"]] !== NODE || txt(r[H["Status"]]) === "Cancelled") continue;
+    if (!inMonth(r[H["Date"]], mi)) continue;   // scope to the selected month
     const q = num(r[H["Qty"]]); if (q === 0) continue;
     rawClosedExNode += q;
     // Internal transfers (not channel supply): stock sent to Quarantine, or back
@@ -358,18 +370,13 @@ export function forecastFromSnapshot(snap: Snapshot): Forecast {
   return { bySku, byChannel, byPlatform };
 }
 
-// Detect the active month from STN transfer dates (fallback SO dispatch dates).
+// The active month is chosen explicitly on the compute page (no auto-detect):
+// every file is scoped to it by date, so uploading a multi-month export or a late
+// SO for an older month only ever counts the rows for the selected month.
 export type MonthInfo = { monthKey: string; month: string; actY: number; actM: number; daysInMonth: number };
-export function detectMonth(soWb: XLSX.WorkBook, stnWb: XLSX.WorkBook): MonthInfo {
-  const sg = sheetGrid(soWb); const SH = findHeader(sg, ["Warehouse", "Last Dispatch Date"]);
-  const tg = sheetGrid(stnWb); const TH = findHeader(tg, ["From Warehouse", "Date"]);
-  const ymCount: Record<string, number> = {};
-  const tally = (v: unknown) => { const p = ymd(v); if (p) { const k = `${p.y}-${p.m}`; ymCount[k] = (ymCount[k] ?? 0) + 1; } };
-  for (let i = TH.row + 1; i < tg.length; i++) if (tg[i]?.[TH.H["From Warehouse"]] === NODE) tally(tg[i][TH.H["Date"]]);
-  if (Object.keys(ymCount).length === 0) for (let i = SH.row + 1; i < sg.length; i++) if (sg[i]?.[SH.H["Warehouse"]] === NODE) tally(sg[i][SH.H["Last Dispatch Date"]]);
-  const topYm = Object.entries(ymCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "2026-6";
-  const [actY, actM] = topYm.split("-").map(Number);
-  return { monthKey: `${actY}-${String(actM).padStart(2, "0")}`, month: `${MONTHS[actM - 1]} ${actY}`, actY, actM, daysInMonth: new Date(actY, actM, 0).getDate() };
+export function monthInfoFromKey(monthKey: string): MonthInfo {
+  const [actY, actM] = monthKey.split("-").map(Number);
+  return { monthKey, month: `${MONTHS[actM - 1]} ${actY}`, actY, actM, daysInMonth: new Date(actY, actM, 0).getDate() };
 }
 
 // ── Daily movement (timing view), all combo-exploded, ex-node ────────────────
@@ -384,10 +391,8 @@ export type DailyResult = {
   dailySkuChannel: Record<string, Record<string, DaySeries>>;   // sku → series(channel|__central|__quarantine) → day series
   monthKey: string; month: string; daysInMonth: number; daysElapsed: number;
 };
-export function computeDaily(soWb: XLSX.WorkBook, stnWb: XLSX.WorkBook, mp: Mappers): DailyResult {
-  const sg = sheetGrid(soWb); const SH = findHeader(sg, ["Warehouse", "Dispatch Qty", "Last Dispatch Date", "Party Name"]);
-  const tg = sheetGrid(stnWb); const TH = findHeader(tg, ["From Warehouse", "To Warehouse", "Status", "Qty", "Date", "FG Code"]);
-  const { actY, actM } = detectMonth(soWb, stnWb);
+export function computeDaily(soWb: XLSX.WorkBook | undefined, stnWb: XLSX.WorkBook | undefined, mp: Mappers, mi: MonthInfo): DailyResult {
+  const { actY, actM } = mi;
   const dayOf = (v: unknown): number | null => { const p = ymd(v); return p && p.y === actY && p.m === actM ? p.d : null; };
 
   const dStnTot: Record<number, number> = {}, dSoTot: Record<number, number> = {};
@@ -397,6 +402,7 @@ export function computeDaily(soWb: XLSX.WorkBook, stnWb: XLSX.WorkBook, mp: Mapp
   const bump = (m: Record<string, Record<number, number>>, k: string, d: number, q: number) => { (m[k] ??= {})[d] = (m[k][d] ?? 0) + q; };
   const bumpSku = (sku: string, key: string, d: number, q: number) => { const s = (dSkuSer[sku] ??= {}); (s[key] ??= {})[d] = (s[key][d] ?? 0) + q; };
 
+  if (soWb) { const sg = sheetGrid(soWb); const SH = findHeader(sg, ["Warehouse", "Dispatch Qty", "Last Dispatch Date", "Party Name"]);
   for (let i = SH.row + 1; i < sg.length; i++) {
     const r = sg[i]; if (!r || r[SH.H["Warehouse"]] !== NODE) continue;
     const dq = num(r[SH.H["Dispatch Qty"]]); if (dq === 0) continue;
@@ -405,7 +411,8 @@ export function computeDaily(soWb: XLSX.WorkBook, stnWb: XLSX.WorkBook, mp: Mapp
     for (const p of resolveLine(txt(r[SH.H["Product SKU"]]), dq, mp)) {
       dSoTot[d] = (dSoTot[d] ?? 0) + p.qty; bump(dCh, ch, d, p.qty); bumpSku(p.sku, ch, d, p.qty);
     }
-  }
+  } }
+  const tg = stnWb ? sheetGrid(stnWb) : []; const TH = stnWb ? findHeader(tg, ["From Warehouse", "To Warehouse", "Status", "Qty", "Date", "FG Code"]) : { row: -1, H: {} as Record<string, number> };
   for (let i = TH.row + 1; i < tg.length; i++) {
     const r = tg[i]; if (!r || r[TH.H["From Warehouse"]] !== NODE || txt(r[TH.H["Status"]]) === "Cancelled") continue;
     const q = num(r[TH.H["Qty"]]); if (q === 0) continue;
@@ -430,22 +437,23 @@ export function computeDaily(soWb: XLSX.WorkBook, stnWb: XLSX.WorkBook, mp: Mapp
   const dailySkuChannel: Record<string, Record<string, DaySeries>> = {};
   for (const s of Object.keys(dSkuSer)) { dailySkuChannel[s] = {}; for (const k of Object.keys(dSkuSer[s])) dailySkuChannel[s][k] = ser(dSkuSer[s][k]); }
   return { daily, dailyChannel, dailyInternal: { central: ser(dInt.central), quarantine: ser(dInt.quarantine) }, dailySkuChannel,
-    monthKey: `${actY}-${String(actM).padStart(2, "0")}`, month: `${MONTHS[actM - 1]} ${actY}`, daysInMonth: new Date(actY, actM, 0).getDate(), daysElapsed: days.length ? Math.max(...days) : new Date(actY, actM, 0).getDate() };
+    monthKey: mi.monthKey, month: mi.month, daysInMonth: mi.daysInMonth, daysElapsed: days.length ? Math.max(...days) : 0 };
 }
 
 // ── Assemble the full snapshot from the files + mappers ──────────────────────
 //   `forecast` is optional: if omitted, pass `presetForecast` (e.g. rebuilt from
 //   the month's last published snapshot) so daily re-computes need only the 3
 //   movement files.
-export type EngineFiles = { forecast?: XLSX.WorkBook; so: XLSX.WorkBook; stn: XLSX.WorkBook; ship?: XLSX.WorkBook };
-export function computeSnapshot(files: EngineFiles, mp: Mappers, presetForecast?: Forecast): { snapshot: Snapshot; diagnostics: Record<string, number>; forecast: Forecast } {
-  const so = computeSO(files.so, mp);
-  const stn = computeSTN(files.stn, mp);
-  const qcom = computeQcom(files.so, mp);
+export type EngineFiles = { forecast?: XLSX.WorkBook; so?: XLSX.WorkBook; stn?: XLSX.WorkBook; ship?: XLSX.WorkBook };
+export function computeSnapshot(files: EngineFiles, mp: Mappers, monthKey: string, presetForecast?: Forecast): { snapshot: Snapshot; diagnostics: Record<string, number>; forecast: Forecast } {
+  const mi = monthInfoFromKey(monthKey);
+  const so = computeSO(files.so, mp, mi);
+  const stn = computeSTN(files.stn, mp, mi);
+  const qcom = computeQcom(files.so, mp, mi);
   const fc = files.forecast ? parseForecast(files.forecast, mp) : presetForecast;
   if (!fc) throw new Error("No forecast available for this month — upload the Forecast file once, then daily updates can reuse it.");
-  const ship = files.ship ? computeShipsheet(files.so, files.ship, mp) : null;
-  const dly = computeDaily(files.so, files.stn, mp);
+  const ship = computeShipsheet(files.so, files.ship, mp);
+  const dly = computeDaily(files.so, files.stn, mp, mi);
 
   const chanOf = (m: SkuChanAgg, sku: string, ch: string) => m.get(sku)?.get(ch) ?? 0;
 
@@ -512,3 +520,4 @@ export function computeSnapshot(files: EngineFiles, mp: Mappers, presetForecast?
   };
   return { snapshot, diagnostics, forecast: fc };
 }
+
