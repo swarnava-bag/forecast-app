@@ -5,7 +5,7 @@
 //   browser using your live Mapper Studio (sku_master + combo_mapper_rows) plus
 //   the editable movement maps; the compact snapshot is then published.
 // ============================================================================
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import AppShell from "@/app/components/AppShell";
@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { downloadTemplate } from "../templates";
 import { loadMappers } from "../mappers";
 import { computeSnapshot, forecastFromSnapshot, EngineFiles } from "../engine";
+import { extractForecastRows } from "../pushForecast";
 import type { Snapshot } from "../lib";
 import { fmtQty, fmtPct, pctOf, fmtInt } from "../lib";
 
@@ -39,15 +40,54 @@ export default function ComputePage() {
   const [result, setResult] = useState<{ snapshot: Snapshot; diagnostics: Record<string, number>; stats: Record<string, number>; warnings: string[]; fcSource: string } | null>(null);
   const [published, setPublished] = useState<string | null>(null);
   const [targetMonth, setTargetMonth] = useState<string>(CURRENT_MONTH);
+  const [pushing, setPushing] = useState(false);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
+  const [savedFiles, setSavedFiles] = useState<{ name: string; path: string; size: number | null; url: string | null; updated: string | null }[]>([]);
+  const [savingSlot, setSavingSlot] = useState<string | null>(null);
   const refs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const loadSaved = useCallback(async (month: string) => {
+    try { const r = await fetch(`/api/movement/save-file?month=${month}`, { cache: "no-store" }); const d = await r.json(); setSavedFiles(r.ok ? (d.files ?? []) : []); }
+    catch { setSavedFiles([]); }
+  }, []);
+  useEffect(() => { loadSaved(targetMonth); }, [targetMonth, loadSaved]);
 
   const pick = useCallback(async (slot: Slot, file: File) => {
     setError(null); setResult(null); setPublished(null);
     try {
       const wb = XLSX.read(await file.arrayBuffer());
       setFiles((f) => ({ ...f, [slot]: { name: file.name, wb } }));
-    } catch (e) { setError(`${slot}: ${e instanceof Error ? e.message : String(e)}`); }
-  }, []);
+    } catch (e) { setError(`${slot}: ${e instanceof Error ? e.message : String(e)}`); return; }
+    // persist the raw file so it is never lost (kept per month + slot)
+    setSavingSlot(slot);
+    try {
+      const fd = new FormData(); fd.append("file", file); fd.append("monthKey", targetMonth); fd.append("slot", slot);
+      const r = await fetch("/api/movement/save-file", { method: "POST", body: fd });
+      if (r.ok) await loadSaved(targetMonth);
+    } catch { /* saving is best-effort; compute still works */ }
+    finally { setSavingSlot(null); }
+  }, [targetMonth, loadSaved]);
+
+  // Push the loaded forecast to the platform's forecast for the target month.
+  // The movement forecast IS the platform forecast — this makes it the current
+  // published forecast (and adds any channel the file introduces).
+  const pushToPlatform = useCallback(async () => {
+    setPushMsg(null); setError(null);
+    if (!files.forecast) { setError("Load the Forecast file first — long-format with columns: New Master SKU · Platform · Channel · Forecast."); return; }
+    setPushing(true);
+    try {
+      const rows = extractForecastRows(files.forecast.wb, XLSX);
+      const r = await fetch("/api/movement/push-forecast", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ monthKey: targetMonth, rows }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `Push failed (${r.status})`);
+      const bits = [`${fmtInt(d.inserted)} rows → ${labelOf(targetMonth)}`, `${fmtQty(d.totalQty)} units`];
+      if (d.channelsCreated?.length) bits.push(`added ${d.channelsCreated.length} channel(s): ${d.channelsCreated.join(", ")}`);
+      if (d.clustersMissing?.length) bits.push(`⚠ unknown cluster(s) skipped: ${d.clustersMissing.join(", ")}`);
+      if (d.skusSkipped?.length) bits.push(`${d.skusSkipped.length} SKU(s) not in SKU Master skipped`);
+      setPushMsg(bits.join(" · "));
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setPushing(false); }
+  }, [files.forecast, targetMonth]);
 
   const compute = async () => {
     setError(null); setResult(null); setPublished(null);
@@ -121,7 +161,12 @@ export default function ComputePage() {
           <select value={targetMonth} onChange={(e) => setTargetMonth(e.target.value)} className="px-3 py-1.5 rounded-lg text-sm" style={{ ...surface, color: "var(--atlas-ink)", cursor: "pointer" }}>
             {MONTH_OPTIONS.map((k) => <option key={k} value={k}>{labelOf(k)}</option>)}
           </select>
+          <button onClick={pushToPlatform} disabled={pushing || !files.forecast} title={files.forecast ? "Write this forecast to the platform's forecast for the selected month" : "Load the Forecast file first"}
+            className="px-4 py-1.5 rounded-lg font-mono" style={{ background: files.forecast ? "var(--atlas-green)" : "var(--atlas-surface-soft)", color: files.forecast ? "#fff" : "var(--atlas-ink-faint)", border: "none", fontSize: 12, letterSpacing: "0.04em", cursor: files.forecast && !pushing ? "pointer" : "not-allowed", whiteSpace: "nowrap" }}>
+            {pushing ? "Pushing…" : "↑ Push forecast to platform"}
+          </button>
         </div>
+        {pushMsg && <div className="p-3 rounded-xl" style={{ background: "var(--atlas-green-bg)", border: "1px solid var(--atlas-line)", color: "var(--atlas-green)", fontSize: 12.5 }}>✓ Pushed to platform forecast — {pushMsg}. <Link href="/dashboard" style={{ color: "var(--atlas-accent)" }}>Open platform →</Link></div>}
 
         {/* file slots */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -129,7 +174,8 @@ export default function ComputePage() {
             <div key={s.k} className="p-3 rounded-xl" style={surface}>
               <div className="flex items-center justify-between mb-2">
                 <span style={{ fontSize: 13, color: "var(--atlas-ink)", fontWeight: 600 }}>{s.label}{s.required ? <span style={{ color: "var(--atlas-red)" }}> *</span> : <span style={{ fontSize: 10.5, color: "var(--atlas-ink-faint)", fontWeight: 400 }}> · {s.hint}</span>}</span>
-                {files[s.k] && <span style={{ fontSize: 11, color: "var(--atlas-green)" }}>✓ loaded</span>}
+                {savingSlot === s.k ? <span style={{ fontSize: 11, color: "var(--atlas-accent)" }}>saving…</span>
+                  : files[s.k] ? <span style={{ fontSize: 11, color: "var(--atlas-green)" }}>✓ loaded{savedFiles.some((f) => f.name.startsWith(`${s.k}-`)) ? " · saved" : ""}</span> : null}
               </div>
               <input ref={(el) => { refs.current[s.k] = el; }} type="file" accept=".xlsx,.xlsb,.xlsm,.csv" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(s.k, f); }} />
               <button onClick={() => refs.current[s.k]?.click()} className="w-full px-3 py-2 rounded-lg text-left" style={{ background: "var(--atlas-surface-soft)", border: `1px dashed ${files[s.k] ? "var(--atlas-green)" : "var(--atlas-line)"}`, cursor: "pointer", fontSize: 12, color: files[s.k] ? "var(--atlas-ink)" : "var(--atlas-ink-muted)" }}>
@@ -138,6 +184,21 @@ export default function ComputePage() {
             </div>
           ))}
         </div>
+
+        {savedFiles.length > 0 && (
+          <div className="p-3 rounded-xl" style={surface}>
+            <div className={mono} style={{ fontSize: 10, letterSpacing: "0.08em", color: "var(--atlas-ink-muted)", marginBottom: 8 }}>
+              Saved raw files · {labelOf(targetMonth)} <span style={{ textTransform: "none", letterSpacing: 0, color: "var(--atlas-ink-faint)" }}>— only the latest per month is kept</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {savedFiles.map((f) => (
+                <a key={f.path} href={f.url ?? undefined} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg" style={{ background: "var(--atlas-surface-soft)", border: "1px solid var(--atlas-line)", color: "var(--atlas-ink-soft)", fontSize: 12, textDecoration: "none" }}>
+                  ↓ {f.name}{f.size ? ` · ${(f.size / 1048576).toFixed(1)}MB` : ""}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={compute} disabled={!!busy} className="px-4 py-2 rounded-lg font-mono" style={{ background: "var(--atlas-accent)", color: "#fff", border: "none", fontSize: 12, letterSpacing: "0.04em", cursor: busy ? "wait" : "pointer", opacity: busy ? 0.7 : 1 }}>

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import * as XLSX from "xlsx";
 import Link from "next/link";
 import AppShell from "@/app/components/AppShell";
+import OneShotForecastUpload from "./OneShotForecastUpload";
 
 type Profile = { id: string; email: string; full_name: string; role: string };
 type Channel = { id: string; name: string; cluster_id: string };
@@ -730,9 +731,13 @@ export default function UploadPage() {
     <AppShell>
       <div className="max-w-6xl mx-auto">
         <h2 className="text-2xl font-bold mb-2">Upload Forecast</h2>
-        <p className="text-sm text-atlas-ink-muted mb-8">
+        <p className="text-sm text-atlas-ink-muted mb-6">
           Upload forecast data with 3-month rolling quantities. Data is saved as draft until admin publishes.
         </p>
+
+        {profile?.role === "admin" && (
+          <div className="mb-8"><OneShotForecastUpload /></div>
+        )}
 
         {successMsg && (
           <div className="mb-6 p-4 bg-green-900/50 border border-green-500 rounded-xl">

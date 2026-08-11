@@ -16,17 +16,27 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
 const DIR = path.join(process.cwd(), "public", "data");
 const TABLE = "movement_snapshots";
+// The snapshot JSON lives in Storage, not the table's jsonb column: writing a
+// large jsonb row is pathologically slow here (it scales with size — ~17s/MB —
+// a sign the column is replicated/GIN-indexed). Storage writes are ~constant.
+const SNAP_BUCKET = "movement-files";
+const snapPath = (key: string) => `_snapshots/${key}.json`;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const label = (key: string) => { const [y, m] = key.split("-").map(Number); return m ? `${MONTHS[m - 1]} ${y}` : key; };
 const fileFor = (key: string) => path.join(DIR, `movement-${key}.json`);
 
 async function supa() {
   try { return await createClient(); } catch { return null; }
+}
+function serviceClient(): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return url && key ? createServiceClient(url, key) : null;
 }
 
 // ── list ──────────────────────────────────────────────────────────────────────
@@ -52,7 +62,16 @@ async function readMonth(key: string) {
   const sb = await supa();
   if (sb) {
     const { data, error } = await sb.from(TABLE).select("data").eq("month_key", key).maybeSingle();
-    if (!error && data?.data) return data.data;
+    if (!error && data?.data) {
+      const d = data.data as Record<string, unknown>;
+      // snapshot stored in Storage → fetch the JSON; else it's a legacy inline row
+      if (d && typeof d === "object" && typeof d._stored === "string") {
+        const svc = serviceClient();
+        if (svc) { const { data: blob } = await svc.storage.from(SNAP_BUCKET).download(d._stored); if (blob) { try { return JSON.parse(await blob.text()); } catch { /* fall through */ } } }
+      } else {
+        return data.data;
+      }
+    }
   }
   try { return JSON.parse(await fs.readFile(fileFor(key), "utf-8")); } catch { /* fall through */ }
   if (key === "2026-06") { try { return JSON.parse(await fs.readFile(path.join(DIR, "movement-jun26.json"), "utf-8")); } catch { /* */ } }
@@ -84,7 +103,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Body must be { monthKey, snapshot } with a valid YYYY-MM month" }, { status: 400 });
   }
 
-  // try Supabase first
+  // Fast path: store the snapshot JSON in Storage, keep only a light pointer row
+  // in the table (avoids the slow large-jsonb write).
+  const svc = serviceClient();
+  if (svc) {
+    const p = snapPath(monthKey);
+    const { error: sErr } = await svc.storage.from(SNAP_BUCKET).upload(p, Buffer.from(JSON.stringify(snap)), { upsert: true, contentType: "application/json" });
+    if (!sErr) {
+      const { error: iErr } = await svc.from(TABLE).upsert({ month_key: monthKey, month_label: monthLabel, data: { _stored: p }, published_at: new Date().toISOString(), published_by: user.id });
+      if (!iErr) return NextResponse.json({ ok: true, monthKey, storage: "supabase-storage", publishedAt: new Date().toISOString() });
+    }
+  }
+
+  // Fallback: inline jsonb upsert (slower, but works without the service role)
   const { error: upErr } = await sb!.from(TABLE).upsert({ month_key: monthKey, month_label: monthLabel, data: snap, published_at: new Date().toISOString(), published_by: user.id });
   if (!upErr) return NextResponse.json({ ok: true, monthKey, storage: "supabase", publishedAt: new Date().toISOString() });
 
