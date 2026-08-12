@@ -103,10 +103,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Body must be { monthKey, snapshot } with a valid YYYY-MM month" }, { status: 400 });
   }
 
-  // Fast path: store the snapshot JSON in Storage, keep only a light pointer row
-  // in the table (avoids the slow large-jsonb write).
+  // Fast path (opt-in): store the snapshot JSON in Storage, keep only a light
+  // pointer row in the table (avoids the slow large-jsonb write). Guarded by an
+  // env flag because a deployment reading `data` directly would choke on the
+  // pointer — only enable once every reader runs this route's `_stored` handling.
   const svc = serviceClient();
-  if (svc) {
+  if (svc && process.env.MOVEMENT_SNAPSHOT_STORAGE === "1") {
     const p = snapPath(monthKey);
     const { error: sErr } = await svc.storage.from(SNAP_BUCKET).upload(p, Buffer.from(JSON.stringify(snap)), { upsert: true, contentType: "application/json" });
     if (!sErr) {
