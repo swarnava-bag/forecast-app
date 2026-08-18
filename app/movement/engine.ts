@@ -23,6 +23,11 @@ import * as XLSX from "xlsx";
 import type { Snapshot, OverallRow, ChannelRow, QcomRow, DailyRow } from "./lib";
 
 export const NODE = "YB FG Warehouse";
+// STN leaves the business two ways: from the mother node, or directly from the
+// Central FG warehouse (a major CFA dispatch point). Both are "ex-node" sources.
+// The Central Production *lines* are factory and never count. Inter-node hops
+// (Central→YB FG) don't reach a channel, so they drop out naturally — no double count.
+export const STN_SOURCES = new Set([NODE, "Central"]);
 export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // ── injected mapper surface ──────────────────────────────────────────────────
@@ -189,12 +194,29 @@ export function computeQcom(wb: XLSX.WorkBook | undefined, mp: Mappers, mi: Mont
 //   from the matched SO line. Reverses next month when the SO closes.
 const normPO = (v: unknown) => txt(v).toUpperCase().replace(/\(.*?\)/g, "").replace(/[^A-Z0-9]/g, "");
 export type ShipResult = { bySku: SkuAgg; bySkuChan: SkuChanAgg; addedBack: number; matchedPOs: number; sheetPOs: number };
+// The shipsheet is only mined for the set of shipped PO / reference numbers; the
+// column is named differently across export formats (Consolidate vs Clickpost/
+// pivot). Find the first sheet+column that looks like a PO reference.
+const SHIP_PO_COLS = ["PO Number", "Reference Order Number", "PO No", "Reference No", "Reference", "PO"];
+function findShipPoColumn(wb: XLSX.WorkBook): { g: Grid; row: number; col: number } | null {
+  for (const name of wb.SheetNames) {
+    const g = sheetGrid(wb, name);
+    for (let i = 0; i < Math.min(g.length, 15); i++) {
+      const H: Record<string, number> = {};
+      (g[i] || []).forEach((h, j) => { if (h != null && String(h).trim() !== "") H[String(h).trim()] = j; });
+      for (const c of SHIP_PO_COLS) if (c in H) return { g, row: i, col: H[c] };
+    }
+  }
+  return null;
+}
 export function computeShipsheet(soWb: XLSX.WorkBook | undefined, shipWb: XLSX.WorkBook | undefined, mp: Mappers): ShipResult {
   if (!soWb || !shipWb) return { bySku: new Map(), bySkuChan: new Map(), addedBack: 0, matchedPOs: 0, sheetPOs: 0 };
-  // 1) PO set from the shipsheet (the detail sheet — consolidate has pivots too)
-  const SH = findSheet(shipWb, ["PO Number", "Qty"]);
+  // 1) PO set from the shipsheet. If the format is unrecognised, skip the add-back
+  //    (return empty) rather than blocking the whole compute.
+  const SH = findShipPoColumn(shipWb);
+  if (!SH) return { bySku: new Map(), bySkuChan: new Map(), addedBack: 0, matchedPOs: 0, sheetPOs: 0 };
   const shipPOs = new Set<string>();
-  for (let i = SH.row + 1; i < SH.g.length; i++) { const po = normPO(SH.g[i]?.[SH.H["PO Number"]]); if (po) shipPOs.add(po); }
+  for (let i = SH.row + 1; i < SH.g.length; i++) { const po = normPO(SH.g[i]?.[SH.col]); if (po) shipPOs.add(po); }
   // 2) SO lines under those POs, ex-node, with open qty
   const g = sheetGrid(soWb);
   const { row, H } = findHeader(g, ["Warehouse", "PO No", "Order Qty", "Dispatch Qty", "Product SKU", "Party Name"]);
@@ -232,17 +254,22 @@ export function computeSTN(wb: XLSX.WorkBook | undefined, mp: Mappers, mi: Month
     // Count all ex-node transfers except Cancelled. GT (and some MT/B2C) is
     // booked to a dummy account as 'Raised', not 'Closed', so a Closed-only
     // filter drops it — the source workbook counts everything but Cancelled.
-    if (r[H["From Warehouse"]] !== NODE || txt(r[H["Status"]]) === "Cancelled") continue;
+    const from = txt(r[H["From Warehouse"]]);
+    if (!STN_SOURCES.has(from) || txt(r[H["Status"]]) === "Cancelled") continue;
     if (!inMonth(r[H["Date"]], mi)) continue;   // scope to the selected month
     const q = num(r[H["Qty"]]); if (q === 0) continue;
     rawClosedExNode += q;
-    // Internal transfers (not channel supply): stock sent to Quarantine, or back
-    // to Central / factory for repacking. Tallied (total + per SKU) for visibility.
     const to = txt(r[H["To Warehouse"]]);
-    const internal = /quarantine/i.test(to) ? "q" : /central/i.test(to) ? "c" : "";
-    if (internal) {
-      if (internal === "q") internalQuarantine += q; else internalCentral += q;
-      for (const p of resolveLine(txt(r[H["FG Code"]]), q, mp)) add(internal === "q" ? quarantineBySku : centralBySku, p.sku, p.qty);
+    // Internal transfers (not channel supply): stock sent to Quarantine, or back to
+    // Central / factory for repacking. Tracked only for the MOTHER NODE's own outflow
+    // — Central→Central / Central→node aren't channel supply and must not inflate the
+    // repacking lines (they simply drop out below since they aren't channel-mapped).
+    if (from === NODE) {
+      const internal = /quarantine/i.test(to) ? "q" : /central/i.test(to) ? "c" : "";
+      if (internal) {
+        if (internal === "q") internalQuarantine += q; else internalCentral += q;
+        for (const p of resolveLine(txt(r[H["FG Code"]]), q, mp)) add(internal === "q" ? quarantineBySku : centralBySku, p.sku, p.qty);
+      }
     }
     // Only transfers to a channel-mapped destination are real outbound supply.
     const channel = mp.warehouseToChannel(to);
@@ -414,15 +441,19 @@ export function computeDaily(soWb: XLSX.WorkBook | undefined, stnWb: XLSX.WorkBo
   } }
   const tg = stnWb ? sheetGrid(stnWb) : []; const TH = stnWb ? findHeader(tg, ["From Warehouse", "To Warehouse", "Status", "Qty", "Date", "FG Code"]) : { row: -1, H: {} as Record<string, number> };
   for (let i = TH.row + 1; i < tg.length; i++) {
-    const r = tg[i]; if (!r || r[TH.H["From Warehouse"]] !== NODE || txt(r[TH.H["Status"]]) === "Cancelled") continue;
+    const r = tg[i]; if (!r) continue;
+    const from = txt(r[TH.H["From Warehouse"]]);
+    if (!STN_SOURCES.has(from) || txt(r[TH.H["Status"]]) === "Cancelled") continue;
     const q = num(r[TH.H["Qty"]]); if (q === 0) continue;
     const d = dayOf(r[TH.H["Date"]]); if (d == null) continue;
     const to = txt(r[TH.H["To Warehouse"]]);
-    const internal = /quarantine/i.test(to) ? "quarantine" : /central/i.test(to) ? "central" : "";
-    if (internal) {
-      dInt[internal][d] = (dInt[internal][d] ?? 0) + q;
-      for (const p of resolveLine(txt(r[TH.H["FG Code"]]), q, mp)) bumpSku(p.sku, internal === "quarantine" ? "__quarantine" : "__central", d, p.qty);
-      continue;
+    if (from === NODE) {
+      const internal = /quarantine/i.test(to) ? "quarantine" : /central/i.test(to) ? "central" : "";
+      if (internal) {
+        dInt[internal][d] = (dInt[internal][d] ?? 0) + q;
+        for (const p of resolveLine(txt(r[TH.H["FG Code"]]), q, mp)) bumpSku(p.sku, internal === "quarantine" ? "__quarantine" : "__central", d, p.qty);
+        continue;
+      }
     }
     const ch = mp.warehouseToChannel(to); if (!ch) continue;
     for (const p of resolveLine(txt(r[TH.H["FG Code"]]), q, mp)) {
