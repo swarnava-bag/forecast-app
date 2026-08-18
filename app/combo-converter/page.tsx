@@ -15,6 +15,19 @@ type ConversionResult = { consolidated: ConsolidatedRow[]; singles: SinglesRow[]
 
 // ========== PARSING ==========
 
+// json_to_sheet derives the column order from object keys — but V8 orders
+// integer-like keys (e.g. numeric date-serial month headers such as 46204) BEFORE
+// string keys, which silently shoves "Master SKU" out of the first column. Build
+// the sheet from an explicit header so the order is always deterministic; any keys
+// not listed (P1, P2 …) are appended after, in first-seen order.
+function orderedSheet(rows: Record<string, unknown>[], header: string[]): XLSX.WorkSheet {
+  const cols = [...header];
+  const seen = new Set(cols);
+  for (const r of rows) for (const k of Object.keys(r)) if (!seen.has(k)) { seen.add(k); cols.push(k); }
+  const aoa = [cols, ...rows.map((r) => cols.map((c) => (r[c] === undefined ? "" : r[c])))];
+  return XLSX.utils.aoa_to_sheet(aoa as unknown[][]);
+}
+
 function parseMapper(ws: XLSX.WorkSheet): { mapperRows: MapperRow[]; productCount: number } {
   const json = XLSX.utils.sheet_to_json<any>(ws, { header: 1 });
   if (json.length < 2) return { mapperRows: [], productCount: 0 };
@@ -496,7 +509,7 @@ function buildOutputExcel(result: ConversionResult, mapperRows: MapperRow[], sku
     r.products.forEach((p, i) => { if (p) row[`P${i + 1}`] = p; });
     return row;
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consData), "Consolidated");
+  XLSX.utils.book_append_sheet(wb, orderedSheet(consData, ["Master SKU", ...result.qtyColumns, "Mapper_Status", "Combo"]), "Consolidated");
 
   // 2. Singles (existing — adds diagnostics for missing FG codes)
   const singData = result.singles.map((r) => {
@@ -514,7 +527,7 @@ function buildOutputExcel(result: ConversionResult, mapperRows: MapperRow[], sku
     for (const col of result.qtyColumns) row[col] = Math.round((r.quantities[col] || 0) * 100) / 100;
     return row;
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(singData), "Singles");
+  XLSX.utils.book_append_sheet(wb, orderedSheet(singData, ["Master SKU", "FG Code", "Product Name", "Status", ...result.qtyColumns]), "Singles");
 
   // 3. NEW: Consolidated_FG_Codes — mirrors Consolidated but with FG codes
   // For combos: own FG from combo_mapper_rows, components (P1..Pn) as FG codes from sku_master
@@ -567,7 +580,7 @@ function buildOutputExcel(result: ConversionResult, mapperRows: MapperRow[], sku
     }
     return row;
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consFgData), "Consolidated_FG_Codes");
+  XLSX.utils.book_append_sheet(wb, orderedSheet(consFgData, ["Master SKU", ...result.qtyColumns, "Combo", "FG Code"]), "Consolidated_FG_Codes");
 
   // 4. NEW: Diagnostics — all issues in one place
   result.consolidated.filter((r) => r.mapper_status === "NOT IN MAPPER").forEach((r) => {
@@ -648,7 +661,7 @@ function buildNtoOutputExcel(result: NtoResult, mapperRows: MapperRow[], skuMap:
     row["Status"] = r.status;
     return row;
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(singlesData), "Singles_NTO");
+  XLSX.utils.book_append_sheet(wb, orderedSheet(singlesData, ["Master SKU", "FG Code", "Product Name", "MRP", ...result.ntoColumns, "Status"]), "Singles_NTO");
 
   // 2. Consolidated_Input — the raw combo input with NTO pre-split
   const consData = result.consolidated.map((r) => {
@@ -657,7 +670,7 @@ function buildNtoOutputExcel(result: NtoResult, mapperRows: MapperRow[], skuMap:
     r.products.forEach((p, i) => { if (p) row[`P${i + 1}`] = p; });
     return row;
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consData), "Consolidated_Input");
+  XLSX.utils.book_append_sheet(wb, orderedSheet(consData, ["Master SKU", "Mapper Status", "Combo", ...result.ntoColumns]), "Consolidated_Input");
 
   // 3. Diagnostics — CRITICAL first (blocked combos), then warnings
   const diag: Array<{ Type: string; "Combo SKU": string; Details: string }> = [];
