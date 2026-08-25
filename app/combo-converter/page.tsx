@@ -135,7 +135,9 @@ function runConversion(comboRows: ComboInputRow[], mapperRows: MapperRow[], qtyC
       for (const row of consolidated) { for (const p of row.products) { if (p === sku) total += row.quantities[col] || 0; } }
       quantities[col] = total;
     }
-    if (Object.values(quantities).some((v) => v > 0))
+    // Keep any non-zero row — negatives count too (differences / adjustments are
+    // valid inputs to convert). Only all-zero rows are dropped.
+    if (Object.values(quantities).some((v) => v !== 0))
       singles.push({ master_sku: sku, quantities, status: notInMapper.has(sku) ? "NOT IN MAPPER" : "Converted" });
   }
   return { consolidated, singles, qtyColumns, productCount, warnings };
