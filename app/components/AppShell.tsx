@@ -23,6 +23,7 @@ const MAIN_NAV: NavItem[] = [
   { href: "/master-data", label: "Master Data", icon: MasterDataIcon },
   { href: "/analytics", label: "Analytics", icon: AnalyticsIcon },
   { href: "/movement", label: "Forecast vs Movement", icon: MovementIcon },
+  { href: "/sales", label: "Sales Dashboard", icon: SalesIcon },
   { href: "#", label: "Base Data", icon: BaseDataIcon, comingSoon: true },
   { href: "/over-under-check", label: "Forecast Check", icon: ForecastCheckIcon },
 ];
@@ -391,6 +392,13 @@ function MovementIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 12h13" /><path d="M12 5l7 7-7 7" /><path d="M3 6v12" />
+    </svg>
+  );
+}
+function SalesIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="20" x2="21" y2="20" /><rect x="6" y="11" width="3" height="7" /><rect x="11" y="6" width="3" height="12" /><rect x="16" y="13" width="3" height="5" />
     </svg>
   );
 }
