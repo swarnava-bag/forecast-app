@@ -104,6 +104,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const isAdmin = profile?.role === "admin";
   const isViewer = profile?.role === "viewer";
+
+  // Viewers keep the app shell but see Dashboard only. Must stay in sync with
+  // VIEWER_ALLOWED_PATHS in lib/supabase/middleware.ts, which refuses every
+  // other route server-side.
+  const visibleMainNav = isViewer
+    ? MAIN_NAV.filter((item) => item.href === "/dashboard")
+    : MAIN_NAV;
   const isAdminPage = pathname.startsWith("/admin");
 
   function toggleCollapse() {
@@ -128,33 +135,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         supply_chain: "Supply Chain",
         viewer: "Viewer",
       } as Record<string, string>)[role] || role
-    );
-  }
-
-  // Viewers have no access to any data in the app. They get a blank page
-  // asking them to contact an admin — no sidebar, no nav, and `children`
-  // is never rendered, so no page ever mounts its queries.
-  if (isViewer) {
-    return (
-      <div className="atlas-shell-locked">
-        <div className="atlas-locked-card">
-          <h1 className="font-display atlas-locked-title">
-            No <em>access</em> yet.
-          </h1>
-          <p className="atlas-locked-body">
-            Your account does not have access to this site. Please contact an
-            administrator to be given access.
-          </p>
-          {profile && (
-            <p className="atlas-locked-meta">
-              Signed in as {profile.email}
-            </p>
-          )}
-          <button onClick={handleSignOut} className="atlas-locked-signout">
-            Sign out
-          </button>
-        </div>
-      </div>
     );
   }
 
@@ -197,7 +177,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Main nav */}
         <nav className="atlas-sidebar-nav">
           <div className="atlas-sidebar-section-label">Navigation</div>
-          {MAIN_NAV.map((item) => {
+          {visibleMainNav.map((item) => {
             if (item.comingSoon) {
               return (
                 <div

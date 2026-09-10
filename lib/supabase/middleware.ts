@@ -1,6 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// The only routes a "viewer" may reach. Dashboard is the single section they
+// see; /account/password is allowed so someone signed in with an
+// admin-issued temporary password can still set their own.
+// Everything else — every other page and every API route — is refused.
+const VIEWER_ALLOWED_PATHS = ["/dashboard", "/account/password"];
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -67,24 +73,29 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Viewers have no access to any data. Enforce it server-side as well as in
-  // AppShell, so API routes cannot be called directly. They are funnelled to
-  // /dashboard, where AppShell renders the "contact an admin" screen.
+  // Viewers keep the app shell but see Dashboard only. AppShell hides the
+  // other nav tabs; this refuses the routes server-side so they cannot be
+  // reached by typing a URL or calling the API directly.
   if (user && isProtectedRoute) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    const path = request.nextUrl.pathname;
+    const isAllowed = VIEWER_ALLOWED_PATHS.some(
+      (allowed) => path === allowed || path.startsWith(`${allowed}/`)
+    );
 
-    if (profile?.role === "viewer") {
-      if (request.nextUrl.pathname.startsWith("/api/")) {
-        return NextResponse.json(
-          { error: "Your account does not have access. Contact an administrator." },
-          { status: 403 }
-        );
-      }
-      if (request.nextUrl.pathname !== "/dashboard") {
+    if (!isAllowed) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.role === "viewer") {
+        if (path.startsWith("/api/")) {
+          return NextResponse.json(
+            { error: "Your account does not have access to this section. Contact an administrator." },
+            { status: 403 }
+          );
+        }
         const url = request.nextUrl.clone();
         url.pathname = "/dashboard";
         url.search = "";
