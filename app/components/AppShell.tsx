@@ -103,6 +103,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const isAdmin = profile?.role === "admin";
+  const isViewer = profile?.role === "viewer";
+
+  // Viewers keep the app shell but see Dashboard only. Must stay in sync with
+  // VIEWER_ALLOWED_PATHS in lib/supabase/middleware.ts, which refuses every
+  // other route server-side.
+  const visibleMainNav = isViewer
+    ? MAIN_NAV.filter((item) => item.href === "/dashboard")
+    : MAIN_NAV;
   const isAdminPage = pathname.startsWith("/admin");
 
   function toggleCollapse() {
@@ -169,7 +177,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Main nav */}
         <nav className="atlas-sidebar-nav">
           <div className="atlas-sidebar-section-label">Navigation</div>
-          {MAIN_NAV.map((item) => {
+          {visibleMainNav.map((item) => {
             if (item.comingSoon) {
               return (
                 <div
@@ -243,7 +251,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </span>
               </div>
             </div>
-            <button onClick={handleSignOut} className="atlas-sidebar-signout">
+            <Link
+              href="/account/password"
+              className="atlas-sidebar-signout"
+              title="Change password"
+            >
+              <KeyIcon />
+            </Link>
+            <button onClick={handleSignOut} className="atlas-sidebar-signout" title="Sign out">
               <SignOutIcon />
             </button>
           </div>
@@ -402,6 +417,15 @@ function SalesIcon() {
     </svg>
   );
 }
+function KeyIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="M10.7 12.3 21 2" /><path d="m16.5 6.5 3 3" />
+    </svg>
+  );
+}
+
 function SignOutIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

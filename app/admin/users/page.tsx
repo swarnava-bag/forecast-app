@@ -42,6 +42,10 @@ export default function ManageUsersPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -158,6 +162,42 @@ export default function ManageUsersPage() {
     setTimeout(() => setSuccessMsg(null), 3000);
   }
 
+  async function handleResetPassword() {
+    if (!selectedUser) return;
+    setResettingPassword(true);
+    setError(null);
+    setShowResetConfirm(false);
+
+    const res = await fetch("/api/admin/reset-user-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: selectedUser.id }),
+    });
+
+    const data = await res.json();
+    setResettingPassword(false);
+
+    if (!res.ok) {
+      setError(data.error || "Failed to reset password");
+      return;
+    }
+
+    setCopied(false);
+    setTempPassword(data.tempPassword);
+  }
+
+  async function copyTempPassword() {
+    if (!tempPassword) return;
+    try {
+      await navigator.clipboard.writeText(tempPassword);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard blocked (non-HTTPS origin or denied permission) — the
+      // password is on screen to copy manually, so just leave the label alone.
+    }
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center h-64"><p className="text-atlas-ink-muted">Loading users...</p></div>;
   }
@@ -206,14 +246,24 @@ export default function ManageUsersPage() {
                   <h3 className="text-lg font-semibold">{selectedUser.full_name || "No name"}</h3>
                   <p className="text-sm text-atlas-ink-muted">{selectedUser.email}</p>
                 </div>
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  disabled={deleting || selectedUser.id === currentUserId}
-                  title={selectedUser.id === currentUserId ? "You cannot delete your own account" : undefined}
-                  className="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-red-400 border border-red-500/50 rounded-lg hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  {deleting ? "Deleting..." : "Delete User"}
-                </button>
+                <div className="flex-shrink-0 flex items-center gap-2">
+                  <button
+                    onClick={() => setShowResetConfirm(true)}
+                    disabled={resettingPassword}
+                    title="Generate a temporary password for this user"
+                    className="px-3 py-1.5 text-sm font-medium text-blue-400 border border-blue-500/50 rounded-lg hover:bg-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    {resettingPassword ? "Generating..." : "Reset Password"}
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={deleting || selectedUser.id === currentUserId}
+                    title={selectedUser.id === currentUserId ? "You cannot delete your own account" : undefined}
+                    className="px-3 py-1.5 text-sm font-medium text-red-400 border border-red-500/50 rounded-lg hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    {deleting ? "Deleting..." : "Delete User"}
+                  </button>
+                </div>
               </div>
               <div className="p-6 space-y-6">
                 {/* Role Selection */}
@@ -292,6 +342,74 @@ export default function ManageUsersPage() {
           )}
         </div>
       </div>
+
+      {/* Reset Password Confirmation Modal */}
+      {showResetConfirm && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl p-6 w-full max-w-sm mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-atlas-ink mb-2">Reset Password?</h3>
+            <p className="text-sm text-atlas-ink-muted mb-1">
+              A new temporary password will be generated for:
+            </p>
+            <p className="text-sm font-medium text-atlas-ink mb-1">{selectedUser.full_name || "No name"}</p>
+            <p className="text-xs text-atlas-ink-faint mb-5">{selectedUser.email}</p>
+            <p className="text-xs text-amber-400 mb-6">
+              Their current password stops working immediately. You will need to send them the
+              temporary password yourself — no email is sent.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 px-4 py-2 text-sm font-medium text-atlas-ink bg-atlas-surface-soft rounded-lg hover:bg-atlas-surface-soft transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetPassword}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition"
+              >
+                Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Temporary Password Reveal Modal */}
+      {tempPassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-atlas-surface border border-atlas-line rounded-xl p-6 w-full max-w-md mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-atlas-ink mb-2">Temporary Password</h3>
+            <p className="text-sm text-atlas-ink-muted mb-4">
+              Send this to the user over Slack or WhatsApp — not email. It is shown only once.
+            </p>
+
+            <div className="flex items-center gap-2 mb-4">
+              <code className="flex-1 px-3 py-2.5 bg-atlas-surface-soft border border-atlas-line rounded-lg text-atlas-ink font-mono text-sm break-all">
+                {tempPassword}
+              </code>
+              <button
+                onClick={copyTempPassword}
+                className="flex-shrink-0 px-3 py-2.5 text-sm font-medium text-atlas-ink bg-atlas-surface-soft border border-atlas-line rounded-lg hover:bg-blue-500/10 transition"
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+
+            <p className="text-xs text-atlas-ink-faint mb-6">
+              Tell them to log in with it, then use <span className="text-atlas-ink">Change Password</span> in
+              the sidebar to set their own.
+            </p>
+
+            <button
+              onClick={() => { setTempPassword(null); setCopied(false); }}
+              className="w-full px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && selectedUser && (

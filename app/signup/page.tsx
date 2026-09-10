@@ -66,9 +66,9 @@ export default function SignupPage() {
     if (signupError) {
       setError(signupError.message);
     } else {
-      setMessage(
-        "Account created! Check your email for a confirmation link. If you don't see it, check your spam folder."
-      );
+      // Email confirmation is disabled on this project, so the account is
+      // usable straight away — no confirmation link is ever sent.
+      setMessage("Account created! You can log in now.");
     }
     setLoading(false);
   }

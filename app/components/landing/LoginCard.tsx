@@ -29,11 +29,8 @@ export default function LoginCard() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resetSent, setResetSent] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetLoading, setResetLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [showContactAdmin, setShowContactAdmin] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -67,79 +64,11 @@ export default function LoginCard() {
     }
   }
 
-  async function handleForgotPassword(e: React.FormEvent) {
-    e.preventDefault();
-    setResetLoading(true);
-    setError(null);
-
-    const supabase = createClient();
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/+$/, "");
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-      resetEmail,
-      { redirectTo: `${siteUrl}/auth?next=/reset-password` }
-    );
-
-    if (resetError) {
-      setError(resetError.message);
-    } else {
-      setResetSent(true);
-    }
-    setResetLoading(false);
-  }
-
   return (
     <div className="atlas-login-card-wrapper">
       <div className="atlas-card-behind" />
       <div className="atlas-login-card login-card-anim">
-        {showForgotPassword ? (
-          <div>
-            <h2 className="font-display" style={{ fontSize: "30px", fontWeight: 400, letterSpacing: "var(--tracking-display)", margin: "0 0 8px" }}>
-              Reset <em style={{ color: "var(--atlas-accent)" }}>password</em>.
-            </h2>
-            <p className="font-mono" style={{ fontSize: "13px", color: "var(--atlas-ink-muted)", margin: "0 0 24px" }}>
-              We&apos;ll send you a reset link.
-            </p>
-
-            {resetSent ? (
-              <div>
-                <div className="rounded-lg p-3 mb-4" style={{ background: "var(--atlas-green-bg)", border: "1px solid var(--atlas-green)" }}>
-                  <p style={{ fontSize: "var(--text-sm)", color: "var(--atlas-green)" }}>
-                    Reset link sent! Check your email (and spam folder).
-                  </p>
-                </div>
-                <button
-                  onClick={() => { setShowForgotPassword(false); setResetSent(false); }}
-                  style={{ background: "none", border: "none", color: "var(--atlas-accent)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: "var(--text-sm)" }}
-                >
-                  &larr; Back to login
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleForgotPassword}>
-                <div className="mb-5">
-                  <label className="font-mono uppercase block mb-2" style={{ fontSize: "10.5px", letterSpacing: "0.1em", color: "var(--atlas-ink-muted)" }}>
-                    Email address
-                  </label>
-                  <input type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} required placeholder="you@yogabars.in" className="atlas-input" />
-                </div>
-                {error && (
-                  <div className="rounded-lg p-3 mb-4" style={{ background: "var(--atlas-red-bg)", border: "1px solid var(--atlas-red)" }}>
-                    <p style={{ fontSize: "var(--text-sm)", color: "var(--atlas-red)" }}>{error}</p>
-                  </div>
-                )}
-                <button type="submit" disabled={resetLoading} className="atlas-submit mb-3">
-                  <span>{resetLoading ? "Sending..." : "Send Reset Link"}</span>
-                  <span className="arrow">&rarr;</span>
-                </button>
-                <button type="button" onClick={() => { setShowForgotPassword(false); setError(null); }}
-                  style={{ background: "none", border: "none", color: "var(--atlas-ink-muted)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: "var(--text-sm)", width: "100%", textAlign: "center", padding: "8px 0" }}>
-                  &larr; Back to login
-                </button>
-              </form>
-            )}
-          </div>
-        ) : (
-          <div>
+        <div>
             <h2 className="font-display" style={{ fontSize: "30px", fontWeight: 400, letterSpacing: "var(--tracking-display)", margin: "0 0 4px" }}>
               Welcome <em style={{ color: "var(--atlas-accent)" }}>back</em>.
             </h2>
@@ -174,9 +103,9 @@ export default function LoginCard() {
                   <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} style={{ accentColor: "var(--atlas-accent)" }} />
                   Remember this device
                 </label>
-                <button type="button" onClick={() => { setShowForgotPassword(true); setError(null); setResetEmail(email); }}
-                  style={{ background: "none", border: "none", color: "var(--atlas-accent)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: "var(--text-sm)" }}>
-                  Forgot?
+                <button type="button" onClick={() => setShowContactAdmin(true)}
+                  style={{ background: "none", border: "none", color: "var(--atlas-accent)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: "var(--text-sm)", padding: 0 }}>
+                  Forgot password?
                 </button>
               </div>
 
@@ -196,9 +125,44 @@ export default function LoginCard() {
               Don&apos;t have an account?{" "}
               <a href="/signup" style={{ color: "var(--atlas-accent)", textDecoration: "none" }}>Sign up</a>
             </p>
-          </div>
-        )}
+        </div>
       </div>
+
+      {/* Forgot-password popup — password resets are handled by an admin,
+          since transactional email is not available on this project. */}
+      {showContactAdmin && (
+        <div
+          onClick={() => setShowContactAdmin(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", padding: "16px" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            style={{ background: "var(--atlas-surface)", border: "1px solid var(--atlas-line)", borderRadius: "12px", padding: "24px", width: "100%", maxWidth: "380px", boxShadow: "0 20px 40px rgba(0,0,0,0.3)" }}
+          >
+            <h3 className="font-display" style={{ fontSize: "22px", fontWeight: 400, letterSpacing: "var(--tracking-display)", margin: "0 0 10px", color: "var(--atlas-ink)" }}>
+              Contact <em style={{ color: "var(--atlas-accent)" }}>admin</em>.
+            </h3>
+            <p style={{ fontSize: "13.5px", color: "var(--atlas-ink-muted)", margin: "0 0 8px", lineHeight: 1.5 }}>
+              Password resets are handled by an administrator. Reach out to your
+              admin and they will issue you a temporary password.
+            </p>
+            <p style={{ fontSize: "13.5px", color: "var(--atlas-ink-muted)", margin: "0 0 20px", lineHeight: 1.5 }}>
+              Once you sign in with it, use{" "}
+              <span style={{ color: "var(--atlas-ink)" }}>Change Password</span> in the
+              sidebar to set your own.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowContactAdmin(false)}
+              className="atlas-submit"
+            >
+              <span>Got it</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
