@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const next = searchParams.get("next") ?? "/dashboard";
 
   // Use NEXT_PUBLIC_SITE_URL to avoid Railway internal URL (localhost:8080) being used as origin
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || origin).replace(/\/+$/, "");
 
   if (code) {
     const supabase = await createClient();

@@ -73,7 +73,7 @@ export default function LoginCard() {
     setError(null);
 
     const supabase = createClient();
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/+$/, "");
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       resetEmail,
       { redirectTo: `${siteUrl}/auth?next=/reset-password` }
