@@ -67,5 +67,31 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Viewers have no access to any data. Enforce it server-side as well as in
+  // AppShell, so API routes cannot be called directly. They are funnelled to
+  // /dashboard, where AppShell renders the "contact an admin" screen.
+  if (user && isProtectedRoute) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.role === "viewer") {
+      if (request.nextUrl.pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "Your account does not have access. Contact an administrator." },
+          { status: 403 }
+        );
+      }
+      if (request.nextUrl.pathname !== "/dashboard") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/dashboard";
+        url.search = "";
+        return NextResponse.redirect(url);
+      }
+    }
+  }
+
   return supabaseResponse;
 }

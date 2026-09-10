@@ -2014,3 +2014,67 @@
 
 /* Forecast vs Movement — clickable table rows (RCA drill-down) */
 .movement-row:hover { background: var(--atlas-surface-soft); }
+
+/* ── Viewer lockout ─────────────────────────────────────────────────────
+   Shown instead of the whole app shell when a user's role is "viewer",
+   i.e. they have not been granted access to any data yet. */
+.atlas-shell-locked {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--atlas-bg);
+}
+
+.atlas-locked-card {
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  background: var(--atlas-surface);
+  border: 1px solid var(--atlas-line);
+  border-radius: 14px;
+  padding: 36px 28px;
+}
+
+.atlas-locked-title {
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: var(--tracking-display);
+  color: var(--atlas-ink);
+  margin: 0 0 12px;
+}
+
+.atlas-locked-title em { color: var(--atlas-accent); }
+
+.atlas-locked-body {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--atlas-ink-muted);
+  margin: 0 0 18px;
+}
+
+.atlas-locked-meta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--atlas-ink-faint);
+  margin: 0 0 24px;
+  word-break: break-all;
+}
+
+.atlas-locked-signout {
+  background: none;
+  border: 1px solid var(--atlas-line);
+  border-radius: 8px;
+  color: var(--atlas-ink-muted);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 9px 20px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.atlas-locked-signout:hover {
+  background: var(--atlas-surface-soft);
+  color: var(--atlas-ink);
+}

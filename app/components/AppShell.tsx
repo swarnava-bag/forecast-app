@@ -103,6 +103,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const isAdmin = profile?.role === "admin";
+  const isViewer = profile?.role === "viewer";
   const isAdminPage = pathname.startsWith("/admin");
 
   function toggleCollapse() {
@@ -127,6 +128,33 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         supply_chain: "Supply Chain",
         viewer: "Viewer",
       } as Record<string, string>)[role] || role
+    );
+  }
+
+  // Viewers have no access to any data in the app. They get a blank page
+  // asking them to contact an admin — no sidebar, no nav, and `children`
+  // is never rendered, so no page ever mounts its queries.
+  if (isViewer) {
+    return (
+      <div className="atlas-shell-locked">
+        <div className="atlas-locked-card">
+          <h1 className="font-display atlas-locked-title">
+            No <em>access</em> yet.
+          </h1>
+          <p className="atlas-locked-body">
+            Your account does not have access to this site. Please contact an
+            administrator to be given access.
+          </p>
+          {profile && (
+            <p className="atlas-locked-meta">
+              Signed in as {profile.email}
+            </p>
+          )}
+          <button onClick={handleSignOut} className="atlas-locked-signout">
+            Sign out
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -243,7 +271,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </span>
               </div>
             </div>
-            <button onClick={handleSignOut} className="atlas-sidebar-signout">
+            <Link
+              href="/account/password"
+              className="atlas-sidebar-signout"
+              title="Change password"
+            >
+              <KeyIcon />
+            </Link>
+            <button onClick={handleSignOut} className="atlas-sidebar-signout" title="Sign out">
               <SignOutIcon />
             </button>
           </div>
@@ -402,6 +437,15 @@ function SalesIcon() {
     </svg>
   );
 }
+function KeyIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="M10.7 12.3 21 2" /><path d="m16.5 6.5 3 3" />
+    </svg>
+  );
+}
+
 function SignOutIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
