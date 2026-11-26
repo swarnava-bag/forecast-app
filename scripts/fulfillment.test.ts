@@ -186,3 +186,25 @@ test("months: upload spanning months is segregated; partial uploads keep other d
   assert.deepEqual(lateOct.map((x) => x.monthKey), ["2026-10", "2026-11"]);
   assert.deepEqual(lateOct[1].orders.map((x) => x.orderCode), ["O28", "N1", "N15", "N23", "N25old"]);
 });
+
+test("months: stray older orders in an export never create/overwrite a month but still count where due", async () => {
+  const { planMonths, uploadSpan } = await import("../lib/fulfillment/months");
+  // November file: 40 orders/day on 1-3 Nov, plus 2 stray October orders (one Flipkart due 2 Nov)
+  const up: OrderRow[] = [];
+  for (const d of ["01", "02", "03"]) for (let i = 0; i < 40; i++) up.push(o({ orderCode: `N${d}-${i}`, od: `2026-11-${d} 10:00:00` }));
+  up.push(o({ orderCode: "OCT10-FK", channelName: "AMAZON_X", od: "2026-10-10 10:00:00", due: "2026-11-02 14:00:00" }));
+  up.push(o({ orderCode: "OCT12", od: "2026-10-12 10:00:00" }));
+  const span = uploadSpan(up)!;
+  assert.deepEqual(span.covered, ["2026-11"]);
+  assert.deepEqual(span.stray, [{ monthKey: "2026-10", orders: 2 }]);
+  assert.equal(span.first, isoToDay("2026-11-01"));
+  // a real October is stored — it must survive untouched
+  const realOct = [o({ orderCode: "REAL-OCT10", od: "2026-10-10 11:00:00" }), o({ orderCode: "REAL-OCT31", od: "2026-10-31 11:00:00" })];
+  const plans = planMonths(up, new Map([["2026-10", realOct]]), ["2026-10"]);
+  assert.deepEqual(plans.map((p) => p.monthKey), ["2026-11"]); // October not touched
+  const nov = plans[0].orders.map((x) => x.orderCode);
+  assert.ok(nov.includes("OCT10-FK"), "older order due in Nov is carried into Nov");
+  assert.ok(!nov.includes("OCT12"), "older order not due in Nov is not");
+  assert.ok(nov.includes("REAL-OCT31"), "stored tail of October is carried");
+  assert.equal(plans[0].fromUpload, 120);
+});

@@ -42,6 +42,9 @@ export const saveSettings = (s: { cutoff: string; credDefaultHours: number | nul
 export async function listMonths(): Promise<{ monthKey: string; updatedAt: string | null }[]> {
   return (await jsonOrThrow(await fetch(`${API}?list=1`, { cache: "no-store" }))).months ?? [];
 }
+export async function deleteMonth(key: string): Promise<void> {
+  await jsonOrThrow(await fetch(`${API}?month=${key}`, { method: "DELETE" }));
+}
 export async function loadMonth(key: string): Promise<Snapshot> {
   return unpackSnapshot(await jsonOrThrow(await fetch(`${API}?month=${key}`, { cache: "no-store" })));
 }
