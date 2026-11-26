@@ -12,7 +12,7 @@ import { inMonth } from "@/lib/fulfillment/months";
 import TrendTab from "./TrendTab";
 import { hasAccess, monthLabel, type Snapshot } from "@/lib/fulfillment/snapshot";
 import {
-  loadSettings, listMonths, loadMonth, publishMonth,
+  loadSettings, listMonths, loadMonth, publishMonth, deleteMonth,
   saveChannelMap, saveClosedDays, saveCredSla, saveReasons, saveSettings, type SectionMeta,
 } from "@/lib/fulfillment/store";
 import { buildWorkbook, saveFile } from "@/lib/fulfillment/download";
@@ -226,7 +226,16 @@ export default function FulfillmentPage() {
               reasons: wrapSave(saveReasons), settings: wrapSave(saveSettings),
             }} />
         )}
-        {tab === "upload" && <UploadTab channelMap={config.channelMap} existingMonths={(months ?? []).map((m) => m.monthKey)} onPublished={onPublished} />}
+        {tab === "upload" && (
+          <UploadTab channelMap={config.channelMap} existingMonths={(months ?? []).map((m) => m.monthKey)} onPublished={onPublished}
+            isAdmin={me?.role === "admin"}
+            onDeleteMonth={async (k) => {
+              await deleteMonth(k);
+              const m = await listMonths();
+              setMonths(m); setTrendKey((n) => n + 1);
+              if (k === monthKey) { setSnap(null); setMonthKey(m[0]?.monthKey ?? null); }
+            }} />
+        )}
       </div>
     </AppShell>
   );

@@ -37,15 +37,19 @@ async function readAsCsv(f: File): Promise<CsvFileInput> {
 
 type Preview = ParsedUpload & {
   plans: MonthPlan[]; firstDay: number; lastDay: number; unmapped: { name: string; orders: number }[];
+  stray: { monthKey: string; orders: number }[];
   reports: FileReport[]; columns: number; consolidatedCsv: string;
 };
 
-export default function UploadTab({ channelMap, existingMonths, onPublished }: {
+export default function UploadTab({ channelMap, existingMonths, onPublished, isAdmin, onDeleteMonth }: {
   channelMap: ChannelMapRow[];
   existingMonths: string[];
   /** publish each month snapshot in turn; resolves after all are saved */
   onPublished: (snaps: Snapshot[], progress: (msg: string) => void) => Promise<void>;
+  isAdmin: boolean;
+  onDeleteMonth: (key: string) => Promise<void>;
 }) {
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -102,7 +106,7 @@ export default function UploadTab({ channelMap, existingMonths, onPublished }: {
       const um = new Map<string, number>();
       for (const o of p.orders) if (!mapped.has(o.channelName)) um.set(o.channelName, (um.get(o.channelName) ?? 0) + 1);
       setPreview({
-        ...p, plans, firstDay: span.first, lastDay: span.last,
+        ...p, plans, firstDay: span.first, lastDay: span.last, stray: span.stray,
         unmapped: [...um].map(([name, orders]) => ({ name, orders })).sort((a, b) => b.orders - a.orders),
         reports: merged.reports, columns: merged.header.length, consolidatedCsv: merged.csv,
       });
@@ -223,7 +227,35 @@ export default function UploadTab({ channelMap, existingMonths, onPublished }: {
               </tbody>
             </table>
           </div>
+          {preview.stray.length > 0 && (
+            <Notice tone="info">
+              The files also contain {preview.stray.map((s) => `${fmtInt(s.orders)} older order${s.orders === 1 ? "" : "s"} from ${monthLabel(s.monthKey)}`).join(", ")} still being processed.
+              They are counted where they are due (e.g. in this month&apos;s 3 PM and pending numbers) but do not create or overwrite {preview.stray.length === 1 ? "that month" : "those months"} — backfill {preview.stray.length === 1 ? "it" : "them"} with {preview.stray.length === 1 ? "its" : "their"} own export.
+            </Notice>
+          )}
           <Btn primary disabled={!!busy} onClick={publish}>{busy ?? `Publish ${monthsLabel}`}</Btn>
+        </div>
+      )}
+
+      {isAdmin && existingMonths.length > 0 && (
+        <div className="p-4 rounded-xl space-y-2" style={surface}>
+          <h3 style={{ fontSize: 14, fontWeight: 700 }}>Stored months <span style={{ fontWeight: 400, ...faint }}>· admin</span></h3>
+          <p style={{ fontSize: 12, ...muted }}>Delete a month only if it was published by mistake — it is removed for everyone. Re-upload its export to bring it back.</p>
+          <div className="flex flex-wrap gap-2">
+            {[...existingMonths].sort().map((k) => (
+              <span key={k} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg" style={{ ...soft, fontSize: 12.5 }}>
+                {monthLabel(k)}
+                <button disabled={!!deleting} title={`Delete ${monthLabel(k)}`} style={{ background: "none", border: "none", cursor: deleting ? "wait" : "pointer", color: "var(--atlas-red)" }}
+                  onClick={async () => {
+                    if (!window.confirm(`Delete ${monthLabel(k)} for everyone? This cannot be undone (re-upload its export to restore it).`)) return;
+                    setDeleting(k); setErr(null);
+                    try { await onDeleteMonth(k); setDone(`${monthLabel(k)} deleted.`); }
+                    catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+                    finally { setDeleting(null); }
+                  }}>{deleting === k ? "…" : "✕"}</button>
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>

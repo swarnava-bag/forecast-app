@@ -8,6 +8,7 @@
 //   GET  ?config=1          → { config, meta }
 //   POST { kind: "snapshot", monthKey, fields, rows, … }       publish/replace a month (gzip body)
 //   POST { kind: "config", section, value }                     replace one settings section
+//   DELETE ?month=YYYY-MM   → remove a stored month                (admin only)
 //   All methods: Supply Chain / admin only.
 import { NextResponse } from "next/server";
 import { gzipSync, gunzipSync } from "zlib";
@@ -121,6 +122,19 @@ export async function GET(req: Request) {
   return new Response(await data.arrayBuffer(), {
     headers: { "Content-Type": "application/json", "Content-Encoding": "gzip", "Cache-Control": "no-store" },
   });
+}
+
+export async function DELETE(req: Request) {
+  const me = await currentUser();
+  if (!me) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (me.role !== "admin") return NextResponse.json({ error: "Only admins can delete a month." }, { status: 403 });
+  const svc = service();
+  if (!svc) return NextResponse.json({ error: "Server missing SUPABASE_SERVICE_ROLE_KEY." }, { status: 500 });
+  const key = new URL(req.url).searchParams.get("month") ?? "";
+  if (!KEY_RE.test(key)) return NextResponse.json({ error: "month=YYYY-MM required" }, { status: 400 });
+  const { error } = await svc.storage.from(BUCKET).remove([pathFor(key)]);
+  if (error) return NextResponse.json({ error: `Delete failed: ${error.message}` }, { status: 500 });
+  return NextResponse.json({ ok: true, monthKey: key });
 }
 
 export async function POST(req: Request) {
