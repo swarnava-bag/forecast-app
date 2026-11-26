@@ -13,7 +13,8 @@ type Profile = {
 };
 
 /* ── Nav config ────────────────────────────────────────────────────────── */
-type NavItem = { href: string; label: string; icon: () => React.JSX.Element; comingSoon?: boolean };
+/** roles: when set, only these profile roles see the item. */
+type NavItem = { href: string; label: string; icon: () => React.JSX.Element; comingSoon?: boolean; roles?: string[] };
 
 const MAIN_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon },
@@ -27,6 +28,7 @@ const MAIN_NAV: NavItem[] = [
   { href: "#", label: "Base Data", icon: BaseDataIcon, comingSoon: true },
   { href: "/over-under-check", label: "Forecast Check", icon: ForecastCheckIcon },
   { href: "/consolidator", label: "Consolidator", icon: ConsolidatorIcon },
+  { href: "/fulfillment", label: "Fulfillment TAT", icon: FulfillmentIcon, roles: ["supply_chain", "admin"] },
 ];
 
 const ADMIN_NAV = [
@@ -111,7 +113,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // other route server-side.
   const visibleMainNav = isViewer
     ? MAIN_NAV.filter((item) => item.href === "/dashboard")
-    : MAIN_NAV;
+    : MAIN_NAV.filter((item) => !item.roles || (profile?.role && item.roles.includes(profile.role)));
   const isAdminPage = pathname.startsWith("/admin");
 
   function toggleCollapse() {
@@ -341,6 +343,7 @@ function getBreadcrumb(pathname: string) {
     "/admin/workflow": "Admin / Workflow Guide",
     "/analytics": "Forecast Analytics",
     "/consolidator": "Consolidator",
+    "/fulfillment": "Fulfillment TAT",
   };
 
   return (
@@ -397,6 +400,9 @@ function BaseDataIcon() {
 }
 function ForecastCheckIcon() {
   return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>);
+}
+function FulfillmentIcon() {
+  return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>);
 }
 function ConsolidatorIcon() {
   return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>);
