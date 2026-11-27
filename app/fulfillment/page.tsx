@@ -3,7 +3,7 @@
 // Metabase look-ups around it). Upload the daily month-to-date Unicommerce SO
 // export → Overview, Sheet View, Orders explorer, Pending Orders, editable
 // Settings, and an Excel download. Supply Chain / admin only.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/app/components/AppShell";
 import { createClient } from "@/lib/supabase/client";
 import { computeAll, buildDashboard, buildPending, prepareConfig, reportWindow, dayToIso, type FulfillmentConfig } from "@/lib/fulfillment/engine";
@@ -23,7 +23,7 @@ import OrdersTab from "./OrdersTab";
 import PendingTab from "./PendingTab";
 import SettingsTab from "./SettingsTab";
 import UploadTab from "./UploadTab";
-import { surface, muted, faint, fmtDayLong, todayDay, Btn, Notice } from "./ui";
+import { surface, muted, faint, fmtDayLong, fmtDT, Btn, Notice } from "./ui";
 
 type Tab = "overview" | "trend" | "sheet" | "orders" | "pending" | "settings" | "upload";
 type Me = { id: string; role: string | null; name: string };
@@ -44,6 +44,16 @@ export default function FulfillmentPage() {
   const [drill, setDrill] = useState<{ orders?: Filters; pending?: Filters; n: number }>({ n: 0 });
   const [trendKey, setTrendKey] = useState(0);
   const [trendOpened, setTrendOpened] = useState(false);
+  // freshness: storage version of the loaded month, and whether newer data has been published since
+  const [loadedVersion, setLoadedVersion] = useState<string | null>(null);
+  const [newer, setNewer] = useState<string | null>(null);
+  const [verified, setVerified] = useState<string | null>(null);
+  const expectRef = useRef(new Map<string, { orders: number; latest: number | null }>());
+  // what the Upload tab is doing (shown on every tab so an unpublished upload is never mistaken for published data)
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const monthKeys = useMemo(() => (months ?? []).map((m) => m.monthKey), [months]);
+  const sameList = (a: { monthKey: string; updatedAt: string | null }[] | null, b: { monthKey: string; updatedAt: string | null }[]) =>
+    !!a && a.length === b.length && a.every((x, i) => x.monthKey === b[i].monthKey && x.updatedAt === b[i].updatedAt);
 
   // who am I
   useEffect(() => {
@@ -75,25 +85,80 @@ export default function FulfillmentPage() {
     if (!monthKey) return;
     let live = true;
     setLoading(`Loading ${monthLabel(monthKey)}…`); setErr(null);
-    loadMonth(monthKey)
-      .then((s) => { if (live) setSnap(s); })
-      .catch((e) => { if (live) { setErr(e instanceof Error ? e.message : String(e)); setSnap(null); } })
-      .finally(() => { if (live) setLoading(null); });
+    (async () => {
+      try {
+        // record the stored version BEFORE downloading: if a publish lands in between,
+        // the next freshness check reports "newer" rather than missing it
+        const list = await listMonths().catch(() => null);
+        const ver = list?.find((m) => m.monthKey === monthKey)?.updatedAt ?? null;
+        const s = await loadMonth(monthKey);
+        if (!live) return;
+        setSnap(s); setLoadedVersion(ver); setNewer(null);
+        if (list) setMonths((cur) => (sameList(cur, list) ? cur : list));
+        // a month that was just published must load back exactly as sent
+        const exp = expectRef.current.get(monthKey);
+        if (exp) {
+          expectRef.current.delete(monthKey);
+          const latest = s.orders.reduce<number | null>((a, o) => (o.orderDate !== null && (a === null || o.orderDate > a) ? o.orderDate : a), null);
+          if (s.orders.length !== exp.orders || latest !== exp.latest) {
+            setErr(`${monthLabel(monthKey)} did not load back as published (expected ${exp.orders.toLocaleString()} orders to ${fmtDT(exp.latest)}, got ${s.orders.length.toLocaleString()} to ${fmtDT(latest)}). Click Reload; if it persists, publish again.`);
+          } else {
+            setVerified(`${monthLabel(monthKey)} now runs to ${fmtDT(latest)} — ${s.orders.length.toLocaleString()} orders, verified against what was published.`);
+          }
+        }
+      } catch (e) { if (live) { setErr(e instanceof Error ? e.message : String(e)); setSnap(null); } }
+      finally { if (live) setLoading(null); }
+    })();
     return () => { live = false; };
   }, [monthKey, reload]);
+
+  // freshness watch: every minute and whenever the tab regains focus, ask whether
+  // the open month was re-published or a new month appeared since it was loaded
+  useEffect(() => {
+    if (!allowed || !monthKey) return;
+    let stop = false;
+    const check = async () => {
+      if (stop || document.visibilityState !== "visible") return;
+      try {
+        const list = await listMonths();
+        if (stop) return;
+        const cur = list.find((m) => m.monthKey === monthKey);
+        const known = new Set(monthKeys);
+        const added = list.filter((m) => !known.has(m.monthKey)).map((m) => monthLabel(m.monthKey));
+        if (cur && loadedVersion && cur.updatedAt && cur.updatedAt !== loadedVersion) {
+          setNewer(`${monthLabel(monthKey)} was re-published at ${new Date(cur.updatedAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })} — you are looking at an older copy.`);
+        } else if (added.length) {
+          setNewer(`New data available: ${added.join(", ")}.`);
+        }
+      } catch { /* offline — try again later */ }
+    };
+    const id = window.setInterval(check, 60_000);
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => { stop = true; window.clearInterval(id); window.removeEventListener("focus", check); document.removeEventListener("visibilitychange", check); };
+  }, [allowed, monthKey, loadedVersion, monthKeys]);
+
+  const reloadNow = async () => {
+    setNewer(null);
+    try { const list = await listMonths(); setMonths((cur) => (sameList(cur, list) ? cur : list)); setTrendKey((n) => n + 1); } catch { /* keep going */ }
+    setReload((n) => n + 1);
+  };
 
   // calculations (re-run whenever data or settings change)
   const calc = useMemo(() => {
     if (!snap) return null;
     const all = computeAll(snap.orders, config);
-    const win = reportWindow(snap.orders, todayDay(), snap.monthKey);
+    // window end = the data's own latest order day (clamped to the month) — not the
+    // viewer's PC date, so a computer with a wrong clock cannot cut the view short
+    const win = reportWindow(snap.orders, Number.POSITIVE_INFINITY, snap.monthKey);
     // the snapshot also carries last month's final days (for orders due in this
     // month); views show only orders placed or due in this month
     const rows = all.filter((r) => inMonth(r.orderDay, r.dueDay, { start: win.startDay, end: win.endDay }));
     const dash = buildDashboard(rows, win.startDay, win.endDay);
     const pending = buildPending(rows, win.startDay, win.endDay, prepareConfig(config).reasons);
     const facilities = [...new Set(rows.map((o) => o.facility).filter(Boolean))].sort();
-    return { rows, dash, pending, facilities };
+    const latestOrder = rows.reduce<number | null>((a, r) => (r.orderDate !== null && r.orderDay !== null && r.orderDay <= win.endDay && (a === null || r.orderDate > a) ? r.orderDate : a), null);
+    return { rows, dash, pending, facilities, latestOrder };
   }, [snap, config]);
 
   const wrapSave = useCallback(<A,>(fn: (a: A) => Promise<{ config: FulfillmentConfig; meta: SectionMeta }>) => async (a: A) => {
@@ -101,17 +166,28 @@ export default function FulfillmentPage() {
     setConfig(saved.config); setMeta(saved.meta);
   }, []);
 
-  const onPublished = async (snaps: Snapshot[], progress: (m: string) => void) => {
+  const onPublished = async (snaps: Snapshot[], progress: (m: string) => void): Promise<string> => {
+    const lines: string[] = [];
     for (const [i, s] of snaps.entries()) {
       progress(`Publishing ${monthLabel(s.monthKey)} (${i + 1} of ${snaps.length})…`);
-      await publishMonth(s);
+      const latest = s.orders.reduce<number | null>((a, o) => (o.orderDate !== null && (a === null || o.orderDate > a) ? o.orderDate : a), null);
+      const res = await publishMonth(s);
+      // the server reports what it stored — it must match what was sent
+      if (res.orders !== s.orders.length || res.latestOrderDate !== latest) {
+        throw new Error(`${monthLabel(s.monthKey)} was not stored as sent (sent ${s.orders.length} orders to ${fmtDT(latest)}, stored ${res.orders} to ${fmtDT(res.latestOrderDate)}). Please publish again.`);
+      }
+      expectRef.current.set(s.monthKey, { orders: s.orders.length, latest });
+      lines.push(`${monthLabel(s.monthKey)} → ${s.orders.length.toLocaleString()} orders to ${fmtDT(latest)}`);
     }
-    setMonths(await listMonths());
+    const list = await listMonths();
+    setMonths(list);
     setTrendKey((n) => n + 1); // FY Trend reloads with the new data
-    // open the latest month that was published
+    // open the latest month that was published (its reload verifies it end to end)
     setMonthKey(snaps.map((s) => s.monthKey).sort().at(-1)!);
     setReload((n) => n + 1);
+    setNewer(null);
     setTab("overview");
+    return `Published: ${lines.join(" · ")}.`;
   };
 
   const onDrill = (target: DrillTarget, f: Filters) => {
@@ -162,7 +238,7 @@ export default function FulfillmentPage() {
             <h1 className="text-2xl font-bold">Fulfillment TAT</h1>
             <p className="text-sm mt-1" style={muted}>
               {calc && snap
-                ? <>Data {fmtDayLong(calc.dash.startDay)} → <b style={{ color: "var(--atlas-ink)" }}>{fmtDayLong(calc.dash.endDay)}</b> · {calc.rows.length.toLocaleString()} orders
+                ? <>Data till <b style={{ color: "var(--atlas-ink)" }}>{fmtDayLong(calc.dash.endDay)}</b>{calc.latestOrder !== null && <> (latest order {fmtDT(calc.latestOrder)})</>} · from {fmtDayLong(calc.dash.startDay)} · {calc.rows.length.toLocaleString()} orders
                   {me?.role === "admin" && <> · uploaded {new Date(snap.uploadedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}{snap.uploadedBy ? ` by ${snap.uploadedBy}` : ""}</>}</>
                 : "Order-level fulfillment, 3 PM dispatch compliance, CRED SLA and Website TAT."}
             </p>
@@ -194,6 +270,19 @@ export default function FulfillmentPage() {
         </div>
 
         {err && <Notice tone="error">{err}</Notice>}
+        {newer && (
+          <Notice tone="warn">
+            <span className="flex flex-wrap items-center gap-3">{newer}<Btn small primary onClick={reloadNow}>↻ Reload now</Btn></span>
+          </Notice>
+        )}
+        {verified && tab !== "upload" && (
+          <Notice tone="ok"><span className="flex flex-wrap items-center gap-3">{verified}<button onClick={() => setVerified(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--atlas-ink-faint)" }}>✕</button></span></Notice>
+        )}
+        {uploadStatus && tab !== "upload" && (
+          <Notice tone="info">
+            <span className="flex flex-wrap items-center gap-3">{uploadStatus}<Btn small onClick={() => setTab("upload")}>Go to Upload</Btn></span>
+          </Notice>
+        )}
         {loading && dataTab && <div className="py-12 text-center" style={muted}>{loading}</div>}
         {!loading && dataTab && !calc && months?.length === 0 && (
           <Notice tone="info">No data yet. Go to <b>Upload</b> and drop the month-to-date Unicommerce SO export.</Notice>
@@ -215,7 +304,7 @@ export default function FulfillmentPage() {
         {/* FY Trend loads every month once opened, then stays mounted */}
         {trendOpened && months && (
           <div style={{ display: tab === "trend" ? "block" : "none" }}>
-            <TrendTab key={trendKey} months={months.map((m) => m.monthKey)} config={config}
+            <TrendTab key={trendKey} months={monthKeys} config={config}
               onOpenMonth={(k) => { setMonthKey(k); setTab("overview"); }} />
           </div>
         )}
@@ -226,8 +315,10 @@ export default function FulfillmentPage() {
               reasons: wrapSave(saveReasons), settings: wrapSave(saveSettings),
             }} />
         )}
-        {tab === "upload" && (
-          <UploadTab channelMap={config.channelMap} existingMonths={(months ?? []).map((m) => m.monthKey)} onPublished={onPublished}
+        {/* Upload stays mounted: reading / checking / publishing survives switching tabs */}
+        <div style={{ display: tab === "upload" ? "block" : "none" }}>
+          <UploadTab channelMap={config.channelMap} existingMonths={monthKeys} onPublished={onPublished}
+            onStatus={setUploadStatus}
             isAdmin={me?.role === "admin"}
             onDeleteMonth={async (k) => {
               await deleteMonth(k);
@@ -235,7 +326,7 @@ export default function FulfillmentPage() {
               setMonths(m); setTrendKey((n) => n + 1);
               if (k === monthKey) { setSnap(null); setMonthKey(m[0]?.monthKey ?? null); }
             }} />
-        )}
+        </div>
       </div>
     </AppShell>
   );

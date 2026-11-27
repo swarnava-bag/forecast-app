@@ -208,3 +208,22 @@ test("months: stray older orders in an export never create/overwrite a month but
   assert.ok(nov.includes("REAL-OCT31"), "stored tail of October is carried");
   assert.equal(plans[0].fromUpload, 120);
 });
+
+test("months: an upload never shrinks a month; the report window ignores the viewer's PC date", async () => {
+  const { planMonths } = await import("../lib/fulfillment/months");
+  const mk = (code: string, od: string) => o({ orderCode: code, od });
+  // stored November runs to the 26th
+  const stored = new Map([["2026-11", [mk("A", "2026-11-01 10:00:00"), mk("B", "2026-11-23 10:00:00"), mk("C", "2026-11-26 16:20:00")]]]);
+  // someone uploads an older file that only runs to the 23rd
+  const [p] = planMonths([mk("A", "2026-11-01 10:00:00"), mk("B", "2026-11-23 11:00:00")], stored, ["2026-11"]);
+  assert.equal(p.storedLatestDay, isoToDay("2026-11-26"));
+  assert.equal(p.latestDay, isoToDay("2026-11-26"), "the 26th is kept — older uploads cannot cut a month short");
+  assert.ok(p.orders.some((x) => x.orderCode === "C"));
+  // a newer file extends it
+  const [q] = planMonths([mk("A", "2026-11-01 10:00:00"), mk("D", "2026-11-27 09:00:00")], stored, ["2026-11"]);
+  assert.equal(q.storedLatestDay, isoToDay("2026-11-26"));
+  assert.equal(q.latestDay, isoToDay("2026-11-27"));
+  // window: data to the 26th; a viewer whose PC date is the 23rd must still see to the 26th
+  const w = reportWindow(stored.get("2026-11")!, Number.POSITIVE_INFINITY, "2026-11");
+  assert.equal(w.endDay, isoToDay("2026-11-26"));
+});

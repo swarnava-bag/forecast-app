@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { csvToTable, extractOrders, COLUMNS, type ParsedUpload } from "@/lib/fulfillment/parse";
 import type { ChannelMapRow, OrderRow } from "@/lib/fulfillment/engine";
@@ -41,11 +41,13 @@ type Preview = ParsedUpload & {
   reports: FileReport[]; columns: number; consolidatedCsv: string;
 };
 
-export default function UploadTab({ channelMap, existingMonths, onPublished, isAdmin, onDeleteMonth }: {
+export default function UploadTab({ channelMap, existingMonths, onPublished, onStatus, isAdmin, onDeleteMonth }: {
   channelMap: ChannelMapRow[];
   existingMonths: string[];
-  /** publish each month snapshot in turn; resolves after all are saved */
-  onPublished: (snaps: Snapshot[], progress: (msg: string) => void) => Promise<void>;
+  /** publish each month snapshot in turn; resolves with a verified summary after all are saved */
+  onPublished: (snaps: Snapshot[], progress: (msg: string) => void) => Promise<string>;
+  /** tells the page what is in flight, so other tabs can warn that it is NOT published yet */
+  onStatus: (s: string | null) => void;
   isAdmin: boolean;
   onDeleteMonth: (key: string) => Promise<void>;
 }) {
@@ -57,6 +59,13 @@ export default function UploadTab({ channelMap, existingMonths, onPublished, isA
   const [done, setDone] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
   const ref = useRef<HTMLInputElement | null>(null);
+
+  // let the page warn on other tabs while an upload is being read, checked or published
+  useEffect(() => {
+    if (busy) onStatus(`Upload in progress — ${busy} The dashboard still shows the previously published data until this finishes.`);
+    else if (preview) onStatus(`Files checked (data till ${fmtDayLong(preview.lastDay)}) but NOT published yet — the dashboard still shows the previously published data. Open Upload and click Publish.`);
+    else onStatus(null);
+  }, [busy, preview, onStatus]);
 
   const add = (list: FileList | null) => {
     if (!list) return;
@@ -91,7 +100,8 @@ export default function UploadTab({ channelMap, existingMonths, onPublished, isA
       if (p.orders.length === 0) throw new Error("No active orders found in these files.");
       const span = uploadSpan(p.orders);
       if (!span) throw new Error("None of the orders has an Order Date — cannot tell which month they belong to.");
-      if (span.last > todayDay()) throw new Error(`Orders are dated up to ${fmtDayLong(span.last)}, which is in the future — check the export.`);
+      // guard against mis-read dates (e.g. month/day swapped); 2 days' grace for a PC clock that is off
+      if (span.last > todayDay() + 2) throw new Error(`Orders are dated up to ${fmtDayLong(span.last)}, which is in the future — check the export's dates.`);
 
       // 3) Month segregation: rebuild every month the upload touches (load what's stored first)
       const touched = touchedMonths(span, existingMonths);
@@ -122,8 +132,7 @@ export default function UploadTab({ channelMap, existingMonths, onPublished, isA
         monthKey: pl.monthKey, uploadedAt: new Date().toISOString(), uploadedBy: "",
         files: preview.files, itemRows: preview.itemRows, inactiveOrders: preview.inactiveOrders, orders: pl.orders,
       }));
-      await onPublished(snaps, (m) => setBusy(m));
-      setDone(`Published ${preview.plans.map((pl) => monthLabel(pl.monthKey)).join(", ")}.`);
+      setDone(await onPublished(snaps, (m) => setBusy(m)));
       setFiles([]); setPreview(null);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(null); }
@@ -216,6 +225,11 @@ export default function UploadTab({ channelMap, existingMonths, onPublished, isA
                     <td className="pr-4 py-0.5" style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{monthLabel(pl.monthKey)}</td>
                     <td className="pr-4" style={{ whiteSpace: "nowrap" }}>
                       {pl.isNew ? <span style={{ color: "var(--atlas-green)" }}>＋ New month</span> : <span>↻ Update</span>}
+                    </td>
+                    <td className="pr-4" style={{ whiteSpace: "nowrap", fontWeight: 600 }}>
+                      {pl.storedLatestDay !== null && pl.storedLatestDay !== pl.latestDay
+                        ? <>data till {fmtDayLong(pl.storedLatestDay)} → <span style={{ color: "var(--atlas-green)" }}>{pl.latestDay !== null ? fmtDayLong(pl.latestDay) : "—"}</span></>
+                        : <>data till {pl.latestDay !== null ? fmtDayLong(pl.latestDay) : "—"}</>}
                     </td>
                     <td style={muted}>
                       {pl.replacedDays

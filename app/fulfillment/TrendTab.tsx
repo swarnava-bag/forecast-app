@@ -9,7 +9,7 @@ import { inMonth } from "@/lib/fulfillment/months";
 import { kpis, byChannel, type Kpis, type ChannelRow } from "@/lib/fulfillment/analytics";
 import { loadMonth } from "@/lib/fulfillment/store";
 import { monthLabel } from "@/lib/fulfillment/snapshot";
-import { surface, muted, faint, fmtInt, fmtDay, rateTone, todayDay, Btn, Notice } from "./ui";
+import { surface, muted, faint, fmtInt, fmtDay, rateTone, Btn, Notice } from "./ui";
 
 type MonthSummary = { monthKey: string; start: number; end: number; k: Kpis; channels: ChannelRow[] };
 
@@ -65,7 +65,7 @@ export default function TrendTab({ months, config, onOpenMonth }: { months: stri
         setProgress(`Loading ${monthLabel(key)} (${i + 1} of ${keys.length})…`);
         try {
           const s = await loadMonth(key);
-          const win = reportWindow(s.orders, todayDay(), key);
+          const win = reportWindow(s.orders, Number.POSITIVE_INFINITY, key); // data's own latest day, not the PC date
           const g = { start: win.startDay, end: win.endDay };
           const rows = computeAll(s.orders, config).filter((r) => inMonth(r.orderDay, r.dueDay, g));
           out.push({ monthKey: key, start: g.start, end: g.end, k: kpis(rows, g), channels: byChannel(rows, g) });
