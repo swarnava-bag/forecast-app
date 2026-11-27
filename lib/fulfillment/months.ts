@@ -98,7 +98,20 @@ export type MonthPlan = {
   fromUpload: number; // orders in the month proper taken from this upload
   kept: number; // orders in the month proper kept from what was stored
   replacedDays: { first: number; last: number } | null; // upload days within the month proper
+  latestDay: number | null; // latest order day in the month after this upload
+  storedLatestDay: number | null; // latest order day in the month before it (null = month not stored)
 };
+
+/** Latest raw order day of orders placed inside [start, end]. */
+export function latestOrderDay(orders: OrderRow[], m: { start: number; end: number }): number | null {
+  let best: number | null = null;
+  for (const o of orders) {
+    if (o.orderDate === null) continue;
+    const d = dayOf(o.orderDate);
+    if (d >= m.start && d <= m.end && (best === null || d > best)) best = d;
+  }
+  return best;
+}
 
 /**
  * Build every touched month's new snapshot.
@@ -136,12 +149,15 @@ export function planMonths(upload: OrderRow[], stored: Map<string, OrderRow[]>, 
     }
 
     const rFirst = Math.max(start, span.first), rLast = Math.min(end, span.last);
+    const orders = [...byCode.values()].sort((a, b) => (a.orderDate ?? 0) - (b.orderDate ?? 0));
     plans.push({
       monthKey: key,
-      orders: [...byCode.values()].sort((a, b) => (a.orderDate ?? 0) - (b.orderDate ?? 0)),
+      orders,
       isNew: !existing.includes(key),
       fromUpload, kept,
       replacedDays: rFirst <= rLast ? { first: rFirst, last: rLast } : null,
+      latestDay: latestOrderDay(orders, m),
+      storedLatestDay: stored.has(key) ? latestOrderDay(stored.get(key)!, m) : null,
     });
   }
   return plans;

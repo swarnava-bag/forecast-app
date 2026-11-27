@@ -187,9 +187,13 @@ export async function POST(req: Request) {
     delete body.kind;
     await ensureBucket(svc);
     const gz = gzipSync(Buffer.from(JSON.stringify(body)));
-    const { error } = await svc.storage.from(BUCKET).upload(pathFor(key), gz, { upsert: true, contentType: "application/gzip" });
+    const { error } = await svc.storage.from(BUCKET).upload(pathFor(key), gz, { upsert: true, contentType: "application/gzip", cacheControl: "no-cache" });
     if (error) return NextResponse.json({ error: `Upload failed: ${error.message}` }, { status: 500 });
-    return NextResponse.json({ ok: true, monthKey: key, orders: body.rows.length, bytes: gz.length, uploadedAt: now, uploadedBy: me.name });
+    // report back what was stored, so the page can verify it end to end
+    const od = (body.fields as string[]).indexOf("orderDate");
+    let latestOrderDate: number | null = null;
+    for (const r of body.rows as unknown[][]) { const v = r[od]; if (typeof v === "number" && (latestOrderDate === null || v > latestOrderDate)) latestOrderDate = v; }
+    return NextResponse.json({ ok: true, monthKey: key, orders: body.rows.length, latestOrderDate, bytes: gz.length, uploadedAt: now, uploadedBy: me.name });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

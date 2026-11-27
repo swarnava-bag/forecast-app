@@ -53,7 +53,7 @@ export async function loadMonth(key: string): Promise<Snapshot> {
  * browser first (~2.3 MB): requests pass through the Next.js proxy, which
  * truncates bodies over 10 MB (proxyClientMaxBodySize).
  */
-export async function publishMonth(s: Snapshot): Promise<{ orders: number; bytes: number; uploadedAt: string; uploadedBy: string }> {
+export async function publishMonth(s: Snapshot): Promise<{ orders: number; latestOrderDate: number | null; bytes: number; uploadedAt: string; uploadedBy: string }> {
   const json = JSON.stringify({ kind: "snapshot", ...packSnapshot(s) });
   const gz = await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
   return jsonOrThrow(await fetch(API, { method: "POST", headers: { "Content-Type": "application/gzip" }, body: gz }));
